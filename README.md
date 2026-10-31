@@ -26,12 +26,12 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 
 ## 操作
 
-| 玩家 | 移动 | 跳跃 |
-| --- | --- | --- |
-| P1 | A / D | 空格 |
-| P2 | J / L | Enter |
+| 玩家 | 移动 | 上 / 下 | 跳跃 | 冲刺 |
+| --- | --- | --- | --- | --- |
+| P1 | A / D | W / S | 空格 | 左 Shift |
+| P2 | ← / → | ↑ / ↓ | 右 Alt | `.`（句号） |
 
-两人共用一个键盘。I / K（P2）和 W / S（P1）暂未使用，留给蹲下或上方向操作。之后接手柄时再换成 Input System 的 control scheme。
+两人共用一个键盘。测试房里按 `R` 重置位置和测量数据。冲刺不可斜向；上下方向优先于左右，空中才能下冲。之后接手柄时再换成 Input System 的 control scheme。
 
 ## 结构
 
@@ -40,24 +40,31 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 ├── Project/nameless/               Unity 工程
 │   └── Assets/
 │       ├── Scripts/
-│       │   ├── PlayerMotor.cs          移动、跳跃、地面检测、被撞控制权让出
-│       │   └── CoopCamera.cs           双人中点跟随 + 按距离缩放
+│       │   ├── GameConstants.cs        尺度、跳距、冲刺距离等规格常量
+│       │   ├── PlayerMotor.cs          移动、跳跃、四向冲刺、地面检测、被撞控制权让出
+│       │   ├── SpeedTierProvider.cs    v0–v4 挡位状态 → 目标速度；可替换为速度推导挡位
+│       │   ├── CoopCamera.cs           双人中点跟随 + 按距离缩放
+│       │   └── DebugHud.cs             挡位、速度、冷却、跳跃/冲刺测距
 │       └── Editor/
-│           └── PrototypeSceneBuilder.cs 一键生成原型场景
+│           └── PrototypeSceneBuilder.cs 一键生成 16px 网格测试房
 ├── docs/agents/                    工程约定（issue / 域模型）
 └── AGENTS.md
 ```
 
 ## 当前实现的范围
 
+- 世界尺度：1 单位 = 1 格 = 16px，人物 13px；取景和测量都按格
 - 速度驱动的动态刚体（`Rigidbody2D`），水平用 `Mathf.MoveTowards` 逼近目标速度，不是直接赋值，这样物理推挤才有机会生效
-- 跳跃：coyote time、跳跃缓冲、可变跳跃高度、上升/下落不同重力
+- 跳跃：coyote time、跳跃缓冲、可变跳跃高度、上升/下落不同重力；按规格调到跳高 2 格、跳远 3 格
+- 四向冲刺：水平 / 上 / 下，不可斜冲；下冲仅限空中；冲刺期间无重力；落地且不在冲刺时开始 0.5s 冷却
+- 挡位状态机：行为申请 v0–v4，挡位给出目标速度；目前冲刺申请 v1，碰撞 v2 和 v3/v4 留给下一阶段
 - 双人碰撞：被撞一方在 0.12s 内交出水平控制权，由物理完成推挤
 - 地面检测同时认 `Ground` 和 `Player` 两层，所以可以踩在队友头上起跳
 - 被踩的一方同样可以起跳，不做压制（已与策划确认，暂时作为特性保留，不是 bug）
-- `MotionState` 状态机：`Idle` / `Move` / `Jump` / `Fall`，通过 `StateChanged` 事件外抛，供动画和音效挂接。加冲刺就是加一个枚举值和一个分支
+- `MotionState` 状态机：`Idle` / `Move` / `Jump` / `Fall` / `Dash`，通过 `StateChanged` 事件外抛，供动画和音效挂接
+- 测试房带 1 格刻度、2 格高度标记、2.5 格断崖（跳距按 3 格调）和调试 HUD；`R` 重置
 
-还没做：碰撞冲量调参、顿帧与震屏、Tilemap 关卡、手柄、Cinemachine 相机。
+还没做：碰撞把对方送进 v2、绳子/冰块等材质判定、A 的形态、Tilemap 正式关卡、顿帧与震屏、手柄、Cinemachine 相机。
 
 ## 协作
 

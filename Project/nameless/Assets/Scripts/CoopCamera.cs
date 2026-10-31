@@ -24,7 +24,8 @@ public class CoopCamera : MonoBehaviour
         mid.z = transform.position.z;
         transform.position = Vector3.Lerp(transform.position, mid + offset, t);
 
-        float spread = Mathf.Abs(a.position.x - b.position.x);
+        float spread = Mathf.Max(Mathf.Abs(a.position.x - b.position.x),
+                                 Mathf.Abs(a.position.y - b.position.y));
         float targetSize = Mathf.Clamp(minSize + spread * sizePerWorldUnit, minSize, maxSize);
         cam.orthographicSize = Mathf.Lerp(cam.orthographicSize, targetSize, t);
     }
