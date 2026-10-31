@@ -25,4 +25,18 @@ public static class GameConstants
     public const float HorizontalPushDistance = 3f;
     public const float HorizontalPushFollowDistance = 2f;
     public const float HorizontalPushBufferDistance = 1f;
+
+    // P4 材质阈值
+    public const SpeedTier RopePassTier = SpeedTier.V2;
+    public const SpeedTier RopeBounceMinTier = SpeedTier.V3;
+    public const float RopeBounceDuration = 0.35f;
+    public const float GroundRopeDropDuration = 0.2f;
+    public const SpeedTier IceBreakTier = SpeedTier.V2;
+    public const SpeedTier WallBreakTier = SpeedTier.V2;
+    public const SpeedTier GateBreakTier = SpeedTier.V2;
+    public const int GateBreakMass = 2;
+    public const int PortalKeyCost = 1;
+    public const float KeyCarryHeight = 0.8f;
+    // 冰面把地面加速度压到 15%，减速靠惯性拖长
+    public const float IceAccelerationScale = 0.15f;
 }

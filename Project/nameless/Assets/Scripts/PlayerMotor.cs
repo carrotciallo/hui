@@ -50,6 +50,10 @@ public class PlayerMotor : MonoBehaviour
     public SpeedTier Tier => tierProvider.Tier;
     public SpeedTierProvider SpeedTiers => tierProvider;
     public Vector2 Velocity => rb.linearVelocity;
+    public Vector2 ImpactVelocity => isDashing ? dashVelocity : rb.linearVelocity;
+    public Scheme InputScheme => scheme;
+
+    public void SetScheme(Scheme value) => scheme = value;
     public Vector2 SpawnPosition { get; private set; }
     public event System.Action<MotionState, MotionState> StateChanged;
     public event System.Action<ImpactInfo> ImpactReceived;
@@ -73,6 +77,7 @@ public class PlayerMotor : MonoBehaviour
     float bufferTimer;
     float controlLockTimer;
     bool grounded;
+    bool onIce;
 
     bool isDashing;
     float dashTimer;
@@ -141,7 +146,11 @@ public class PlayerMotor : MonoBehaviour
         Vector2 v = rb.linearVelocity;
 
         if (controlLockTimer <= 0f)
-            v.x = StepTowards(v.x, moveInput * tierProvider.TargetSpeed, grounded ? groundAccel : airAccel);
+        {
+            float accel = grounded ? groundAccel : airAccel;
+            if (grounded && onIce) accel *= GameConstants.IceAccelerationScale;
+            v.x = StepTowards(v.x, moveInput * tierProvider.TargetSpeed, accel);
+        }
 
         // 用按住状态而不是抬手那一帧判断，否则漏掉的物理步会让可变跳跃高度时灵时不灵；
         // 再给一个最小起跳时间，避免「点一下」时跳跃在第一个物理步就被截成半高
@@ -261,15 +270,7 @@ public class PlayerMotor : MonoBehaviour
         }
         if (Mathf.Abs(normal.x) > 0.01f && Mathf.Sign(normal.x) != dir) normal = -normal;
 
-        var impact = new ImpactInfo
-        {
-            Attacker = attacker,
-            Target = this,
-            Normal = normal,
-            Velocity = attacker.IsDashing ? attacker.DashVelocity : attacker.Velocity,
-            Tier = SpeedTier.V2,
-            Point = point
-        };
+        var impact = ImpactInfo.Build(attacker, this, normal, point);
 
         isKnocked = true;
         knockbackStage = 0;
@@ -315,6 +316,39 @@ public class PlayerMotor : MonoBehaviour
         rb.linearVelocity = v;
     }
 
+    /// 调试用：不改变速度，只把挡位压到指定值。
+    public void ForceTier(SpeedTier tier, float duration)
+    {
+        tierProvider.Force(tier, Mathf.Max(0.05f, duration));
+    }
+
+    /// 绳、地面绳等材质把玩家弹开时调用：结束冲刺 / 击飞，按法线方向给速度并压上新挡位。
+    public void ReceiveBounce(Vector2 normal, SpeedTier tier, float duration)
+    {
+        if (isDashing) EndDash();
+
+        if (normal.sqrMagnitude < 0.0001f)
+            normal = Velocity.sqrMagnitude > 0.0001f ? -Velocity : Vector2.up;
+        normal.Normalize();
+
+        SpeedTier capped = (SpeedTier)Mathf.Min((int)tier, (int)SpeedTier.V4);
+        float speed = tierProvider.SpeedFor(capped);
+
+        isKnocked = false;
+        knockbackStage = 0;
+        knockbackTimer = 0f;
+        knockbackDir = 0f;
+
+        Vector2 v = normal * speed;
+        rb.gravityScale = v.y < 0f ? fallGravityScale : riseGravityScale;
+        rb.linearVelocity = v;
+        tierProvider.Force(capped, Mathf.Max(0.05f, duration));
+
+        bufferTimer = 0f;
+        dashBufferTimer = 0f;
+        jumpCutApplied = true;
+    }
+
     float StepTowards(float current, float target, float accel)
     {
         bool turning = Mathf.Abs(target) > 0.01f
@@ -333,12 +367,18 @@ public class PlayerMotor : MonoBehaviour
         int count = Physics2D.BoxCastNonAlloc(origin, probeSize, 0f, Vector2.down,
                                               groundHits, groundProbeDistance, groundMask);
 
+        bool found = false;
+        onIce = false;
+
         for (int i = 0; i < count; i++)
         {
             var hit = groundHits[i].collider;
-            if (hit != null && hit.attachedRigidbody != rb) return true;
+            if (hit == null || hit.attachedRigidbody == rb) continue;
+
+            found = true;
+            if (hit.TryGetComponent(out IceSurface _)) onIce = true;
         }
-        return false;
+        return found;
     }
 
     void TickState()

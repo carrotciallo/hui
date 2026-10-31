@@ -9,7 +9,6 @@ using UnityEngine.Tilemaps;
 public static class WorldBuilder
 {
     const string ScenePath = "Assets/Scenes/World.unity";
-    const string SpritePath = "Assets/Art/Greybox/White.png";
     const string TilePath = "Assets/Art/Greybox/WorldTile.asset";
     const string MaterialPath = "Assets/Settings/PlayerFrictionless.physicsMaterial2D";
     const string MarkerPrefabDir = "Assets/Prefabs/Markers";
@@ -37,13 +36,14 @@ public static class WorldBuilder
     {
         if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
-        EnsureLayer(GroundLayerIndex, "Ground");
-        EnsureLayer(PlayerLayerIndex, "Player");
-        EnsureLayer(HazardLayerIndex, "Hazard");
-        EnsureLayer(InteractableLayerIndex, "Interactable");
+        GreyboxAssets.EnsureLayer(GroundLayerIndex, "Ground");
+        GreyboxAssets.EnsureLayer(PlayerLayerIndex, "Player");
+        GreyboxAssets.EnsureLayer(HazardLayerIndex, "Hazard");
+        GreyboxAssets.EnsureLayer(InteractableLayerIndex, "Interactable");
 
-        Sprite white = EnsureWhiteSprite();
-        PhysicsMaterial2D slick = EnsureFrictionlessMaterial();
+        Sprite white = GreyboxAssets.EnsureWhiteSprite();
+        PhysicsMaterial2D slick = GreyboxAssets.EnsurePhysicsMaterial(
+            MaterialPath, "PlayerFrictionless", 0f);
         Tile tile = EnsureWorldTile(white);
 
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -77,10 +77,14 @@ public static class WorldBuilder
         var world = worldGo.AddComponent<World>();
         world.Configure(regions.ToArray(), WorldBounds, FallFloor);
 
-        var p1 = CreatePlayer("Player1", w.SpawnPositionFor(0), new Color(0.36f, 0.62f, 1f),
-                              PlayerMotor.Scheme.WASD, white, slick);
-        var p2 = CreatePlayer("Player2", w.SpawnPositionFor(1), new Color(1f, 0.45f, 0.4f),
-                              PlayerMotor.Scheme.Arrows, white, slick);
+        var p1 = GreyboxAssets.CreatePlayer("Player1", w.SpawnPositionFor(0),
+                                            new Color(0.36f, 0.62f, 1f),
+                                            PlayerMotor.Scheme.WASD, white, slick, white,
+                                            PlayerLayerIndex);
+        var p2 = GreyboxAssets.CreatePlayer("Player2", w.SpawnPositionFor(1),
+                                            new Color(1f, 0.45f, 0.4f),
+                                            PlayerMotor.Scheme.Arrows, white, slick, white,
+                                            PlayerLayerIndex);
 
         var life1 = p1.AddComponent<PlayerLife>();
         var life2 = p2.AddComponent<PlayerLife>();
@@ -124,47 +128,31 @@ public static class WorldBuilder
 
         return new MarkerPrefabs
         {
-            Spawn = BuildPrefab($"{MarkerPrefabDir}/SpawnPoint.prefab", white,
-                                new Vector2(0.5f, 1.6f), SpawnColor, 6, InteractableLayerIndex,
-                                null),
-            Respawn = BuildPrefab($"{MarkerPrefabDir}/RespawnPoint.prefab", white,
-                                  new Vector2(1.2f, 1.8f), RespawnColor, 6, InteractableLayerIndex,
-                                  go =>
-                                  {
-                                      var box = go.AddComponent<BoxCollider2D>();
-                                      box.isTrigger = true;
-                                      go.AddComponent<RespawnPoint>();
-                                  }),
-            KillZone = BuildPrefab($"{MarkerPrefabDir}/KillZone.prefab", white,
-                                   new Vector2(4f, 1f), HazardColor, 6, HazardLayerIndex,
-                                   go =>
-                                   {
-                                       var box = go.AddComponent<BoxCollider2D>();
-                                       box.isTrigger = true;
-                                       go.AddComponent<KillZone>();
-                                   }),
-            RegionMarker = BuildPrefab($"{MarkerPrefabDir}/RegionMarker.prefab", white,
-                                       new Vector2(0.12f, 3f), RegionColor, 5, 0, null)
+            Spawn = GreyboxAssets.BuildPrefab($"{MarkerPrefabDir}/SpawnPoint.prefab", white,
+                                              new Vector2(0.5f, 1.6f), SpawnColor, 6,
+                                              InteractableLayerIndex, null),
+            Respawn = GreyboxAssets.BuildPrefab($"{MarkerPrefabDir}/RespawnPoint.prefab", white,
+                                                new Vector2(1.2f, 1.8f), RespawnColor, 6,
+                                                InteractableLayerIndex,
+                                                go =>
+                                                {
+                                                    var box = go.AddComponent<BoxCollider2D>();
+                                                    box.isTrigger = true;
+                                                    go.AddComponent<RespawnPoint>();
+                                                }),
+            KillZone = GreyboxAssets.BuildPrefab($"{MarkerPrefabDir}/KillZone.prefab", white,
+                                                 new Vector2(4f, 1f), HazardColor, 6,
+                                                 HazardLayerIndex,
+                                                 go =>
+                                                 {
+                                                     var box = go.AddComponent<BoxCollider2D>();
+                                                     box.isTrigger = true;
+                                                     go.AddComponent<KillZone>();
+                                                 }),
+            RegionMarker = GreyboxAssets.BuildPrefab($"{MarkerPrefabDir}/RegionMarker.prefab", white,
+                                                     new Vector2(0.12f, 3f), RegionColor, 5, 0,
+                                                     null)
         };
-    }
-
-    static GameObject BuildPrefab(string path, Sprite sprite, Vector2 size, Color color,
-                                  int sortingOrder, int layer, System.Action<GameObject> configure)
-    {
-        var go = new GameObject(Path.GetFileNameWithoutExtension(path));
-        go.transform.localScale = new Vector3(size.x, size.y, 1f);
-        go.layer = layer;
-
-        var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = sprite;
-        sr.color = color;
-        sr.sortingOrder = sortingOrder;
-
-        configure?.Invoke(go);
-
-        var prefab = PrefabUtility.SaveAsPrefabAsset(go, path);
-        Object.DestroyImmediate(go);
-        return prefab;
     }
 
     static Tilemap CreateTilemap(Transform parent)
@@ -279,99 +267,6 @@ public static class WorldBuilder
         return camGo;
     }
 
-    static GameObject CreatePlayer(string name, Vector2 position, Color color, PlayerMotor.Scheme scheme,
-                                   Sprite sprite, PhysicsMaterial2D material)
-    {
-        var go = new GameObject(name);
-        go.layer = PlayerLayerIndex;
-        go.transform.position = position;
-        go.transform.localScale = Vector3.one * GameConstants.PlayerSize;
-
-        var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = sprite;
-        sr.color = color;
-        sr.sortingOrder = 10;
-
-        var aura = new GameObject("TierOutline");
-        aura.transform.SetParent(go.transform, false);
-        aura.transform.localPosition = Vector3.zero;
-        aura.transform.localScale = Vector3.one * 1.35f;
-        var auraSr = aura.AddComponent<SpriteRenderer>();
-        auraSr.sprite = sprite;
-        auraSr.color = new Color(1f, 1f, 1f, 0f);
-        auraSr.sortingOrder = 9;
-        aura.AddComponent<TierOutline>();
-
-        var box = go.AddComponent<BoxCollider2D>();
-        box.sharedMaterial = material;
-
-        var rb = go.AddComponent<Rigidbody2D>();
-        rb.gravityScale = GameConstants.RiseGravityScale;
-        rb.freezeRotation = true;
-        rb.interpolation = RigidbodyInterpolation2D.Interpolate;
-        rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-
-        go.AddComponent<SpeedTierProvider>();
-        var motor = go.AddComponent<PlayerMotor>();
-
-        var so = new SerializedObject(motor);
-        so.FindProperty("scheme").enumValueIndex = (int)scheme;
-        so.ApplyModifiedPropertiesWithoutUndo();
-
-        return go;
-    }
-
-    static Sprite EnsureWhiteSprite()
-    {
-        var existing = AssetDatabase.LoadAssetAtPath<Sprite>(SpritePath);
-        var importer = AssetImporter.GetAtPath(SpritePath) as TextureImporter;
-        var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(SpritePath);
-
-        bool valid = existing != null && importer != null && texture != null
-                     && texture.width == 16 && texture.height == 16
-                     && Mathf.Approximately(importer.spritePixelsPerUnit, GameConstants.PixelsPerUnit);
-
-        if (valid) return existing;
-
-        Directory.CreateDirectory(Path.GetDirectoryName(SpritePath));
-
-        var tex = new Texture2D(16, 16, TextureFormat.RGBA32, false);
-        var pixels = new Color32[16 * 16];
-        for (int i = 0; i < pixels.Length; i++) pixels[i] = new Color32(255, 255, 255, 255);
-        tex.SetPixels32(pixels);
-        tex.Apply();
-        File.WriteAllBytes(SpritePath, tex.EncodeToPNG());
-        Object.DestroyImmediate(tex);
-
-        AssetDatabase.ImportAsset(SpritePath, ImportAssetOptions.ForceUpdate);
-
-        importer = (TextureImporter)AssetImporter.GetAtPath(SpritePath);
-        importer.textureType = TextureImporterType.Sprite;
-        importer.spriteImportMode = SpriteImportMode.Single;
-        importer.spritePixelsPerUnit = GameConstants.PixelsPerUnit;
-        importer.filterMode = FilterMode.Point;
-        importer.mipmapEnabled = false;
-        importer.textureCompression = TextureImporterCompression.Uncompressed;
-        importer.alphaIsTransparency = true;
-        importer.SaveAndReimport();
-
-        return AssetDatabase.LoadAssetAtPath<Sprite>(SpritePath);
-    }
-
-    static PhysicsMaterial2D EnsureFrictionlessMaterial()
-    {
-        var existing = AssetDatabase.LoadAssetAtPath<PhysicsMaterial2D>(MaterialPath);
-        if (existing != null) return existing;
-
-        var material = new PhysicsMaterial2D("PlayerFrictionless")
-        {
-            friction = 0f,
-            bounciness = 0f
-        };
-        AssetDatabase.CreateAsset(material, MaterialPath);
-        return material;
-    }
-
     static Tile EnsureWorldTile(Sprite sprite)
     {
         var tile = AssetDatabase.LoadAssetAtPath<Tile>(TilePath);
@@ -388,19 +283,5 @@ public static class WorldBuilder
         AssetDatabase.SaveAssets();
 
         return tile;
-    }
-
-    static void EnsureLayer(int index, string layerName)
-    {
-        var assets = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset");
-        if (assets.Length == 0) return;
-
-        var so = new SerializedObject(assets[0]);
-        var layers = so.FindProperty("layers");
-        var entry = layers.GetArrayElementAtIndex(index);
-        if (entry.stringValue == layerName) return;
-
-        entry.stringValue = layerName;
-        so.ApplyModifiedPropertiesWithoutUndo();
     }
 }

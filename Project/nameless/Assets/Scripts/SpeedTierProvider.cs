@@ -87,7 +87,9 @@ public class SpeedTierProvider : MonoBehaviour, ISpeedTierProvider
         _ => "?"
     };
 
-    public Color TierColor => tier switch
+    public Color TierColor => ColorFor(tier);
+
+    public static Color ColorFor(SpeedTier value) => value switch
     {
         SpeedTier.V0 => new Color(0.85f, 0.87f, 0.92f),
         SpeedTier.V1 => new Color(1f, 0.85f, 0.25f),

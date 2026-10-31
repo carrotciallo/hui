@@ -78,10 +78,21 @@ public sealed class RunStateTests
     }
 
     [Test]
+    public void OpeningGateIsIdempotent()
+    {
+        Assert.IsTrue(state.OpenGate(4));
+        Assert.IsFalse(state.OpenGate(4));
+        Assert.AreEqual(1, state.OpenedGateCount);
+        Assert.IsTrue(state.IsGateOpen(4));
+        Assert.IsFalse(state.IsGateOpen(5));
+    }
+
+    [Test]
     public void ResetClearsProgress()
     {
         state.AddKey();
         state.LightPortal(1);
+        state.OpenGate(2);
         state.SetBMass(4);
         state.SetRespawn(0, Vector2.one);
         state.SetLastRegion(7);
@@ -90,6 +101,7 @@ public sealed class RunStateTests
 
         Assert.AreEqual(0, state.Keys);
         Assert.AreEqual(0, state.LitPortalCount);
+        Assert.AreEqual(0, state.OpenedGateCount);
         Assert.AreEqual(1, state.BMass);
         Assert.AreEqual(0, state.LastRegion);
         Assert.IsFalse(state.TryGetRespawn(0, out _));

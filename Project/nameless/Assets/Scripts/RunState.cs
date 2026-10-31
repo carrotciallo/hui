@@ -8,6 +8,7 @@ public sealed class RunState
     public const int PlayerCount = 2;
 
     readonly HashSet<int> litPortals = new HashSet<int>();
+    readonly HashSet<int> openGates = new HashSet<int>();
     readonly Vector2[] respawns = new Vector2[PlayerCount];
     readonly bool[] hasRespawn = new bool[PlayerCount];
 
@@ -15,6 +16,7 @@ public sealed class RunState
     public int BMass { get; private set; } = 1;
     public int LastRegion { get; private set; }
     public int LitPortalCount => litPortals.Count;
+    public int OpenedGateCount => openGates.Count;
 
     public void AddKey() => Keys++;
 
@@ -29,6 +31,11 @@ public sealed class RunState
     public bool LightPortal(int id) => litPortals.Add(id);
 
     public bool IsPortalLit(int id) => litPortals.Contains(id);
+
+    /// 过关门打开后跨区域、跨死亡保持打开；重复打开返回 false。
+    public bool OpenGate(int id) => openGates.Add(id);
+
+    public bool IsGateOpen(int id) => openGates.Contains(id);
 
     public void SetRespawn(int slot, Vector2 position)
     {
@@ -60,6 +67,7 @@ public sealed class RunState
         BMass = 1;
         LastRegion = 0;
         litPortals.Clear();
+        openGates.Clear();
         Array.Clear(hasRespawn, 0, hasRespawn.Length);
     }
 
