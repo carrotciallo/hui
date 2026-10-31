@@ -6,7 +6,7 @@ public class PlayerMotor : MonoBehaviour
 {
     public enum Scheme { WASD, Arrows }
 
-    public enum MotionState { Idle, Move, Jump, Fall, Dash }
+    public enum MotionState { Idle, Move, Jump, Fall, Dash, Hit }
 
     [SerializeField] Scheme scheme = Scheme.WASD;
 
@@ -23,6 +23,7 @@ public class PlayerMotor : MonoBehaviour
     [SerializeField] float coyoteTime = 0.1f;
     [SerializeField] float jumpBufferTime = 0.1f;
     [SerializeField] float jumpCutMultiplier = 0.5f;
+    [SerializeField] float minJumpTime = 0.1f;
 
     [Header("Dash")]
     [SerializeField] float dashHorizontalDistance = GameConstants.DashHorizontalDistance;
@@ -42,13 +43,16 @@ public class PlayerMotor : MonoBehaviour
     public MotionState State { get; private set; } = MotionState.Idle;
     public bool Grounded => grounded;
     public bool IsDashing => isDashing;
-    public bool CanDash => !dashSpent && dashCooldownTimer <= 0f && !isDashing;
+    public bool IsKnocked => isKnocked;
+    public Vector2 DashVelocity => isDashing ? dashVelocity : Vector2.zero;
+    public bool CanDash => !dashSpent && dashCooldownTimer <= 0f && !isDashing && !isKnocked;
     public float DashCooldownRemaining => dashCooldownTimer;
     public SpeedTier Tier => tierProvider.Tier;
     public SpeedTierProvider SpeedTiers => tierProvider;
     public Vector2 Velocity => rb.linearVelocity;
     public Vector2 SpawnPosition { get; private set; }
     public event System.Action<MotionState, MotionState> StateChanged;
+    public event System.Action<ImpactInfo> ImpactReceived;
 
     Rigidbody2D rb;
     Collider2D body;
@@ -62,6 +66,7 @@ public class PlayerMotor : MonoBehaviour
     bool jumpPressed;
     bool jumpHeld;
     bool jumpCutApplied;
+    float jumpElapsed;
     float dashBufferTimer;
 
     float coyoteTimer;
@@ -75,6 +80,11 @@ public class PlayerMotor : MonoBehaviour
     float dashCooldownTimer;
     bool cooldownPending;
     bool dashSpent;
+
+    bool isKnocked;
+    int knockbackStage;
+    float knockbackTimer;
+    float knockbackDir;
 
     void Awake()
     {
@@ -108,6 +118,13 @@ public class PlayerMotor : MonoBehaviour
         controlLockTimer = Mathf.Max(0f, controlLockTimer - Time.fixedDeltaTime);
         TickDashCooldown();
 
+        if (isKnocked)
+        {
+            TickKnockback();
+            TickState();
+            return;
+        }
+
         if (isDashing)
         {
             TickDash();
@@ -126,8 +143,10 @@ public class PlayerMotor : MonoBehaviour
         if (controlLockTimer <= 0f)
             v.x = StepTowards(v.x, moveInput * tierProvider.TargetSpeed, grounded ? groundAccel : airAccel);
 
-        // 用按住状态而不是抬手那一帧判断，否则漏掉的物理步会让可变跳跃高度时灵时不灵
-        if (!jumpHeld && !jumpCutApplied && v.y > 0f)
+        // 用按住状态而不是抬手那一帧判断，否则漏掉的物理步会让可变跳跃高度时灵时不灵；
+        // 再给一个最小起跳时间，避免「点一下」时跳跃在第一个物理步就被截成半高
+        if (v.y > 0f) jumpElapsed += Time.fixedDeltaTime;
+        if (!jumpHeld && !jumpCutApplied && v.y > 0f && jumpElapsed >= minJumpTime)
         {
             v.y *= jumpCutMultiplier;
             jumpCutApplied = true;
@@ -139,6 +158,7 @@ public class PlayerMotor : MonoBehaviour
             bufferTimer = 0f;
             coyoteTimer = 0f;
             jumpCutApplied = false;
+            jumpElapsed = 0f;
         }
 
         rb.gravityScale = v.y < 0f ? fallGravityScale : riseGravityScale;
@@ -227,6 +247,74 @@ public class PlayerMotor : MonoBehaviour
         }
     }
 
+    void BeginKnockback(PlayerMotor attacker, Vector2 normal, Vector2 point)
+    {
+        if (isDashing) EndDash();
+
+        // 只做水平击飞。方向以「攻击方 → 受击方」为准，不依赖物理后端给的法线朝向
+        float dx = transform.position.x - attacker.transform.position.x;
+        float dir = Mathf.Sign(dx);
+        if (Mathf.Abs(dx) < 0.05f)
+        {
+            float dashDir = attacker.DashVelocity.x;
+            dir = Mathf.Abs(dashDir) > 0.01f ? Mathf.Sign(dashDir) : 1f;
+        }
+        if (Mathf.Abs(normal.x) > 0.01f && Mathf.Sign(normal.x) != dir) normal = -normal;
+
+        var impact = new ImpactInfo
+        {
+            Attacker = attacker,
+            Target = this,
+            Normal = normal,
+            Velocity = attacker.IsDashing ? attacker.DashVelocity : attacker.Velocity,
+            Tier = SpeedTier.V2,
+            Point = point
+        };
+
+        isKnocked = true;
+        knockbackStage = 0;
+        knockbackDir = dir;
+        knockbackTimer = GameConstants.HorizontalPushDistance / tierProvider.SpeedFor(SpeedTier.V2);
+        tierProvider.Force(SpeedTier.V2, knockbackTimer);
+
+        // 击飞期间不接受跳/冲输入，清掉缓冲，避免硬直结束时补放一次旧输入
+        bufferTimer = 0f;
+        dashBufferTimer = 0f;
+        jumpCutApplied = true;
+
+        ImpactReceived?.Invoke(impact);
+    }
+
+    void TickKnockback()
+    {
+        knockbackTimer -= Time.fixedDeltaTime;
+
+        if (knockbackTimer <= 0f)
+        {
+            if (knockbackStage == 0)
+            {
+                knockbackStage = 1;
+                knockbackTimer = GameConstants.HorizontalPushFollowDistance / tierProvider.SpeedFor(SpeedTier.V1);
+                tierProvider.Force(SpeedTier.V1, knockbackTimer);
+            }
+            else
+            {
+                isKnocked = false;
+                // 保留 v1 速度交给正常减速，再滑约 1 格，凑成横碰的 3 + 2 + 1
+                return;
+            }
+        }
+
+        float speed = knockbackStage == 0
+            ? tierProvider.SpeedFor(SpeedTier.V2)
+            : tierProvider.SpeedFor(SpeedTier.V1);
+
+        Vector2 v = rb.linearVelocity;
+        v.x = knockbackDir * speed;
+        rb.gravityScale = v.y < 0f ? fallGravityScale : riseGravityScale;
+        rb.linearVelocity = v;
+    }
+
     float StepTowards(float current, float target, float accel)
     {
         bool turning = Mathf.Abs(target) > 0.01f
@@ -256,7 +344,9 @@ public class PlayerMotor : MonoBehaviour
     void TickState()
     {
         MotionState next;
-        if (isDashing)
+        if (isKnocked)
+            next = MotionState.Hit;
+        else if (isDashing)
             next = MotionState.Dash;
         else if (!grounded)
             next = rb.linearVelocity.y > 0.05f ? MotionState.Jump : MotionState.Fall;
@@ -277,19 +367,44 @@ public class PlayerMotor : MonoBehaviour
         StateChanged?.Invoke(previous, next);
     }
 
-    void OnCollisionEnter2D(Collision2D c)
+    void OnCollisionEnter2D(Collision2D c) => HandlePlayerContact(c, true);
+
+    // 已经贴在一起时再起冲不会有 Enter 事件，所以 Stay 也要接
+    void OnCollisionStay2D(Collision2D c) => HandlePlayerContact(c, false);
+
+    void HandlePlayerContact(Collision2D c, bool entering)
     {
+        if (isKnocked) return;
         if (!c.collider.TryGetComponent(out PlayerMotor other)) return;
 
+        Vector2 normal = c.contactCount > 0 ? c.GetContact(0).normal : Vector2.right;
+
         // 只有横向撞击才算推挤；踩在队友头上是纵向接触，不该锁住横向操作
-        if (c.contactCount > 0 && Mathf.Abs(c.GetContact(0).normal.x) < 0.5f) return;
+        if (Mathf.Abs(normal.x) < 0.5f) return;
+
+        // 碰撞回调里的速度已经被物理解算过，等质量相撞后双方速度会被拉平，
+        // 所以用「对方正在冲刺且冲刺方向朝我」来认攻击方，而不是比较解算后的速度
+        float dx = transform.position.x - other.transform.position.x;
+        float dashDir = other.DashVelocity.x;
+        bool dashHit = Mathf.Abs(dx) > 0.01f
+                       && Mathf.Abs(dashDir) > 0.01f
+                       && Mathf.Sign(dashDir) == Mathf.Sign(dx);
+
+        if (dashHit && other.Tier >= SpeedTier.V1)
+        {
+            Vector2 point = c.contactCount > 0 ? c.GetContact(0).point : (Vector2)transform.position;
+            BeginKnockback(other, normal, point);
+            return;
+        }
+
+        if (!entering) return;
 
         float otherSpeed = Mathf.Abs(other.rb.linearVelocity.x);
         float mySpeed = Mathf.Abs(rb.linearVelocity.x);
+        if (otherSpeed - mySpeed <= pushSpeedThreshold) return;
 
-        // 被撞的一方短暂交出水平控制权，物理推挤才不会被下一帧的速度覆盖吃掉
-        if (otherSpeed - mySpeed > pushSpeedThreshold)
-            controlLockTimer = pushControlLockTime;
+        // 慢速推挤保留短硬直，否则被推方下一帧就会用输入抹掉物理推挤
+        controlLockTimer = pushControlLockTime;
     }
 
     public void ResetTo(Vector2 position)
@@ -305,6 +420,7 @@ public class PlayerMotor : MonoBehaviour
         jumpPressed = false;
         jumpHeld = false;
         jumpCutApplied = false;
+        jumpElapsed = 0f;
         dashBufferTimer = 0f;
         bufferTimer = 0f;
         coyoteTimer = 0f;
@@ -314,6 +430,10 @@ public class PlayerMotor : MonoBehaviour
         dashCooldownTimer = 0f;
         cooldownPending = false;
         dashSpent = false;
+        isKnocked = false;
+        knockbackStage = 0;
+        knockbackTimer = 0f;
+        knockbackDir = 0f;
         rb.gravityScale = riseGravityScale;
         tierProvider.Clear();
         SetState(MotionState.Idle);

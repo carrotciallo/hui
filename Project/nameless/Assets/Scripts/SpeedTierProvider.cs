@@ -47,6 +47,13 @@ public class SpeedTierProvider : MonoBehaviour, ISpeedTierProvider
         holdTimer = Mathf.Max(0f, duration);
     }
 
+    /// 无视优先级的强制挡位，用于击飞这种必须覆盖当前冲刺档的场景。
+    public virtual void Force(SpeedTier forced, float duration)
+    {
+        SetTier(forced);
+        holdTimer = Mathf.Max(0f, duration);
+    }
+
     public virtual void Tick(float deltaTime)
     {
         if (holdTimer <= 0f) return;

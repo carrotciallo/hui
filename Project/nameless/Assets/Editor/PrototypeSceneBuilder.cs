@@ -35,9 +35,9 @@ public static class PrototypeSceneBuilder
         CreateTestRoom(white);
 
         float standY = GameConstants.PlayerSize * 0.5f + 0.01f;
-        var p1 = CreatePlayer("Player1", new Vector2(-4f, standY), new Color(0.36f, 0.62f, 1f),
+        var p1 = CreatePlayer("Player1", new Vector2(-5f, standY), new Color(0.36f, 0.62f, 1f),
                               PlayerMotor.Scheme.WASD, white, slick);
-        var p2 = CreatePlayer("Player2", new Vector2(-2.5f, standY), new Color(1f, 0.45f, 0.4f),
+        var p2 = CreatePlayer("Player2", new Vector2(-3.5f, standY), new Color(1f, 0.45f, 0.4f),
                               PlayerMotor.Scheme.Arrows, white, slick);
 
         int groundMask = (1 << GroundLayerIndex) | (1 << PlayerLayerIndex);
@@ -67,7 +67,8 @@ public static class PrototypeSceneBuilder
         AssetDatabase.Refresh();
 
         Debug.Log("[Prototype] 场景已生成：P1 = WASD / Space 跳 / LeftShift 冲刺；" +
-                  "P2 = 方向键 / 右Alt 跳 / . 冲刺；R 重置。");
+                  "P2 = 方向键 / 右Alt 跳 / . 冲刺；R 重置。" +
+                  "撞飞测试：P1 向右冲刺撞 P2，P2 应变红 v2 并滑行约 6 格。");
     }
 
     static GameObject CreateCamera()
@@ -150,6 +151,16 @@ public static class PrototypeSceneBuilder
         sr.sprite = sprite;
         sr.color = color;
         sr.sortingOrder = 10;
+
+        var aura = new GameObject("TierOutline");
+        aura.transform.SetParent(go.transform, false);
+        aura.transform.localPosition = Vector3.zero;
+        aura.transform.localScale = Vector3.one * 1.35f;
+        var auraSr = aura.AddComponent<SpriteRenderer>();
+        auraSr.sprite = sprite;
+        auraSr.color = new Color(1f, 1f, 1f, 0f);
+        auraSr.sortingOrder = 9;
+        aura.AddComponent<TierOutline>();
 
         var box = go.AddComponent<BoxCollider2D>();
         box.sharedMaterial = material;
