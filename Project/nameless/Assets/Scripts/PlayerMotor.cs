@@ -407,7 +407,7 @@ public class PlayerMotor : MonoBehaviour
         controlLockTimer = pushControlLockTime;
     }
 
-    public void ResetTo(Vector2 position)
+    public void Teleport(Vector2 position)
     {
         rb.linearVelocity = Vector2.zero;
         rb.angularVelocity = 0f;

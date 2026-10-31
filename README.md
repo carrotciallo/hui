@@ -19,8 +19,9 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 
 1. Unity Hub 添加 `Project/nameless`
 2. 用 6000.6.4f1 打开
-3. 菜单 **GameJam → Build Prototype Scene**，生成 `Assets/Scenes/Prototype.unity`
-4. Play
+3. 菜单 **GameJam → Build World Scene**，生成正式世界 `Assets/Scenes/World.unity`（L0 灰盒 + L1–L10 占位，Build Settings 只保留它）
+4. 需要单测手感时，再跑 **GameJam → Build Prototype Scene** 生成玩具房 `Assets/Scenes/Prototype.unity`（不进构建）
+5. Play
 
 场景由脚本生成，所以第一次打开仓库时没有现成场景是正常的；生成一次后正常提交即可。
 
@@ -32,6 +33,8 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 | P2 | ← / → | ↑ / ↓ | 右 Alt | `.`（句号） |
 
 两人共用一个键盘。测试房里按 `R` 重置位置和测量数据。冲刺不可斜向；上下方向优先于左右，空中才能下冲。之后接手柄时再换成 Input System 的 control scheme。
+
+正式世界额外调试键：`R` 回各自重生点，`PageUp` / `PageDown` 选区域，`Home` 传送到选中区域，`F3` 收起/展开运行状态（钥匙、传送门、B 质量、重生点、生死）。
 
 ## 结构
 
@@ -45,10 +48,20 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 │       │   ├── SpeedTierProvider.cs    v0–v4 挡位状态 → 目标速度；可替换为速度推导挡位
 │       │   ├── ImpactInfo.cs           撞击上下文 + 表面响应契约（P4 材质消费）
 │       │   ├── TierOutline.cs          玩家挡位描边（黄/红/蓝/紫）
-│       │   ├── CoopCamera.cs           双人中点跟随 + 按距离缩放
-│       │   └── DebugHud.cs             挡位、速度、冷却、跳跃/冲刺测距
-│       └── Editor/
-│           └── PrototypeSceneBuilder.cs 一键生成 16px 网格测试房
+│       │   ├── RunState.cs             钥匙、传送门、B 质量、两槽位重生点（纯 C#）
+│       │   ├── RunStateHost.cs         场景内持有 RunState 的宿主
+│       │   ├── Region.cs / World.cs    区域、出生点、世界外框、掉落线与区域判定
+│       │   ├── PlayerLife.cs           死亡、延迟重生、队友复活接口与事件
+│       │   ├── KillZone.cs             通用死亡触发器
+│       │   ├── RespawnPoint.cs         记录重生点 + 立即复活已死亡的队友
+│       │   ├── CoopCamera.cs           双人中点跟随 + 缩放 + 世界边界 clamp
+│       │   └── DebugHud.cs             挡位、速度、RunState 与调试传送
+│       ├── Editor/
+│       │   ├── PrototypeSceneBuilder.cs 一键生成 16px 网格测试房
+│       │   └── WorldBuilder.cs          一键生成 World.unity（Tilemap + marker prefab）
+│       └── Tests/
+│           ├── EditMode/               RunState 规则测试
+│           └── PlayMode/               出生、掉落、KillZone、复活、相机、传送
 ├── docs/agents/                    工程约定（issue / 域模型）
 └── AGENTS.md
 ```
@@ -67,8 +80,13 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 - 被踩的一方同样可以起跳，不做压制（已与策划确认，暂时作为特性保留，不是 bug）
 - `MotionState` 状态机：`Idle` / `Move` / `Jump` / `Fall` / `Dash` / `Hit`，通过 `StateChanged` 事件外抛，供动画和音效挂接
 - 测试房带 1 格刻度、2 格高度标记、2.5 格断崖（跳距按 3 格调）和调试 HUD；`R` 重置
+- 单场景连续世界：Tilemap 灰盒 + `Region` / `World` 区域划分，L0 灰盒（2 格跳高、3 格跳远、4 格横冲缺口）+ L1–L10 占位
+- 死亡与重生：掉落线、`KillZone` 触发死亡，0.5s 后在最近 `RespawnPoint` 复活；没有记录时回当前区域出生点；队友触碰重生点可立即复活
+- `RunState` 跨区域保留钥匙、已点亮传送门、B 质量和两人重生点，死亡不重置
+- 相机按世界外框 clamp、只框活着的玩家，留了 `SetViewRestriction` 给 L10 视野揭示
+- 程序集拆分为 `GameJam.Runtime` / `GameJam.Editor` / 两个测试程序集；EditMode 测 `RunState`，PlayMode 测关卡流程
 
-还没做：绳子/冰块等材质判定、A 的形态、Tilemap 正式关卡、顿帧与震屏、手柄、Cinemachine 相机。
+还没做：绳子/冰块等材质判定、A 的形态、L1–L10 实际关卡内容、顿帧与震屏、手柄、Cinemachine 相机。
 
 ## 协作
 
