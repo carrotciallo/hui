@@ -27,6 +27,13 @@ public static class FormsBuilder
     [MenuItem("GameJam/Build Forms Test Scene")]
     public static void Build()
     {
+        // SaveCurrentModifiedScenesIfUserWantsTo 和 NewScene 在 Play 模式下会直接抛异常
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+        {
+            Debug.LogWarning("[Forms] 请先退出 Play 模式，再生成形态测试场景。");
+            return;
+        }
+
         if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
         GreyboxAssets.EnsureLayer(GroundLayerIndex, "Ground");
