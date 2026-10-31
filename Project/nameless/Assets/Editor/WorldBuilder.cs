@@ -26,6 +26,7 @@ public static class WorldBuilder
     static readonly Rect WorldBounds = new Rect(-24f, -12f, 424f, 30f);
 
     static readonly Color FloorColor = new Color(0.30f, 0.33f, 0.40f);
+    static readonly Color WallColor = new Color(0.55f, 0.55f, 0.62f);
     static readonly Color SpawnColor = new Color(0.3f, 0.9f, 1f, 0.9f);
     static readonly Color RespawnColor = new Color(0.35f, 0.9f, 0.5f, 0.9f);
     static readonly Color HazardColor = new Color(1f, 0.25f, 0.2f, 0.7f);
@@ -34,6 +35,13 @@ public static class WorldBuilder
     [MenuItem("GameJam/Build World Scene")]
     public static void Build()
     {
+        // SaveCurrentModifiedScenesIfUserWantsTo 和 NewScene 在 Play 模式下会直接抛异常
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+        {
+            Debug.LogWarning("[World] 请先退出 Play 模式，再生成正式世界。");
+            return;
+        }
+
         if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
         GreyboxAssets.EnsureLayer(GroundLayerIndex, "Ground");
@@ -70,7 +78,15 @@ public static class WorldBuilder
             var area = new Rect(20f + RegionSpacing * (i - 1), WorldBounds.yMin,
                                 RegionSpacing, WorldBounds.height);
             var region = CreateRegion(worldGo.transform, tilemap, tile, i, $"L{i}",
-                                      new Vector2(x, SpawnY), area, markers, paintGround: true);
+                                      new Vector2(x, SpawnY), area, markers,
+                                      paintGround: i != 1);
+
+            if (i == 1)
+            {
+                PaintL1(tilemap, tile);
+                AddL1Markers(region, markers, white);
+            }
+
             regions.Add(region);
         }
 
@@ -109,7 +125,7 @@ public static class WorldBuilder
         EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
         AssetDatabase.Refresh();
 
-        Debug.Log("[World] 场景已生成：L0 灰盒 + L1–L10 占位；" +
+        Debug.Log("[World] 场景已生成：L0 灰盒 + L1 正式内容（横碰撞墙 / 上冲高台 / 重生点） + L2–L10 占位；" +
                   "PageUp/PageDown 选区域，Home 传送，R 回重生点。");
     }
 
@@ -190,6 +206,61 @@ public static class WorldBuilder
         PaintRect(tilemap, tile, 0, 9, -4, -1);
         PaintRect(tilemap, tile, 13, 15, -4, -1);
         PaintRect(tilemap, tile, 3, 7, 0, 1);
+    }
+
+    static void PaintL1(Tilemap tilemap, Tile tile)
+    {
+        // 入口地面 [20,26) / 2 格坑 / 主地面 [28,45)
+        PaintRect(tilemap, tile, 20, 25, -2, -1);
+        PaintRect(tilemap, tile, 28, 44, -2, -1);
+
+        // 破墙隧道：上方厚顶 [32,36)×[3,8)，墙体是单独的可破坏物件
+        PaintRect(tilemap, tile, 32, 35, 3, 7);
+
+        // 上冲高台 [38,45)×[0,4)，再往右是 [45,46) 和 [48,60) 的顶面，中间 2 格缺口；
+        // 出口平台补到 x=60 与 L2 地面接上，避免台边漏出 1 格无标记的死亡缝
+        PaintRect(tilemap, tile, 38, 44, 0, 3);
+        PaintRect(tilemap, tile, 45, 45, 3, 3);
+        PaintRect(tilemap, tile, 48, 59, 3, 3);
+    }
+
+    static void AddL1Markers(Region l1, MarkerPrefabs markers, Sprite white)
+    {
+        // L1 考察点：横碰破墙 / 上冲上高台 / 重生点
+        CreateBreakableWall(l1.transform, white, new Vector2(33.5f, 1.5f), new Vector2(1f, 3f));
+
+        var entryRespawn = InstantiateMarker(markers.Respawn, l1.transform,
+                                             new Vector2(28.9f, 0.9f), Vector2.one);
+        entryRespawn.name = "RespawnPoint AfterPit";
+
+        var ledgeRespawn = InstantiateMarker(markers.Respawn, l1.transform,
+                                             new Vector2(41f, 4.9f), Vector2.one);
+        ledgeRespawn.name = "RespawnPoint Ledge";
+
+        var entryPit = InstantiateMarker(markers.KillZone, l1.transform,
+                                         new Vector2(27f, -2.5f), new Vector2(2f, 2f));
+        entryPit.name = "KillZone EntryPit";
+
+        var topGap = InstantiateMarker(markers.KillZone, l1.transform,
+                                       new Vector2(47f, -4f), new Vector2(3f, 2f));
+        topGap.name = "KillZone TopGap";
+    }
+
+    static void CreateBreakableWall(Transform parent, Sprite sprite, Vector2 center, Vector2 size)
+    {
+        var go = new GameObject("BreakableWall");
+        go.transform.SetParent(parent, false);
+        go.layer = GroundLayerIndex;
+        go.transform.position = center;
+        go.transform.localScale = new Vector3(size.x, size.y, 1f);
+
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = sprite;
+        sr.color = WallColor;
+        sr.sortingOrder = 2;
+
+        go.AddComponent<BoxCollider2D>();
+        go.AddComponent<BreakableWall>();
     }
 
     static Region CreateRegion(Transform parent, Tilemap tilemap, Tile tile, int index, string label,

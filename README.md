@@ -19,7 +19,7 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 
 1. Unity Hub 添加 `Project/nameless`
 2. 用 6000.6.4f1 打开
-3. 菜单 **GameJam → Build World Scene**，生成正式世界 `Assets/Scenes/World.unity`（L0 灰盒 + L1–L10 占位，Build Settings 只保留它）
+3. 菜单 **GameJam → Build World Scene**，生成正式世界 `Assets/Scenes/World.unity`（L0 灰盒 + L1 正式内容 + L2–L10 占位，Build Settings 只保留它）
 4. 需要单测手感时，再跑 **GameJam → Build Prototype Scene** 生成玩具房 `Assets/Scenes/Prototype.unity`（不进构建）
 5. 验材质判定时，跑 **GameJam → Build Materials Test Scene** 生成材质测试房 `Assets/Scenes/Materials.unity`（不进构建）
 6. 验 A 的形态时，跑 **GameJam → Build Forms Test Scene** 生成形态测试房 `Assets/Scenes/Forms.unity`（不进构建）
@@ -108,13 +108,13 @@ A（P1）的形态：`1`–`6` 依次切普通 / `u` 大炮 / `L` 转换器 / `|
 - 被踩的一方同样可以起跳，不做压制（已与策划确认，暂时作为特性保留，不是 bug）
 - `MotionState` 状态机：`Idle` / `Move` / `Jump` / `Fall` / `Dash` / `Hit` / `Climb` / `Swim`，通过 `StateChanged` 事件外抛，供动画和音效挂接
 - 测试房带 1 格刻度、2 格高度标记、2.5 格断崖（跳距按 3 格调）和调试 HUD；`R` 重置
-- 单场景连续世界：Tilemap 灰盒 + `Region` / `World` 区域划分，L0 灰盒（2 格跳高、3 格跳远、4 格横冲缺口）+ L1–L10 占位
+- 单场景连续世界：Tilemap 灰盒 + `Region` / `World` 区域划分，L0 灰盒（2 格跳高、3 格跳远、4 格横冲缺口）+ L1 正式灰盒（横碰破墙、上冲高台、两次重生点）+ L2–L10 占位
 - 死亡与重生：掉落线、`KillZone` 触发死亡，0.5s 后在最近 `RespawnPoint` 复活；没有记录时回当前区域出生点；队友触碰重生点可立即复活
 - `RunState` 跨区域保留钥匙、已点亮传送门、B 质量和两人重生点，死亡不重置
 - 相机按世界外框 clamp、只框活着的玩家，留了 `SetViewRestriction` 给 L10 视野揭示
 - 程序集拆分为 `GameJam.Runtime` / `GameJam.Editor` / 两个测试程序集；EditMode 测 `RunState`，PlayMode 测关卡流程、材质判定与 A 形态
 
-还没做：玉米糊规则、热锻、L1–L10 实际关卡内容、传送效果、顿帧与震屏、手柄、Cinemachine 相机。
+还没做：玉米糊规则、热锻、L2–L10 实际关卡内容（L1 已完成）、传送效果、顿帧与震屏、手柄、Cinemachine 相机。
 
 ## 协作
 
