@@ -37,6 +37,6 @@ public static class GameConstants
     public const int GateBreakMass = 2;
     public const int PortalKeyCost = 1;
     public const float KeyCarryHeight = 0.8f;
-    // 冰面把地面加速度压到 15%，减速靠惯性拖长
-    public const float IceAccelerationScale = 0.15f;
+    // 冰面把地面加速度压到 30%，起步更快，同时保留明显滑行
+    public const float IceAccelerationScale = 0.3f;
 }
