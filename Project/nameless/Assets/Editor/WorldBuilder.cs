@@ -12,6 +12,7 @@ public static class WorldBuilder
     const string TilePath = "Assets/Art/Greybox/WorldTile.asset";
     const string MaterialPath = "Assets/Settings/PlayerFrictionless.physicsMaterial2D";
     const string MarkerPrefabDir = "Assets/Prefabs/Markers";
+    const string MaterialPrefabDir = "Assets/Prefabs/Materials";
 
     const int GroundLayerIndex = 6;
     const int PlayerLayerIndex = 7;
@@ -79,12 +80,17 @@ public static class WorldBuilder
                                 RegionSpacing, WorldBounds.height);
             var region = CreateRegion(worldGo.transform, tilemap, tile, i, $"L{i}",
                                       new Vector2(x, SpawnY), area, markers,
-                                      paintGround: i != 1);
+                                      paintGround: i != 1 && i != 2);
 
             if (i == 1)
             {
                 PaintL1(tilemap, tile);
                 AddL1Markers(region, markers, white);
+            }
+            else if (i == 2)
+            {
+                PaintL2(tilemap, tile);
+                AddL2Markers(region, markers);
             }
 
             regions.Add(region);
@@ -125,7 +131,8 @@ public static class WorldBuilder
         EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
         AssetDatabase.Refresh();
 
-        Debug.Log("[World] 场景已生成：L0 灰盒 + L1 正式内容（横碰撞墙 / 上冲高台 / 重生点） + L2–L10 占位；" +
+        Debug.Log("[World] 场景已生成：L0 灰盒 + L1 正式内容（横碰撞墙 / 上冲高台 / 重生点） + " +
+                  "L2 正式内容（冲刺复习 / 钥匙与过关门 / 地绳桥） + L3–L10 占位；" +
                   "PageUp/PageDown 选区域，Home 传送，R 回重生点。");
     }
 
@@ -261,6 +268,70 @@ public static class WorldBuilder
 
         go.AddComponent<BoxCollider2D>();
         go.AddComponent<BreakableWall>();
+    }
+
+    static void PaintL2(Tilemap tilemap, Tile tile)
+    {
+        // 入口 [60,70) / 4 格冲刺缺口 (70–74) / 钥匙与门走廊 [74,90) / 地绳桥 (90–94) / 出口 [94,100)
+        PaintRect(tilemap, tile, 60, 69, -2, -1);
+        PaintRect(tilemap, tile, 74, 89, -2, -1);
+        PaintRect(tilemap, tile, 94, 99, -2, -1);
+
+        // 钥匙柱 [79,80)×[0,1) 只有 1 格高，跳上去拿头顶的钥匙
+        PaintRect(tilemap, tile, 79, 79, 0, 0);
+
+        // 门洞上方压顶 [83,86)×[3,8)：门顶 y=3 与顶板齐平，上冲翻不过门
+        PaintRect(tilemap, tile, 83, 85, 3, 7);
+    }
+
+    static void AddL2Markers(Region l2, MarkerPrefabs markers)
+    {
+        // L2 考察点：4 格冲刺缺口 / 钥匙 + 过关门 / 地绳桥
+        var entryRespawn = InstantiateMarker(markers.Respawn, l2.transform,
+                                             new Vector2(66f, 0.9f), Vector2.one);
+        entryRespawn.name = "RespawnPoint Entry";
+
+        var ropeRespawn = InstantiateMarker(markers.Respawn, l2.transform,
+                                            new Vector2(88.5f, 0.9f), Vector2.one);
+        ropeRespawn.name = "RespawnPoint BeforeRope";
+
+        var dashGap = InstantiateMarker(markers.KillZone, l2.transform,
+                                        new Vector2(72f, -2.5f), new Vector2(4f, 2f));
+        dashGap.name = "KillZone DashGap";
+
+        var ropePit = InstantiateMarker(markers.KillZone, l2.transform,
+                                        new Vector2(92f, -3.5f), new Vector2(4f, 2f));
+        ropePit.name = "KillZone RopePit";
+
+        PlaceMaterial(l2.transform, "KeyPickup", new Vector2(79.5f, 1.8f), "KeyPickup L2");
+
+        var gate = PlaceMaterial(l2.transform, "KeyGate", new Vector2(84.5f, 1.5f), "KeyGate L2");
+        if (gate != null)
+        {
+            var so = new SerializedObject(gate.GetComponent<KeyGate>());
+            so.FindProperty("id").intValue = 2;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        // 地绳顶面齐地面 y=0，直接走过去；下落穿过留给 v2 之后的机制
+        PlaceMaterial(l2.transform, "GroundRope", new Vector2(92f, -0.125f), "GroundRope L2");
+    }
+
+    static GameObject PlaceMaterial(Transform parent, string prefabName, Vector2 position,
+                                    string name)
+    {
+        var path = $"{MaterialPrefabDir}/{prefabName}.prefab";
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        if (prefab == null)
+        {
+            Debug.LogWarning($"[World] 缺少 {path}，先跑 GameJam → Build Materials Test Scene。");
+            return null;
+        }
+
+        var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+        go.transform.position = position;
+        go.name = name;
+        return go;
     }
 
     static Region CreateRegion(Transform parent, Tilemap tilemap, Tile tile, int index, string label,
