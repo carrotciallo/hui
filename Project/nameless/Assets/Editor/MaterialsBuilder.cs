@@ -108,7 +108,7 @@ public static class MaterialsBuilder
 
         Debug.Log("[Materials] 材质测试场景已生成：" +
                   "绳 / 地绳 / 冰面 / 冰面板 / 破墙 / 钥匙+门 / 刺 / 传送门各一排；" +
-                  "按 1–5 强制挡位，K 发钥匙。");
+                  "按 F1–F5 强制挡位，K 发钥匙。");
     }
 
     static MaterialPrefabs CreatePrefabs(Sprite white, PhysicsMaterial2D iceMat)

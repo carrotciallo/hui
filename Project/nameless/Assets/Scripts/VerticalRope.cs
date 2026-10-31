@@ -1,9 +1,12 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// 竖绳：纯触发器，v2 穿过，v3 及以上被弹回并 +1 挡位。
 [RequireComponent(typeof(BoxCollider2D))]
 public sealed class VerticalRope : MonoBehaviour, IImpactReceiver
 {
+    public static readonly List<VerticalRope> All = new List<VerticalRope>();
+
     [SerializeField] float bounceDuration = GameConstants.RopeBounceDuration;
 
     BoxCollider2D rope;
@@ -12,6 +15,10 @@ public sealed class VerticalRope : MonoBehaviour, IImpactReceiver
     public Vector2 SegmentTop => rope != null ? (Vector2)rope.bounds.max : (Vector2)transform.position + Vector2.up;
     public Vector2 SegmentBottom => rope != null ? (Vector2)rope.bounds.min : (Vector2)transform.position - Vector2.up;
     public Vector2 Center => rope != null ? (Vector2)rope.bounds.center : (Vector2)transform.position;
+
+    void OnEnable() => All.Add(this);
+
+    void OnDisable() => All.Remove(this);
 
     void Awake() => rope = GetComponent<BoxCollider2D>();
 

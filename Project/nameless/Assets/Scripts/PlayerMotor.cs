@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -6,7 +7,9 @@ public class PlayerMotor : MonoBehaviour
 {
     public enum Scheme { WASD, Arrows }
 
-    public enum MotionState { Idle, Move, Jump, Fall, Dash, Hit }
+    public enum MotionState { Idle, Move, Jump, Fall, Dash, Hit, Climb, Swim }
+
+    public static readonly List<PlayerMotor> All = new List<PlayerMotor>();
 
     [SerializeField] Scheme scheme = Scheme.WASD;
 
@@ -52,6 +55,18 @@ public class PlayerMotor : MonoBehaviour
     public Vector2 Velocity => rb.linearVelocity;
     public Vector2 ImpactVelocity => isDashing ? dashVelocity : rb.linearVelocity;
     public Scheme InputScheme => scheme;
+    public float Facing => facing;
+    public float MoveInput => moveInput;
+    public float VerticalInput => verticalInput;
+    public bool DownPressedThisFrame => downPressed;
+    public bool DashPressedThisFrame => dashPressed;
+    public bool JumpPressedThisFrame => jumpPressed;
+    public PlayerMotor RideTarget => rideTarget;
+    public bool IsSuspended => suspended;
+    public bool IsClimbing => climbing;
+    public bool IsFloating => floating;
+    public bool IsEmptyForm => emptyBody;
+    public float HalfHeight => body != null ? body.bounds.extents.y : GameConstants.PlayerSize * 0.5f;
 
     public void SetScheme(Scheme value) => scheme = value;
     public Vector2 SpawnPosition { get; private set; }
@@ -69,6 +84,8 @@ public class PlayerMotor : MonoBehaviour
     float facing = 1f;
     bool jumpPressed;
     bool jumpHeld;
+    bool downPressed;
+    bool dashPressed;
     bool jumpCutApplied;
     float jumpElapsed;
     float dashBufferTimer;
@@ -78,6 +95,13 @@ public class PlayerMotor : MonoBehaviour
     float controlLockTimer;
     bool grounded;
     bool onIce;
+    PlayerMotor rideTarget;
+
+    bool suspended;
+    bool climbing;
+    bool floating;
+    float floatTargetY;
+    bool emptyBody;
 
     bool isDashing;
     float dashTimer;
@@ -90,6 +114,10 @@ public class PlayerMotor : MonoBehaviour
     int knockbackStage;
     float knockbackTimer;
     float knockbackDir;
+
+    void OnEnable() => All.Add(this);
+
+    void OnDisable() => All.Remove(this);
 
     void Awake()
     {
@@ -117,11 +145,38 @@ public class PlayerMotor : MonoBehaviour
     void FixedUpdate()
     {
         tierProvider.Tick(Time.fixedDeltaTime);
+        controlLockTimer = Mathf.Max(0f, controlLockTimer - Time.fixedDeltaTime);
+
+        if (suspended)
+        {
+            TickState();
+            return;
+        }
+
+        if (climbing)
+        {
+            TickClimb();
+            TickState();
+            return;
+        }
+
+        if (emptyBody)
+        {
+            TickEmpty();
+            TickState();
+            return;
+        }
 
         grounded = ProbeGround();
         coyoteTimer = grounded ? coyoteTime : Mathf.Max(0f, coyoteTimer - Time.fixedDeltaTime);
-        controlLockTimer = Mathf.Max(0f, controlLockTimer - Time.fixedDeltaTime);
         TickDashCooldown();
+
+        if (floating)
+        {
+            TickFloat();
+            TickState();
+            return;
+        }
 
         if (isKnocked)
         {
@@ -149,7 +204,11 @@ public class PlayerMotor : MonoBehaviour
         {
             float accel = grounded ? groundAccel : airAccel;
             if (grounded && onIce) accel *= GameConstants.IceAccelerationScale;
-            v.x = StepTowards(v.x, moveInput * tierProvider.TargetSpeed, accel);
+
+            // 站在队友身上时，队友的水平速度作为目标速度基底，驮着走才不会被摩擦力甩掉
+            float target = moveInput * tierProvider.TargetSpeed;
+            if (grounded && rideTarget != null) target += rideTarget.Velocity.x;
+            v.x = StepTowards(v.x, target, accel);
         }
 
         // 用按住状态而不是抬手那一帧判断，否则漏掉的物理步会让可变跳跃高度时灵时不灵；
@@ -176,6 +235,36 @@ public class PlayerMotor : MonoBehaviour
         rb.linearVelocity = v;
 
         TickState();
+    }
+
+    void TickClimb()
+    {
+        grounded = false;
+        rb.gravityScale = 0f;
+        rb.linearVelocity = new Vector2(0f, verticalInput * GameConstants.ClimbSpeed);
+    }
+
+    /// 空形态：无重力、无碰撞，靠输入自由漂浮，方便穿墙拿钥匙。
+    void TickEmpty()
+    {
+        grounded = false;
+        Vector2 v = rb.linearVelocity;
+        v.x = StepTowards(v.x, moveInput * tierProvider.TargetSpeed, airAccel);
+        v.y = verticalInput * GameConstants.WalkSpeed;
+        rb.gravityScale = 0f;
+        rb.linearVelocity = v;
+    }
+
+    void TickFloat()
+    {
+        Vector2 v = rb.linearVelocity;
+        float targetY = (floatTargetY - rb.position.y) * 8f;
+        v.y = Mathf.MoveTowards(v.y, targetY, 40f * Time.fixedDeltaTime);
+        if (controlLockTimer <= 0f)
+            v.x = StepTowards(v.x, moveInput * tierProvider.TargetSpeed, groundAccel);
+
+        rb.gravityScale = 0f;
+        rb.linearVelocity = v;
     }
 
     bool TryStartDash()
@@ -322,6 +411,86 @@ public class PlayerMotor : MonoBehaviour
         tierProvider.Force(tier, Mathf.Max(0.05f, duration));
     }
 
+    /// B 被收进 A 的大炮时暂停物理，但 Update 仍采样输入，射出时再用。
+    public void SetSuspended(bool value)
+    {
+        suspended = value;
+        if (value)
+        {
+            isDashing = false;
+            isKnocked = false;
+            climbing = false;
+            floating = false;
+            dashBufferTimer = 0f;
+            bufferTimer = 0f;
+            rb.linearVelocity = Vector2.zero;
+        }
+
+        rb.simulated = !value;
+        body.enabled = !value && !emptyBody;
+    }
+
+    /// A 的 | 形态：贴住竖绳后由形态控制器接管升降。
+    public void BeginClimb()
+    {
+        if (suspended || climbing) return;
+
+        if (isDashing) EndDash();
+        climbing = true;
+        isKnocked = false;
+        rb.gravityScale = 0f;
+        rb.linearVelocity = Vector2.zero;
+    }
+
+    public void EndClimb()
+    {
+        if (!climbing) return;
+
+        climbing = false;
+        rb.gravityScale = rb.linearVelocity.y < 0f ? fallGravityScale : riseGravityScale;
+    }
+
+    /// 攀附时把 A 锁在绳上；不走 Teleport，避免清掉挡位和输入。
+    public void SetClimbPosition(float x, float y)
+    {
+        if (!climbing) return;
+
+        rb.position = new Vector2(x, y);
+        transform.position = rb.position;
+    }
+
+    /// A 的 _ 形态：漂浮在液面，关闭重力并保留水平操作。
+    public void SetFloating(bool value, float surfaceY)
+    {
+        floating = value;
+        floatTargetY = surfaceY + HalfHeight;
+        if (!value) return;
+
+        if (isDashing) EndDash();
+        isKnocked = false;
+        climbing = false;
+        rb.gravityScale = 0f;
+    }
+
+    /// A 的空形态：身体改成触发器，可穿墙但仍会触发钥匙、岩浆等区域。
+    public void SetEmpty(bool value)
+    {
+        emptyBody = value;
+        if (body != null) body.isTrigger = value;
+
+        if (value)
+        {
+            if (isDashing) EndDash();
+            isKnocked = false;
+            rb.gravityScale = 0f;
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0f);
+        }
+        else if (!floating && !climbing)
+        {
+            rb.gravityScale = rb.linearVelocity.y < 0f ? fallGravityScale : riseGravityScale;
+        }
+    }
+
     /// 绳、地面绳等材质把玩家弹开时调用：结束冲刺 / 击飞，按法线方向给速度并压上新挡位。
     public void ReceiveBounce(Vector2 normal, SpeedTier tier, float duration)
     {
@@ -360,6 +529,12 @@ public class PlayerMotor : MonoBehaviour
 
     bool ProbeGround()
     {
+        rideTarget = null;
+        onIce = false;
+
+        // 空形态的身体是触发器，穿墙期间不再认地面，避免踩空气起跳
+        if (emptyBody) return false;
+
         Bounds b = body.bounds;
         var probeSize = new Vector2(b.size.x * 0.9f, 0.04f);
         var origin = new Vector2(b.center.x, b.min.y + 0.02f);
@@ -368,15 +543,15 @@ public class PlayerMotor : MonoBehaviour
                                               groundHits, groundProbeDistance, groundMask);
 
         bool found = false;
-        onIce = false;
 
         for (int i = 0; i < count; i++)
         {
             var hit = groundHits[i].collider;
-            if (hit == null || hit.attachedRigidbody == rb) continue;
+            if (hit == null || hit.isTrigger || hit.attachedRigidbody == rb) continue;
 
             found = true;
             if (hit.TryGetComponent(out IceSurface _)) onIce = true;
+            if (hit.TryGetComponent(out PlayerMotor other) && other != this) rideTarget = other;
         }
         return found;
     }
@@ -384,7 +559,11 @@ public class PlayerMotor : MonoBehaviour
     void TickState()
     {
         MotionState next;
-        if (isKnocked)
+        if (climbing)
+            next = MotionState.Climb;
+        else if (floating)
+            next = MotionState.Swim;
+        else if (isKnocked)
             next = MotionState.Hit;
         else if (isDashing)
             next = MotionState.Dash;
@@ -459,6 +638,8 @@ public class PlayerMotor : MonoBehaviour
         facing = 1f;
         jumpPressed = false;
         jumpHeld = false;
+        downPressed = false;
+        dashPressed = false;
         jumpCutApplied = false;
         jumpElapsed = 0f;
         dashBufferTimer = 0f;
@@ -474,6 +655,12 @@ public class PlayerMotor : MonoBehaviour
         knockbackStage = 0;
         knockbackTimer = 0f;
         knockbackDir = 0f;
+        rideTarget = null;
+        climbing = false;
+        floating = false;
+        suspended = false;
+        rb.simulated = true;
+        if (body != null) body.enabled = true;
         rb.gravityScale = riseGravityScale;
         tierProvider.Clear();
         SetState(MotionState.Idle);
@@ -482,6 +669,8 @@ public class PlayerMotor : MonoBehaviour
     void ReadInput()
     {
         jumpPressed = false;
+        downPressed = false;
+        dashPressed = false;
         moveInput = 0f;
         verticalInput = 0f;
 
@@ -521,6 +710,8 @@ public class PlayerMotor : MonoBehaviour
 
         jumpPressed = j.wasPressedThisFrame;
         jumpHeld = j.isPressed;
+        downPressed = d.wasPressedThisFrame;
+        dashPressed = s.wasPressedThisFrame;
         if (s.wasPressedThisFrame) dashBufferTimer = dashBufferTime;
     }
 }

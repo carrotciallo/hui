@@ -30,7 +30,7 @@ public class DebugHud : MonoBehaviour
         if (kb != null)
         {
             if (kb[Key.R].wasPressedThisFrame) ReturnToRespawn();
-            if (kb[Key.F3].wasPressedThisFrame) showRunState = !showRunState;
+            if (kb[Key.F6].wasPressedThisFrame) showRunState = !showRunState;
             if (kb[Key.PageUp].wasPressedThisFrame) CycleRegion(-1);
             if (kb[Key.PageDown].wasPressedThisFrame) CycleRegion(1);
             if (kb[Key.Home].wasPressedThisFrame) TeleportToSelectedRegion();
@@ -106,11 +106,11 @@ public class DebugHud : MonoBehaviour
 
     static int TierKeyPressed(Keyboard kb)
     {
-        if (kb[Key.Digit1].wasPressedThisFrame) return 0;
-        if (kb[Key.Digit2].wasPressedThisFrame) return 1;
-        if (kb[Key.Digit3].wasPressedThisFrame) return 2;
-        if (kb[Key.Digit4].wasPressedThisFrame) return 3;
-        if (kb[Key.Digit5].wasPressedThisFrame) return 4;
+        if (kb[Key.F1].wasPressedThisFrame) return 0;
+        if (kb[Key.F2].wasPressedThisFrame) return 1;
+        if (kb[Key.F3].wasPressedThisFrame) return 2;
+        if (kb[Key.F4].wasPressedThisFrame) return 3;
+        if (kb[Key.F5].wasPressedThisFrame) return 4;
         return -1;
     }
 
@@ -154,10 +154,10 @@ public class DebugHud : MonoBehaviour
 
 #if UNITY_EDITOR || DEBUG
         GUI.Label(new Rect(10f, 424f, 620f, 24f),
-                  "R 回重生点  |  PageUp/PageDown 选区域  |  Home 传送到选中区域  |  K 发钥匙  |  1–5 强制挡位 3s  |  F3 运行状态",
+                  "R 回重生点  |  PageUp/PageDown 选区域  |  Home 传送到选中区域  |  K 发钥匙  |  F1–F5 强制挡位 3s  |  F6 运行状态",
                   labelStyle);
         GUI.Label(new Rect(10f, 446f, 620f, 24f),
-                  "1 格 = 1 单位 = 16px  |  黄条间隔 1 格，亮黄每 5 格",
+                  "A 按 1–6 选形态：普通 / u / L / | / _ / 空  |  1 格 = 1 单位 = 16px",
                   labelStyle);
 #endif
     }
@@ -177,13 +177,18 @@ public class DebugHud : MonoBehaviour
         Vector2 v = p.Velocity;
         var carrier = p.GetComponent<KeyCarrier>();
         string hasKey = carrier != null && carrier.HasKey ? "有" : "无";
+        var form = p.GetComponent<FormController>();
+        string formLine = form != null
+            ? $"\n形态: {form.FormLabel}   携带: {(form.Carried != null ? "B" : "无")}"
+            : "";
 
         string text =
             $"{title}\n" +
             $"挡位: <color=#{color}>{tier.TierLabel}</color>   目标速度: {tier.TargetSpeed:F1}\n" +
             $"速度: {v.x:F1}, {v.y:F1}   合速度: {v.magnitude:F1}\n" +
             $"状态: {p.State}   地面: {p.Grounded}   冲刺: {p.IsDashing}   冷却: {p.DashCooldownRemaining:F2}s   可冲: {p.CanDash}\n" +
-            $"最远: {maxX:F2} 格   最高: {maxUp:F2} 格   钥匙: {hasKey}";
+            $"最远: {maxX:F2} 格   最高: {maxUp:F2} 格   钥匙: {hasKey}" +
+            formLine;
 
         GUI.Label(new Rect(x + 10f, y + 8f, 350f, 116f), text, labelStyle);
     }

@@ -22,7 +22,8 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 3. 菜单 **GameJam → Build World Scene**，生成正式世界 `Assets/Scenes/World.unity`（L0 灰盒 + L1–L10 占位，Build Settings 只保留它）
 4. 需要单测手感时，再跑 **GameJam → Build Prototype Scene** 生成玩具房 `Assets/Scenes/Prototype.unity`（不进构建）
 5. 验材质判定时，跑 **GameJam → Build Materials Test Scene** 生成材质测试房 `Assets/Scenes/Materials.unity`（不进构建）
-6. Play
+6. 验 A 的形态时，跑 **GameJam → Build Forms Test Scene** 生成形态测试房 `Assets/Scenes/Forms.unity`（不进构建）
+7. Play
 
 场景由脚本生成，所以第一次打开仓库时没有现成场景是正常的；生成一次后正常提交即可。
 
@@ -35,7 +36,9 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 
 两人共用一个键盘。测试房里按 `R` 重置位置和测量数据。冲刺不可斜向；上下方向优先于左右，空中才能下冲。之后接手柄时再换成 Input System 的 control scheme。
 
-正式世界额外调试键：`R` 回各自重生点，`PageUp` / `PageDown` 选区域，`Home` 传送到选中区域，`K` 给两人各发一把钥匙，`1`–`5` 强制两人挡位 v0–v4 持续 3 秒，`F3` 收起/展开运行状态（钥匙、已开门、传送门、B 质量、重生点、生死）。
+正式世界额外调试键：`R` 回各自重生点，`PageUp` / `PageDown` 选区域，`Home` 传送到选中区域，`K` 给两人各发一把钥匙，`F1`–`F5` 强制两人挡位 v0–v4 持续 3 秒，`F6` 收起/展开运行状态（钥匙、已开门、传送门、B 质量、重生点、生死）。
+
+A（P1）的形态：`1`–`6` 依次切普通 / `u` 大炮 / `L` 转换器 / `|` 攀附 / `_` 木筏 / 空。`u` 形态下 B 站上来按「下」进仓，B 再按冲刺射出（挡位 +1）；`|` 形态在竖绳旁按 W 附着、W/S 升降；空形态可穿墙拿钥匙，2.5 秒后死亡。
 
 ## 结构
 
@@ -45,7 +48,10 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 │   └── Assets/
 │       ├── Scripts/
 │       │   ├── GameConstants.cs        尺度、跳距、冲刺距离等规格常量
-│       │   ├── PlayerMotor.cs          移动、跳跃、四向冲刺、地面检测、被撞击飞
+│       │   ├── PlayerMotor.cs          移动、跳跃、四向冲刺、地面检测、被撞击飞、驮带/攀附/漂浮/空形态
+│       │   ├── FormController.cs       A 的六形态：切换、大炮收人、转换区、攀绳、木筏、空形态
+│       │   ├── ConverterZone.cs        A 的 L 形态转换区（子物体触发器）
+│       │   ├── Lava.cs                 岩浆：木筏漂浮、普通玩家即死
 │       │   ├── SpeedTierProvider.cs    v0–v4 挡位状态 → 目标速度；可替换为速度推导挡位
 │       │   ├── ImpactInfo.cs           撞击上下文 + 表面响应契约（P4 材质消费）
 │       │   ├── TierOutline.cs          玩家挡位描边（黄/红/蓝/紫）
@@ -70,10 +76,11 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 │       │   ├── GreyboxAssets.cs        共享灰盒资源：精灵、材质、prefab、玩家构建
 │       │   ├── PrototypeSceneBuilder.cs 一键生成 16px 网格测试房
 │       │   ├── WorldBuilder.cs          一键生成 World.unity（Tilemap + marker prefab）
-│       │   └── MaterialsBuilder.cs      一键生成材质 prefab 与 Materials.unity
+│       │   ├── MaterialsBuilder.cs      一键生成材质 prefab 与 Materials.unity
+│       │   └── FormsBuilder.cs          一键生成 Forms.unity（五种形态 + 岩浆各一排）
 │       └── Tests/
 │           ├── EditMode/               RunState 规则测试（含开门幂等）
-│           └── PlayMode/               出生、掉落、KillZone、复活、相机、传送、材质判定
+│           └── PlayMode/               出生、掉落、KillZone、复活、相机、传送、材质判定、A 形态
 ├── docs/agents/                    工程约定（issue / 域模型）
 └── AGENTS.md
 ```
@@ -93,17 +100,21 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 - 钥匙头顶携带（最多 1 把）；过关门有钥匙就吞钥匙开门，否则 B 质量 ≥ 2 且 v2 破门；开门状态写入 `RunState` 跨区域保留
 - 传送门：靠近点亮，双人同时站入并按「下」、消耗 1 把钥匙后激活计数；刺复用 `KillZone`
 - 材质测试房 8 行逐物件验证，PlayMode 用真实物理驱动（不直接调 `ReceiveImpact`）
+- A 的形态：`1`–`6` 切普通 / `u` / `L` / `|` / `_` / 空；`u` 收 B 后按 B 的冲刺方向射出、挡位 +1；`L` 用触发器子物体把横向命中转向上、纵向命中转向远离 A，挡位不变；`|` 贴绳按 W 吸附并能 W/S 升降；`_` 在岩浆上漂浮并承载 B；空形态身体变触发器、无重力、2.5s 后死亡
+- 驮带：站在队友头上时把队友的水平速度叠加进目标速度，跟着走不会被甩掉
+- 岩浆：普通玩家接触即死，木筏形态和骑在木筏上的 B 安全
+- 形态测试房 5 排（大炮 / 转换器 / 竖绳 / 岩浆 / 空形态），PlayMode 用真实物理与输入驱动
 - 地面检测同时认 `Ground` 和 `Player` 两层，所以可以踩在队友头上起跳
 - 被踩的一方同样可以起跳，不做压制（已与策划确认，暂时作为特性保留，不是 bug）
-- `MotionState` 状态机：`Idle` / `Move` / `Jump` / `Fall` / `Dash` / `Hit`，通过 `StateChanged` 事件外抛，供动画和音效挂接
+- `MotionState` 状态机：`Idle` / `Move` / `Jump` / `Fall` / `Dash` / `Hit` / `Climb` / `Swim`，通过 `StateChanged` 事件外抛，供动画和音效挂接
 - 测试房带 1 格刻度、2 格高度标记、2.5 格断崖（跳距按 3 格调）和调试 HUD；`R` 重置
 - 单场景连续世界：Tilemap 灰盒 + `Region` / `World` 区域划分，L0 灰盒（2 格跳高、3 格跳远、4 格横冲缺口）+ L1–L10 占位
 - 死亡与重生：掉落线、`KillZone` 触发死亡，0.5s 后在最近 `RespawnPoint` 复活；没有记录时回当前区域出生点；队友触碰重生点可立即复活
 - `RunState` 跨区域保留钥匙、已点亮传送门、B 质量和两人重生点，死亡不重置
 - 相机按世界外框 clamp、只框活着的玩家，留了 `SetViewRestriction` 给 L10 视野揭示
-- 程序集拆分为 `GameJam.Runtime` / `GameJam.Editor` / 两个测试程序集；EditMode 测 `RunState`，PlayMode 测关卡流程与材质判定
+- 程序集拆分为 `GameJam.Runtime` / `GameJam.Editor` / 两个测试程序集；EditMode 测 `RunState`，PlayMode 测关卡流程、材质判定与 A 形态
 
-还没做：玉米糊规则、A 的形态、L1–L10 实际关卡内容、传送效果、顿帧与震屏、手柄、Cinemachine 相机。
+还没做：玉米糊规则、热锻、L1–L10 实际关卡内容、传送效果、顿帧与震屏、手柄、Cinemachine 相机。
 
 ## 协作
 

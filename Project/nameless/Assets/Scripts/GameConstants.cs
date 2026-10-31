@@ -39,4 +39,11 @@ public static class GameConstants
     public const float KeyCarryHeight = 0.8f;
     // 冰面把地面加速度压到 30%，起步更快，同时保留明显滑行
     public const float IceAccelerationScale = 0.3f;
+
+    // P5 A 形态
+    public const float ClimbSpeed = 4f;
+    public const float CannonLaunchDuration = 0.35f;
+    public const SpeedTier ConverterMinTier = SpeedTier.V1;
+    public const float ConverterCooldown = 0.2f;
+    public const float EmptyFormDuration = 2.5f;
 }

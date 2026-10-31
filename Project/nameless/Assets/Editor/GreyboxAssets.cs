@@ -136,6 +136,9 @@ public static class GreyboxAssets
         var carrier = go.AddComponent<KeyCarrier>();
         carrier.Configure(key.transform);
 
+        // 只有 A（WASD）带形态系统，B 没有形态
+        if (scheme == PlayerMotor.Scheme.WASD) go.AddComponent<FormController>();
+
         return go;
     }
 
