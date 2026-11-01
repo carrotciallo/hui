@@ -452,6 +452,19 @@ public class LabPlayer : MonoBehaviour
 
     public void SetVelocity(Vector2 v) => rb.linearVelocity = v;
 
+    /// <summary>被场景物件弹开：结束冲刺态，速度设成给定方向 × 速度。</summary>
+    public void ApplyBounce(Vector2 normal, float speed)
+    {
+        if (normal.sqrMagnitude < 0.0001f) normal = Vector2.up;
+        normal.Normalize();
+
+        dashPhase = DashPhase.None;
+        dashTimer = 0f;
+        dashLock = 0f;
+        rb.gravityScale = lab != null ? lab.GravityScale : 5.1f;
+        rb.linearVelocity = normal * speed;
+    }
+
     /// <summary>冲刺态的可交换快照：方向、速度、剩余距离（= 剩余时长 × 速度）、结束速度。</summary>
     public struct DashState
     {

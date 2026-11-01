@@ -250,6 +250,9 @@ public class TuningLab : MonoBehaviour
         AddSolid("WallL", new Vector2(-13.5f * roomScale, 8f * roomScale), new Vector2(1f, 16f * roomScale));
         AddSolid("WallR", new Vector2(13.5f * roomScale, 8f * roomScale), new Vector2(1f, 16f * roomScale));
 
+        // 竖绳测试：4 格长，底端贴地
+        AddRope(new Vector2(9f, 2f), 4);
+
         BuildGrid();
     }
 
@@ -309,6 +312,21 @@ public class TuningLab : MonoBehaviour
         sr.sprite = White;
         sr.color = GridColor;
         sr.sortingOrder = -10;
+    }
+
+    /// <summary>竖绳：实心碰撞，按玩家挡位决定挡住 / 放行 / 弹回。</summary>
+    void AddRope(Vector2 center, int cells, int chainId = 0)
+    {
+        var go = new GameObject("VerticalRope");
+        go.transform.SetParent(transform, false);
+        go.transform.position = center;
+
+        var bc = go.AddComponent<BoxCollider2D>();
+        bc.sharedMaterial = slick;
+
+        var rope = go.AddComponent<LabVerticalRope>();
+        rope.cells = cells;
+        rope.chainId = chainId;
     }
 
     GameObject AddSolid(string name, Vector2 center, Vector2 size)
