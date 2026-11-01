@@ -187,15 +187,30 @@ public class TuningLab : MonoBehaviour
     static readonly Color ColorA = new Color(0.36f, 0.62f, 1f);
     static readonly Color ColorB = new Color(1f, 0.45f, 0.4f);
 
+    [Tooltip("勾上 = 运行时自动搭整个场地；烘焙成场景后应当关掉，否则会重复生成。")]
+    public bool autoBuild = true;
+
     void Awake()
+    {
+        if (autoBuild) BuildAll();
+    }
+
+    /// <summary>
+    /// 一次性搭出整个场地。Awake 里调用，也可以被编辑器烘焙流程直接调用，
+    /// 生成真实的 GameObject 之后存成场景，就能在编辑器里直接改。
+    /// </summary>
+    public void BuildAll()
     {
         Physics2D.gravity = new Vector2(0f, -9.81f);
         Time.timeScale = timeScale;
+
         BuildRoom();
         BuildPlayers();
         BuildCamera();
         BuildPixelGrid();
-        Hud = gameObject.AddComponent<LabHud>();
+
+        if (Hud == null) Hud = gameObject.GetComponent<LabHud>();
+        if (Hud == null) Hud = gameObject.AddComponent<LabHud>();
         Hud.Bind(this);
     }
 

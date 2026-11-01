@@ -11,6 +11,7 @@ public static class TuningLabMenu
 {
     const string ScenePath = "Assets/Scenes/TuningLab.unity";
     const string ScenePath4x = "Assets/Scenes/TuningLab4x.unity";
+    const string ScenePathBaked = "Assets/Scenes/TuningLabEditable.unity";
 
     [MenuItem("GameJam/Build Tuning Lab")]
     public static void Build()
@@ -32,6 +33,36 @@ public static class TuningLabMenu
         EditorUtility.DisplayDialog(
             "Tuning Lab 4x",
             "已生成 " + ScenePath4x + "\n地面和墙壁放大 4 倍，台阶位置不变，默认开自由相机。",
+            "好");
+    }
+
+    /// <summary>
+    /// 烘焙一份"实体"场景：把运行时才生成的地面、玩家、相机、绳子全部实例化出来并存盘，
+    /// 之后就能在编辑器里直接选中、拖动、增删，不必再按 Play。
+    /// </summary>
+    [MenuItem("GameJam/Bake Tuning Lab To Editable Scene")]
+    public static void BakeEditable()
+    {
+        if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+
+        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        var go = new GameObject("TuningLab");
+
+        var lab = go.AddComponent<TuningLab>();
+        lab.autoBuild = false;          // 已经烘焙成实体，别再自动生成一遍
+        lab.roomScale = 1f;
+        lab.freeCamera = false;
+        lab.BuildAll();
+
+        Directory.CreateDirectory(Path.GetDirectoryName(ScenePathBaked));
+        EditorSceneManager.SaveScene(scene, ScenePathBaked);
+        AssetDatabase.Refresh();
+
+        EditorUtility.DisplayDialog(
+            "TuningLab Baked",
+            "已生成可编辑场景：\n" + ScenePathBaked +
+            "\n\n场景里的地面、台阶、玩家、相机、绳子都是真实物体，可以直接改。\n" +
+            "注意 TuningLab 上的 autoBuild 已关闭。",
             "好");
     }
 
