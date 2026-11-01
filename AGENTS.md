@@ -25,6 +25,35 @@
 - 不要伪造测试结果、构建结果或审查结论；无法验证时必须明确说明。
 - 关注错误处理、边界条件、兼容性、安全性和性能影响。
 
+## 工程与版本控制
+
+### ProjectSettings 重写
+
+Unity 每次打开工程都会重写 `ProjectSettings/` 下的资源，多数是序列化整理，不是配置改动。常见来源：
+
+- **重新序列化**：按当前版本的序列化器重写 YAML，字段顺序、默认值、浮点精度、`serializedVersion` 都可能变。
+- **版本迁移**：`ProjectVersion.txt` 固定 6000.6.4f1；实际用别的 6000.x 补丁版本打开，Unity 会升级这些资源并写回。
+- **包解析回写**：Input System、URP 等包会把设置写进 `InputManager.asset`、图形/质量设置。
+- **构建场景列表**：`WorldBuilder` 生成世界时执行 `EditorBuildSettings.scenes = ...`；进出 Play、切换场景时也可能规范化这份列表。
+- **退出/域重载落盘**：`EditorSettings.asset`、`QualitySettings.asset` 等编辑器状态类设置。
+
+判断是噪音还是实质改动：
+
+```bash
+git diff --stat Project/nameless/ProjectSettings/
+git diff Project/nameless/ProjectSettings/EditorBuildSettings.asset
+```
+
+- 只有 `serializedVersion`、字段顺序、默认值变化：重新序列化噪音，`git restore` 掉，不提交。
+- 出现真实的场景列表、layer、图形设置变化：实质改动，需要提交并在 PR 里说明。
+
+约定：
+
+- 全组统一 Unity **6000.6.4f1**，不混用其他补丁版本。
+- 每次打开工程后先看 `git status`，把纯序列化噪音 `git restore` 掉再开始开发。
+- 本地生成或调试产生的场景、`EditorBuildSettings.asset` 改动不要带进 PR。
+- **不要整体 ignore `ProjectSettings/`**：图层、物理、输入、URP、构建场景等关键配置都在这里，必须进版本库。
+
 ## Pull Request Review
 
 Review 其他智能代理提交的 PR 时，按以下优先级检查：
