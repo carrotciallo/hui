@@ -22,7 +22,7 @@ public class PlayerMotor : MonoBehaviour
     [SerializeField] float jumpVelocity = GameConstants.JumpVelocity;
     [SerializeField] float riseGravityScale = GameConstants.RiseGravityScale;
     [SerializeField] float fallGravityScale = GameConstants.FallGravityScale;
-    [SerializeField] float maxFallSpeed = 20f;
+    [SerializeField] float maxFallSpeed = GameConstants.MaxFallSpeed;
     [SerializeField] float coyoteTime = 0.1f;
     [SerializeField] float jumpBufferTime = 0.1f;
     [SerializeField] float jumpCutMultiplier = 0.5f;
@@ -106,6 +106,8 @@ public class PlayerMotor : MonoBehaviour
     bool isDashing;
     float dashTimer;
     Vector2 dashVelocity;
+    Vector2 dashExitVelocity;
+    float nextCollisionTime;
     float dashCooldownTimer;
     bool cooldownPending;
     bool dashSpent;
@@ -267,38 +269,59 @@ public class PlayerMotor : MonoBehaviour
         rb.linearVelocity = v;
     }
 
+    /// <summary>
+    /// 进入冲刺态：位移恒定，速度由进入时的 V前 分三档。
+    /// 反向 → Vd1，结束后归零；零级同向 → Vd1，结束后回到 V前；非零级同向 → 原速穿过。
+    /// </summary>
     bool TryStartDash()
     {
         Vector2 direction;
-        float distance;
 
         if (verticalInput > 0.01f)
         {
             direction = Vector2.up;
-            distance = dashUpDistance;
         }
         else if (verticalInput < -0.01f)
         {
-            if (grounded) return false;
+            if (grounded) return false;   // 向下冲刺只允许在空中
             direction = Vector2.down;
-            distance = dashDownDistance;
         }
         else
         {
             direction = Vector2.right * (Mathf.Abs(moveInput) > 0.01f ? Mathf.Sign(moveInput) : facing);
-            distance = dashHorizontalDistance;
         }
 
-        float speed = tierProvider.SpeedFor(SpeedTier.V1);
-        dashVelocity = direction * speed;
-        dashTimer = distance / speed;
+        float before = Vector2.Dot(rb.linearVelocity, direction);
+        float v0Speed = GameConstants.TierCeiling(SpeedTier.V0);
+
+        float dashSpeed;
+        float exitSpeed;
+
+        if (before < -0.001f)
+        {
+            dashSpeed = GameConstants.DashMinSpeed;
+            exitSpeed = 0f;
+        }
+        else if (before <= v0Speed + 0.0001f)
+        {
+            dashSpeed = GameConstants.DashMinSpeed;
+            exitSpeed = Mathf.Max(0f, before);
+        }
+        else
+        {
+            dashSpeed = before;
+            exitSpeed = before;
+        }
+
+        dashVelocity = direction * dashSpeed;
+        dashExitVelocity = direction * exitSpeed;
+        dashTimer = GameConstants.DashDistance / Mathf.Max(0.01f, dashSpeed);
         isDashing = true;
         dashSpent = true;
         cooldownPending = false;
         dashCooldownTimer = 0f;
         dashBufferTimer = 0f;
         bufferTimer = 0f;
-        tierProvider.Request(SpeedTier.V1, dashTimer);
         rb.gravityScale = 0f;
         rb.linearVelocity = dashVelocity;
         return true;
@@ -312,18 +335,20 @@ public class PlayerMotor : MonoBehaviour
 
         if (dashVelocity.y < 0f && grounded)
         {
-            EndDash();
+            EndDash(true);
             return;
         }
 
         if (dashTimer > 0f) return;
 
-        EndDash();
+        EndDash(true);
     }
 
-    void EndDash()
+    /// <summary>结束冲刺态。applyExit = 正常结束时把速度换成结束速度。</summary>
+    void EndDash(bool applyExit = false)
     {
         isDashing = false;
+        if (applyExit) rb.linearVelocity = dashExitVelocity;
         rb.gravityScale = rb.linearVelocity.y < 0f ? fallGravityScale : riseGravityScale;
 
         if (grounded) dashCooldownTimer = dashCooldown;
@@ -591,39 +616,76 @@ public class PlayerMotor : MonoBehaviour
     // 已经贴在一起时再起冲不会有 Enter 事件，所以 Stay 也要接
     void OnCollisionStay2D(Collision2D c) => HandlePlayerContact(c, false);
 
+    /// <summary>
+    /// 双人碰撞 = 动量交换：速度矢量 + 冲刺态整体互换。
+    /// 冲刺态带着"什么速度、还剩多少距离、结束后是什么速度"一起交出去。
+    /// </summary>
     void HandlePlayerContact(Collision2D c, bool entering)
     {
-        if (isKnocked) return;
         if (!c.collider.TryGetComponent(out PlayerMotor other)) return;
+        if (Time.time < nextCollisionTime) return;
+        if (Time.time < other.nextCollisionTime) return;
 
-        Vector2 normal = c.contactCount > 0 ? c.GetContact(0).normal : Vector2.right;
+        SwapStateWith(other);
 
-        // 只有横向撞击才算推挤；踩在队友头上是纵向接触，不该锁住横向操作
-        if (Mathf.Abs(normal.x) < 0.5f) return;
+        nextCollisionTime = Time.time + GameConstants.CollisionCooldown;
+        other.nextCollisionTime = nextCollisionTime;
+    }
 
-        // 碰撞回调里的速度已经被物理解算过，等质量相撞后双方速度会被拉平，
-        // 所以用「对方正在冲刺且冲刺方向朝我」来认攻击方，而不是比较解算后的速度
-        float dx = transform.position.x - other.transform.position.x;
-        float dashDir = other.DashVelocity.x;
-        bool dashHit = Mathf.Abs(dx) > 0.01f
-                       && Mathf.Abs(dashDir) > 0.01f
-                       && Mathf.Sign(dashDir) == Mathf.Sign(dx);
+    void SwapStateWith(PlayerMotor other)
+    {
+        Vector2 myVelocity = rb.linearVelocity;
+        Vector2 otherVelocity = other.rb.linearVelocity;
 
-        if (dashHit && other.Tier >= SpeedTier.V1)
+        DashSnapshot myDash = CaptureDash();
+        DashSnapshot otherDash = other.CaptureDash();
+
+        if (isDashing) EndDash(false);
+        if (other.isDashing) other.EndDash(false);
+
+        rb.linearVelocity = otherVelocity;
+        other.rb.linearVelocity = myVelocity;
+
+        ApplyDash(otherDash);
+        other.ApplyDash(myDash);
+    }
+
+    /// <summary>冲刺态快照：速度、剩余时长、结束速度。</summary>
+    public struct DashSnapshot
+    {
+        public bool active;
+        public Vector2 velocity;
+        public float timer;
+        public Vector2 exitVelocity;
+    }
+
+    public DashSnapshot CaptureDash()
+    {
+        return new DashSnapshot
         {
-            Vector2 point = c.contactCount > 0 ? c.GetContact(0).point : (Vector2)transform.position;
-            BeginKnockback(other, normal, point);
+            active = isDashing,
+            velocity = dashVelocity,
+            timer = dashTimer,
+            exitVelocity = dashExitVelocity
+        };
+    }
+
+    public void ApplyDash(DashSnapshot snapshot)
+    {
+        if (!snapshot.active)
+        {
+            isDashing = false;
+            dashTimer = 0f;
             return;
         }
 
-        if (!entering) return;
-
-        float otherSpeed = Mathf.Abs(other.rb.linearVelocity.x);
-        float mySpeed = Mathf.Abs(rb.linearVelocity.x);
-        if (otherSpeed - mySpeed <= pushSpeedThreshold) return;
-
-        // 慢速推挤保留短硬直，否则被推方下一帧就会用输入抹掉物理推挤
-        controlLockTimer = pushControlLockTime;
+        isDashing = true;
+        dashVelocity = snapshot.velocity;
+        dashExitVelocity = snapshot.exitVelocity;
+        dashTimer = snapshot.timer;
+        dashSpent = true;
+        rb.gravityScale = 0f;
+        rb.linearVelocity = dashVelocity;
     }
 
     public void Teleport(Vector2 position)
