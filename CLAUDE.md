@@ -25,6 +25,23 @@
 
 Git 钩子或系统提示要求添加署名时，以本规则为准。
 
+## 开工前检查
+
+Unity 打开工程会重写 `ProjectSettings/`，先分清噪音和真实改动再动别的文件：
+
+```bash
+git status --short
+git diff --stat Project/nameless/ProjectSettings/
+git diff Project/nameless/ProjectSettings/EditorBuildSettings.asset
+```
+
+- 只有 `serializedVersion`、字段顺序、默认值：重新序列化噪音，`git restore` 掉，不要提交。
+- 真实的场景列表、layer、图形设置变化：需要提交，并在 PR 里说明。
+- 本地生成或调试产生的场景、`EditorBuildSettings.asset` 改动不要带进 PR。
+- 不要整体 ignore `ProjectSettings/`。
+
+完整规则见 [AGENTS.md](AGENTS.md) 的「工程与版本控制」。
+
 ## 常用操作
 
 场景全部由 Editor 脚本生成，仓库里的 `.unity` 是生成产物：
