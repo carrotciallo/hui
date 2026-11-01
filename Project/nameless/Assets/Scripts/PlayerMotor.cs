@@ -22,7 +22,7 @@ public class PlayerMotor : MonoBehaviour
     [SerializeField] float jumpVelocity = GameConstants.JumpVelocity;
     [SerializeField] float riseGravityScale = GameConstants.RiseGravityScale;
     [SerializeField] float fallGravityScale = GameConstants.FallGravityScale;
-    [SerializeField] float maxFallSpeed = 20f;
+    [SerializeField] float maxFallSpeed = GameConstants.MaxFallSpeed;
     [SerializeField] float coyoteTime = 0.1f;
     [SerializeField] float jumpBufferTime = 0.1f;
     [SerializeField] float jumpCutMultiplier = 0.5f;
@@ -48,8 +48,8 @@ public class PlayerMotor : MonoBehaviour
     public bool IsDashing => isDashing;
     public bool IsKnocked => isKnocked;
     public Vector2 DashVelocity => isDashing ? dashVelocity : Vector2.zero;
-    public bool CanDash => !dashSpent && dashCooldownTimer <= 0f && !isDashing && !isKnocked;
-    public float DashCooldownRemaining => dashCooldownTimer;
+    public bool CanDash => charge >= 1f && !isDashing && !isKnocked;
+    public float DashCooldownRemaining => (1f - charge) * dashCooldown;
     public SpeedTier Tier => tierProvider.Tier;
     public SpeedTierProvider SpeedTiers => tierProvider;
     public Vector2 Velocity => rb.linearVelocity;
@@ -106,6 +106,11 @@ public class PlayerMotor : MonoBehaviour
     bool isDashing;
     float dashTimer;
     Vector2 dashVelocity;
+    Vector2 dashExitVelocity;
+    float nextCollisionTime;
+    float playerContactTimer;
+    float charge = 1f;
+    bool refillArmed;
     float dashCooldownTimer;
     bool cooldownPending;
     bool dashSpent;
@@ -114,6 +119,49 @@ public class PlayerMotor : MonoBehaviour
     int knockbackStage;
     float knockbackTimer;
     float knockbackDir;
+
+    // ---- 红热态：四条边各自的状态（只有 A 的框有边） ----
+    public enum EdgeState { Normal = 0, Hot1 = 1, Hot2 = 2 }
+
+    [Header("红热")]
+    [SerializeField] int redHotTierIndex = 1;
+    [SerializeField] float redHotDuration = 1.5f;
+    [SerializeField] float dashDistance = GameConstants.DashDistance;
+
+    readonly EdgeState[] edgeStates = new EdgeState[4];   // 上 下 左 右
+    readonly float[] edgeTimers = new float[4];
+
+    PlayerVisual visual;
+    Vector2 preCollisionVelocity;
+
+    public bool CanBeRedHot => scheme == Scheme.WASD;
+
+    public EdgeState GetEdge(int index) =>
+        index >= 0 && index < 4 ? edgeStates[index] : EdgeState.Normal;
+
+    void SetEdge(int index, EdgeState next)
+    {
+        if (index < 0 || index >= 4 || edgeStates[index] == next) return;
+        edgeStates[index] = next;
+        edgeTimers[index] = next == EdgeState.Hot1 ? redHotDuration : 0f;
+        if (visual != null) visual.SetEdge(index, next);
+    }
+
+    void TickEdges()
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            if (edgeStates[i] != EdgeState.Hot1) continue;
+            edgeTimers[i] -= Time.fixedDeltaTime;
+            if (edgeTimers[i] <= 0f) SetEdge(i, EdgeState.Normal);
+        }
+    }
+
+    static int EdgeFor(Vector2 axis)
+    {
+        if (Mathf.Abs(axis.x) > 0.5f) return axis.x > 0f ? 3 : 2;
+        return axis.y > 0f ? 0 : 1;
+    }
 
     void OnEnable() => All.Add(this);
 
@@ -130,6 +178,66 @@ public class PlayerMotor : MonoBehaviour
 
         if (groundMask == 0) groundMask = LayerMask.GetMask("Ground", "Player");
         SpawnPosition = transform.position;
+
+        ApplyGlobalTuning();
+        BuildVisual();
+    }
+
+    /// <summary>从 Resources/GameTuning.asset 覆盖序列化字段：改一处，所有场景生效。</summary>
+    void ApplyGlobalTuning()
+    {
+        var tuning = GameTuning.Current;
+        if (tuning == null) return;
+
+        jumpVelocity = GameConstants.JumpVelocityForHeight(tuning.jumpHeight);
+        maxFallSpeed = tuning.maxFallSpeed;
+        riseGravityScale = tuning.riseGravityScale;
+        fallGravityScale = tuning.fallGravityScale;
+        groundAccel = tuning.groundAccel;
+        airAccel = tuning.airAccel;
+        dashCooldown = tuning.dashCooldown;
+        redHotTierIndex = tuning.redHotTierIndex;
+        redHotDuration = tuning.redHotDuration;
+        dashDistance = tuning.dashDistance;
+        jumpCutMultiplier = tuning.jumpCutMultiplier;
+    }
+
+    /// <summary>把场景里的方块换成三层视觉：外圈等级 / 中框红热 / 白眼睛朝向。</summary>
+    void BuildVisual()
+    {
+        var existing = GetComponent<SpriteRenderer>();
+        Color color = Color.white;
+        if (existing != null)
+        {
+            color = existing.color;
+            existing.enabled = false;   // 旧方块让位给分层视觉
+        }
+
+        bool hollow = scheme == Scheme.WASD;   // A（大框）空心，B（小块）实心
+        int pixels = Mathf.RoundToInt(GameConstants.PlayerPixels);
+        visual = PlayerVisual.Build(transform, pixels, hollow, color);
+    }
+
+    void LateUpdate()
+    {
+        if (visual == null) return;
+
+        Vector2 v = rb.linearVelocity;
+        visual.SetRingTiers(
+            v.y > 0.01f ? (int)SpeedTierProvider.TierOf(v.y) : 0,
+            v.y < -0.01f ? (int)SpeedTierProvider.TierOf(-v.y) : 0,
+            v.x < -0.01f ? (int)SpeedTierProvider.TierOf(-v.x) : 0,
+            v.x > 0.01f ? (int)SpeedTierProvider.TierOf(v.x) : 0);
+
+        visual.SetAim(AimDirection());
+    }
+
+    Vector2 AimDirection()
+    {
+        if (Mathf.Abs(verticalInput) > 0.01f) return new Vector2(0f, Mathf.Sign(verticalInput));
+        if (Mathf.Abs(moveInput) > 0.01f) return new Vector2(Mathf.Sign(moveInput), 0f);
+        if (!grounded && Mathf.Abs(rb.linearVelocity.y) > 0.5f) return new Vector2(0f, Mathf.Sign(rb.linearVelocity.y));
+        return new Vector2(Mathf.Sign(facing), 0f);
     }
 
     void Update()
@@ -145,6 +253,8 @@ public class PlayerMotor : MonoBehaviour
     void FixedUpdate()
     {
         tierProvider.Tick(Time.fixedDeltaTime);
+        preCollisionVelocity = rb.linearVelocity;   // 碰撞回调里速度已被解算，先用这里存一份
+        TickEdges();
         controlLockTimer = Mathf.Max(0f, controlLockTimer - Time.fixedDeltaTime);
 
         if (suspended)
@@ -192,13 +302,17 @@ public class PlayerMotor : MonoBehaviour
             return;
         }
 
-        if (dashBufferTimer > 0f && !dashSpent && dashCooldownTimer <= 0f && TryStartDash())
+        if (dashBufferTimer > 0f && charge >= 1f && TryStartDash())
         {
             TickState();
             return;
         }
 
         Vector2 v = rb.linearVelocity;
+
+        // 空气制动：空中水平方向持续 -g，和竖直方向的重力对称
+        if (!grounded)
+            v.x = Mathf.MoveTowards(v.x, 0f, GameConstants.HorizontalAirDrag * Time.fixedDeltaTime);
 
         if (controlLockTimer <= 0f)
         {
@@ -267,38 +381,58 @@ public class PlayerMotor : MonoBehaviour
         rb.linearVelocity = v;
     }
 
+    /// <summary>
+    /// 进入冲刺态：位移恒定，速度由进入时的 V前 分三档。
+    /// 反向 → Vd1，结束后归零；零级同向 → Vd1，结束后回到 V前；非零级同向 → 原速穿过。
+    /// </summary>
     bool TryStartDash()
     {
         Vector2 direction;
-        float distance;
 
         if (verticalInput > 0.01f)
         {
             direction = Vector2.up;
-            distance = dashUpDistance;
         }
         else if (verticalInput < -0.01f)
         {
-            if (grounded) return false;
+            if (grounded) return false;   // 向下冲刺只允许在空中
             direction = Vector2.down;
-            distance = dashDownDistance;
         }
         else
         {
             direction = Vector2.right * (Mathf.Abs(moveInput) > 0.01f ? Mathf.Sign(moveInput) : facing);
-            distance = dashHorizontalDistance;
         }
 
-        float speed = tierProvider.SpeedFor(SpeedTier.V1);
-        dashVelocity = direction * speed;
-        dashTimer = distance / speed;
+        float before = Vector2.Dot(rb.linearVelocity, direction);
+        float v0Speed = GameConstants.TierCeiling(SpeedTier.V0);
+
+        float dashSpeed;
+        float exitSpeed;
+
+        if (before < -0.001f)
+        {
+            dashSpeed = GameConstants.DashMinSpeed;
+            exitSpeed = 0f;
+        }
+        else if (before <= v0Speed + 0.0001f)
+        {
+            dashSpeed = GameConstants.DashMinSpeed;
+            exitSpeed = Mathf.Max(0f, before);
+        }
+        else
+        {
+            dashSpeed = before;
+            exitSpeed = before;
+        }
+
+        dashVelocity = direction * dashSpeed;
+        dashExitVelocity = direction * exitSpeed;
+        dashTimer = Mathf.Max(0.01f, dashDistance) / Mathf.Max(0.01f, dashSpeed);
         isDashing = true;
-        dashSpent = true;
-        cooldownPending = false;
-        dashCooldownTimer = 0f;
+        charge = 0f;
+        refillArmed = false;
         dashBufferTimer = 0f;
         bufferTimer = 0f;
-        tierProvider.Request(SpeedTier.V1, dashTimer);
         rb.gravityScale = 0f;
         rb.linearVelocity = dashVelocity;
         return true;
@@ -312,37 +446,36 @@ public class PlayerMotor : MonoBehaviour
 
         if (dashVelocity.y < 0f && grounded)
         {
-            EndDash();
+            EndDash(true);
             return;
         }
 
         if (dashTimer > 0f) return;
 
-        EndDash();
+        EndDash(true);
     }
 
-    void EndDash()
+    /// <summary>结束冲刺态。applyExit = 正常结束时把速度换成结束速度。</summary>
+    void EndDash(bool applyExit = false)
     {
         isDashing = false;
+        if (applyExit) rb.linearVelocity = dashExitVelocity;
         rb.gravityScale = rb.linearVelocity.y < 0f ? fallGravityScale : riseGravityScale;
-
-        if (grounded) dashCooldownTimer = dashCooldown;
-        else cooldownPending = true;
     }
 
+    /// <summary>
+    /// 充能：接触地面或队友一次就"上弦"，之后计时自己跑完；
+    /// 冲刺用掉后回到 0，需要重新接触才能再上弦。
+    /// </summary>
     void TickDashCooldown()
     {
-        if (dashCooldownTimer > 0f)
-        {
-            dashCooldownTimer = Mathf.Max(0f, dashCooldownTimer - Time.fixedDeltaTime);
-            if (dashCooldownTimer <= 0f) dashSpent = false;
-        }
+        playerContactTimer = Mathf.Max(0f, playerContactTimer - Time.fixedDeltaTime);
+        if (grounded || playerContactTimer > 0f) refillArmed = true;
 
-        if (cooldownPending && grounded)
-        {
-            cooldownPending = false;
-            dashCooldownTimer = dashCooldown;
-        }
+        if (refillArmed && charge < 1f)
+            charge = Mathf.Min(1f, charge + Time.fixedDeltaTime / Mathf.Max(0.01f, dashCooldown));
+
+        if (charge >= 1f) refillArmed = false;
     }
 
     void BeginKnockback(PlayerMotor attacker, Vector2 normal, Vector2 point)
@@ -591,39 +724,113 @@ public class PlayerMotor : MonoBehaviour
     // 已经贴在一起时再起冲不会有 Enter 事件，所以 Stay 也要接
     void OnCollisionStay2D(Collision2D c) => HandlePlayerContact(c, false);
 
+    /// <summary>
+    /// 双人碰撞 = 动量交换：速度矢量 + 冲刺态整体互换。
+    /// 冲刺态带着"什么速度、还剩多少距离、结束后是什么速度"一起交出去。
+    /// </summary>
     void HandlePlayerContact(Collision2D c, bool entering)
     {
-        if (isKnocked) return;
         if (!c.collider.TryGetComponent(out PlayerMotor other)) return;
 
-        Vector2 normal = c.contactCount > 0 ? c.GetContact(0).normal : Vector2.right;
+        playerContactTimer = 0.12f;   // 碰到队友 = 充能上弦
 
-        // 只有横向撞击才算推挤；踩在队友头上是纵向接触，不该锁住横向操作
-        if (Mathf.Abs(normal.x) < 0.5f) return;
+        if (Time.time < nextCollisionTime) return;
+        if (Time.time < other.nextCollisionTime) return;
 
-        // 碰撞回调里的速度已经被物理解算过，等质量相撞后双方速度会被拉平，
-        // 所以用「对方正在冲刺且冲刺方向朝我」来认攻击方，而不是比较解算后的速度
-        float dx = transform.position.x - other.transform.position.x;
-        float dashDir = other.DashVelocity.x;
-        bool dashHit = Mathf.Abs(dx) > 0.01f
-                       && Mathf.Abs(dashDir) > 0.01f
-                       && Mathf.Sign(dashDir) == Mathf.Sign(dx);
+        TryMarkRedHot(other, c);
+        SwapStateWith(other);
 
-        if (dashHit && other.Tier >= SpeedTier.V1)
+        nextCollisionTime = Time.time + GameConstants.CollisionCooldown;
+        other.nextCollisionTime = nextCollisionTime;
+    }
+
+    /// <summary>
+    /// 红热判定：Vp = 同向相减、反向相加（都用碰撞前、沿碰撞轴的分量）。
+    /// Vp 超过门槛就把"参与碰撞的那条边"点亮；热一期间再撞变成永久的红热二。
+    /// </summary>
+    void TryMarkRedHot(PlayerMotor other, Collision2D c)
+    {
+        // 方向用「我 → 对方」的中心差，不用接触法线：
+        // 法线指向的是"从对方指回我"，会把背面的那条边点亮。
+        Vector2 axis = (Vector2)other.transform.position - (Vector2)transform.position;
+        if (axis.sqrMagnitude < 0.0001f) return;
+        axis = Mathf.Abs(axis.x) >= Mathf.Abs(axis.y)
+            ? new Vector2(Mathf.Sign(axis.x), 0f)
+            : new Vector2(0f, Mathf.Sign(axis.y));
+
+        float a = Vector2.Dot(preCollisionVelocity, axis);
+        float b = Vector2.Dot(other.preCollisionVelocity, axis);
+
+        float a2 = a * a;
+        float b2 = b * b;
+        float vp = a * b > 0f ? Mathf.Abs(a2 - b2) : a2 + b2;
+
+        float threshold = tierProvider.SpeedFor((SpeedTier)Mathf.Clamp(redHotTierIndex, 0, 4));
+        if (vp < threshold * threshold) return;
+
+        MarkEdge(EdgeFor(axis));
+        other.MarkEdge(EdgeFor(-axis));
+    }
+
+    void MarkEdge(int index)
+    {
+        if (!CanBeRedHot) return;
+        SetEdge(index, edgeStates[index] == EdgeState.Hot1 ? EdgeState.Hot2 : EdgeState.Hot1);
+    }
+
+    void SwapStateWith(PlayerMotor other)
+    {
+        Vector2 myVelocity = rb.linearVelocity;
+        Vector2 otherVelocity = other.rb.linearVelocity;
+
+        DashSnapshot myDash = CaptureDash();
+        DashSnapshot otherDash = other.CaptureDash();
+
+        if (isDashing) EndDash(false);
+        if (other.isDashing) other.EndDash(false);
+
+        rb.linearVelocity = otherVelocity;
+        other.rb.linearVelocity = myVelocity;
+
+        ApplyDash(otherDash);
+        other.ApplyDash(myDash);
+    }
+
+    /// <summary>冲刺态快照：速度、剩余时长、结束速度。</summary>
+    public struct DashSnapshot
+    {
+        public bool active;
+        public Vector2 velocity;
+        public float timer;
+        public Vector2 exitVelocity;
+    }
+
+    public DashSnapshot CaptureDash()
+    {
+        return new DashSnapshot
         {
-            Vector2 point = c.contactCount > 0 ? c.GetContact(0).point : (Vector2)transform.position;
-            BeginKnockback(other, normal, point);
+            active = isDashing,
+            velocity = dashVelocity,
+            timer = dashTimer,
+            exitVelocity = dashExitVelocity
+        };
+    }
+
+    public void ApplyDash(DashSnapshot snapshot)
+    {
+        if (!snapshot.active)
+        {
+            isDashing = false;
+            dashTimer = 0f;
             return;
         }
 
-        if (!entering) return;
-
-        float otherSpeed = Mathf.Abs(other.rb.linearVelocity.x);
-        float mySpeed = Mathf.Abs(rb.linearVelocity.x);
-        if (otherSpeed - mySpeed <= pushSpeedThreshold) return;
-
-        // 慢速推挤保留短硬直，否则被推方下一帧就会用输入抹掉物理推挤
-        controlLockTimer = pushControlLockTime;
+        isDashing = true;
+        dashVelocity = snapshot.velocity;
+        dashExitVelocity = snapshot.exitVelocity;
+        dashTimer = snapshot.timer;
+        rb.gravityScale = 0f;
+        rb.linearVelocity = dashVelocity;
     }
 
     public void Teleport(Vector2 position)
@@ -648,9 +855,8 @@ public class PlayerMotor : MonoBehaviour
         controlLockTimer = 0f;
         isDashing = false;
         dashTimer = 0f;
-        dashCooldownTimer = 0f;
-        cooldownPending = false;
-        dashSpent = false;
+        charge = 1f;
+        refillArmed = false;
         isKnocked = false;
         knockbackStage = 0;
         knockbackTimer = 0f;
@@ -693,7 +899,7 @@ public class PlayerMotor : MonoBehaviour
             right = Key.RightArrow;
             up = Key.UpArrow;
             down = Key.DownArrow;
-            jump = Key.RightAlt;
+            jump = Key.Slash;
             dash = Key.Period;
         }
 

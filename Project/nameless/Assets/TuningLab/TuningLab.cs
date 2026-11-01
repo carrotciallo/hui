@@ -13,6 +13,12 @@ public class TuningLab : MonoBehaviour
     [Tooltip("时间缩放，仅调试用。也可以在 Play 中直接改 Inspector，HUD 滑块与它是同一个值。")]
     [Range(0.05f, 2f)] public float timeScale = 1f;
 
+    [Header("场地")]
+    [Tooltip("地面和墙壁的长度倍数。1 = 原尺寸，4 = 放大四倍。台阶位置不变。")]
+    public float roomScale = 1f;
+    [Tooltip("打开则改用自由相机（跟随两人中点并按距离缩放）；像素完美相机会关掉。")]
+    public bool freeCamera = true;
+
     [Header("重力（单位：格/秒²）")]
     [Tooltip("改它只改手感，不改任何等级门槛——门槛只认格。")]
     public float gravity = 50f;
@@ -80,6 +86,9 @@ public class TuningLab : MonoBehaviour
     [Header("像素")]
     [Tooltip("P 键切换：叠一层 1 像素的棋盘，用来看最终的像素密度。")]
     public bool showPixelGrid = false;
+
+    [Tooltip("Tab 键切换：相机视野内的整数格网格线。")]
+    public bool showGrid = true;
 
     public LabPlayer PlayerA { get; private set; }
     public LabPlayer PlayerB { get; private set; }
@@ -181,15 +190,30 @@ public class TuningLab : MonoBehaviour
     static readonly Color ColorA = new Color(0.36f, 0.62f, 1f);
     static readonly Color ColorB = new Color(1f, 0.45f, 0.4f);
 
+    [Tooltip("勾上 = 运行时自动搭整个场地；烘焙成场景后应当关掉，否则会重复生成。")]
+    public bool autoBuild = true;
+
     void Awake()
+    {
+        if (autoBuild) BuildAll();
+    }
+
+    /// <summary>
+    /// 一次性搭出整个场地。Awake 里调用，也可以被编辑器烘焙流程直接调用，
+    /// 生成真实的 GameObject 之后存成场景，就能在编辑器里直接改。
+    /// </summary>
+    public void BuildAll()
     {
         Physics2D.gravity = new Vector2(0f, -9.81f);
         Time.timeScale = timeScale;
+
         BuildRoom();
         BuildPlayers();
         BuildCamera();
         BuildPixelGrid();
-        Hud = gameObject.AddComponent<LabHud>();
+
+        if (Hud == null) Hud = gameObject.GetComponent<LabHud>();
+        if (Hud == null) Hud = gameObject.AddComponent<LabHud>();
         Hud.Bind(this);
     }
 
@@ -204,10 +228,13 @@ public class TuningLab : MonoBehaviour
         if (kb == null) return;
         if (kb.rKey.wasPressedThisFrame) ResetPlayers();
         if (kb.pKey.wasPressedThisFrame) showPixelGrid = !showPixelGrid;
+        if (kb.tabKey.wasPressedThisFrame) showGrid = !showGrid;
     }
 
     void LateUpdate()
     {
+        UpdateGrid();
+
         if (pixelGridGo == null || Cam == null) return;
         pixelGridGo.SetActive(showPixelGrid);
         float h = Cam.orthographicSize * 2f;
@@ -231,7 +258,7 @@ public class TuningLab : MonoBehaviour
         slick = new PhysicsMaterial2D("LabSlick") { friction = 0f, bounciness = 0f };
 
         // 地板：上表面 y = 0
-        AddSolid("Floor", new Vector2(0f, -0.5f), new Vector2(26f, 1f));
+        AddSolid("Floor", new Vector2(0f, -0.5f), new Vector2(26f * roomScale, 1f));
 
         // 楼梯：每级高 2 格、宽 3 格，从 y=2 爬到 y=10。往右走每掉一级就是 2 格落差。
         AddSolid("Step_y02", new Vector2(4.5f, 1.5f), new Vector2(3f, 1f));
@@ -241,24 +268,91 @@ public class TuningLab : MonoBehaviour
         AddSolid("Step_y10", new Vector2(-7.5f, 9.5f), new Vector2(3f, 1f));
 
         // 侧墙
-        AddSolid("WallL", new Vector2(-13.5f, 6f), new Vector2(1f, 16f));
-        AddSolid("WallR", new Vector2(13.5f, 6f), new Vector2(1f, 16f));
+        AddSolid("WallL", new Vector2(-13.5f * roomScale, 8f * roomScale), new Vector2(1f, 16f * roomScale));
+        AddSolid("WallR", new Vector2(13.5f * roomScale, 8f * roomScale), new Vector2(1f, 16f * roomScale));
+
+        // 竖绳测试：4 格长，底端贴地
+        AddRope(new Vector2(9f, 2f), 4);
 
         BuildGrid();
     }
 
     void BuildGrid()
     {
-        var root = new GameObject("Grid").transform;
-        root.SetParent(transform, false);
+        // 网格改成每帧按相机视野重建，这里只清空占位。
+        // 线的对象由 UpdateGrid 按需创建并复用。
+    }
 
-        // 1 个美术像素的粗细，这样网格本身就是"像素密度"的尺子
+    readonly System.Collections.Generic.List<SpriteRenderer> gridV = new System.Collections.Generic.List<SpriteRenderer>();
+    readonly System.Collections.Generic.List<SpriteRenderer> gridH = new System.Collections.Generic.List<SpriteRenderer>();
+
+    /// <summary>
+    /// 网格只在相机视野内显示：每帧按当前可见矩形算出整数格范围，
+    /// 复用一组线对象摆过去。自由相机缩放时网格会跟着变密。
+    /// </summary>
+    void UpdateGrid()
+    {
+        Camera cam = Cam != null ? Cam : Camera.main;
+        if (cam == null) return;
+
+        if (!showGrid)
+        {
+            HideAll(gridV);
+            HideAll(gridH);
+            return;
+        }
+
+        float halfH = cam.orthographicSize;
+        float halfW = halfH * cam.aspect;
+        Vector3 center = cam.transform.position;
         float thickness = 1f / CellPixels;
 
-        for (int x = -12; x <= 12; x++)
-            AddLine(root, "V" + x, new Vector2(x, 5f), new Vector2(thickness, 14f));
-        for (int y = -1; y <= 11; y++)
-            AddLine(root, "H" + y, new Vector2(0f, y), new Vector2(24f, thickness));
+        int x0 = Mathf.FloorToInt(center.x - halfW);
+        int x1 = Mathf.CeilToInt(center.x + halfW);
+        int y0 = Mathf.FloorToInt(center.y - halfH);
+        int y1 = Mathf.CeilToInt(center.y + halfH);
+
+        int used = 0;
+        for (int x = x0; x <= x1; x++, used++)
+        {
+            var sr = Line(gridV, used, "GridV");
+            sr.transform.position = new Vector3(x, center.y, 0f);
+            sr.transform.localScale = new Vector3(thickness, halfH * 2f, 1f);
+        }
+        for (int i = used; i < gridV.Count; i++) gridV[i].enabled = false;
+
+        used = 0;
+        for (int y = y0; y <= y1; y++, used++)
+        {
+            var sr = Line(gridH, used, "GridH");
+            sr.transform.position = new Vector3(center.x, y, 0f);
+            sr.transform.localScale = new Vector3(halfW * 2f, thickness, 1f);
+        }
+        for (int i = used; i < gridH.Count; i++) gridH[i].enabled = false;
+    }
+
+    SpriteRenderer Line(System.Collections.Generic.List<SpriteRenderer> pool, int index, string name)
+    {
+        while (pool.Count <= index)
+        {
+            var go = new GameObject(name + "_" + pool.Count);
+            go.transform.SetParent(transform, false);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = White;
+            sr.color = GridColor;
+            sr.sortingOrder = -10;
+            pool.Add(sr);
+        }
+
+        var line = pool[index];
+        line.enabled = true;
+        return line;
+    }
+
+    static void HideAll(System.Collections.Generic.List<SpriteRenderer> pool)
+    {
+        for (int i = 0; i < pool.Count; i++)
+            if (pool[i] != null) pool[i].enabled = false;
     }
 
     /// <summary>
@@ -303,6 +397,21 @@ public class TuningLab : MonoBehaviour
         sr.sprite = White;
         sr.color = GridColor;
         sr.sortingOrder = -10;
+    }
+
+    /// <summary>竖绳：实心碰撞，按玩家挡位决定挡住 / 放行 / 弹回。</summary>
+    void AddRope(Vector2 center, int cells, int chainId = 0)
+    {
+        var go = new GameObject("VerticalRope");
+        go.transform.SetParent(transform, false);
+        go.transform.position = center;
+
+        var bc = go.AddComponent<BoxCollider2D>();
+        bc.sharedMaterial = slick;
+
+        var rope = go.AddComponent<LabVerticalRope>();
+        rope.cells = cells;
+        rope.chainId = chainId;
     }
 
     GameObject AddSolid(string name, Vector2 center, Vector2 size)
@@ -406,15 +515,25 @@ public class TuningLab : MonoBehaviour
         go.AddComponent<AudioListener>();
         cam.GetUniversalAdditionalCameraData(); // URP 项目里必须有，否则相机不渲染
 
-        // 像素完美：1 格 = 16 像素 = 1 世界单位，正交尺寸由参考分辨率推出来。
-        var ppc = go.AddComponent<PixelPerfectCamera>();
-        ppc.assetsPPU = CellPixels;
-        ppc.refResolutionX = RefWidth;
-        ppc.refResolutionY = RefHeight;
-        ppc.gridSnapping = PixelPerfectCamera.GridSnapping.PixelSnapping;
-        ppc.cropFrame = PixelPerfectCamera.CropFrame.None;
+        if (freeCamera)
+        {
+            // 自由相机：跟随两人中点、按距离缩放
+            var follow = go.AddComponent<LabCamera>();
+            follow.minSize = RefHeight / (2f * CellPixels);
+            follow.maxSize = follow.minSize * 4f;
+            follow.Configure(PlayerA.transform, PlayerB.transform, RoomBounds());
+        }
+        // 固定视角：正交尺寸已在上方设为 13.5 格，不用再加组件
 
         Cam = cam;
+    }
+
+    /// <summary>房间的世界范围，给自由相机做边界限制。</summary>
+    Rect RoomBounds()
+    {
+        float halfW = 13f * roomScale;
+        float height = 16f * roomScale;
+        return Rect.MinMaxRect(-halfW, -1f, halfW, height);
     }
 
     static Sprite White

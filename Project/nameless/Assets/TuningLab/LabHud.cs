@@ -218,6 +218,7 @@ public class LabHud : MonoBehaviour
             aligned ? small : WarnStyle());
 
         lab.showPixelGrid = GUILayout.Toggle(lab.showPixelGrid, " 像素网格 (P)", small);
+        lab.showGrid = GUILayout.Toggle(lab.showGrid, " 格子网格 (Tab)", small);
 
         GUILayout.Space(6f);
         GUILayout.Label("说明", title);
