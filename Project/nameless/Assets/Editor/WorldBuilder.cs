@@ -1,9 +1,11 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
+using UnityEngine.SceneManagement;
 using UnityEngine.Tilemaps;
 
 public static class WorldBuilder
@@ -65,6 +67,15 @@ public static class WorldBuilder
 
         var tilemap = CreateTilemap(worldGo.transform);
         PaintL0(tilemap, tile);
+
+        // 地板是 Tilemap 画出来的，一旦 Tile 资源没生效，整个关卡会没有地面、玩家无限掉到
+        // FallFloor 反复重生。铺完 L0 立刻验一次，宁可中止也不要保存一个空世界。
+        tilemap.CompressBounds();
+        if (tilemap.GetUsedTilesCount() == 0)
+        {
+            Debug.LogError("[World] 地面 Tilemap 为空：Tile 资源未生效，已中止生成，未保存场景。");
+            return;
+        }
 
         var regions = new List<Region>();
         var w = CreateRegion(worldGo.transform, tilemap, tile, 0, "L0", L0Spawn,
@@ -131,9 +142,27 @@ public static class WorldBuilder
         EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
         AssetDatabase.Refresh();
 
-        Debug.Log("[World] 场景已生成：L0 灰盒 + L1 正式内容（横碰撞墙 / 上冲高台 / 重生点） + " +
+        // 重新从磁盘读一遍再验：内存里画上地板不等于存进了 .unity，玩家 Play 时读的是磁盘那份。
+        var saved = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+        int groundTiles = CountTiles(saved);
+        if (groundTiles == 0)
+        {
+            Debug.LogError($"[World] {ScenePath} 保存后重读是空地板（内存里画了 {tilemap.GetUsedTilesCount()} 格）：" +
+                           "Tilemap 没写进场景文件，不要提交这个场景。");
+            return;
+        }
+
+        Debug.Log($"[World] 场景已生成（地面 {groundTiles} 格）：" +
+                  "L0 灰盒 + L1 正式内容（横碰撞墙 / 上冲高台 / 重生点） + " +
                   "L2 正式内容（冲刺复习 / 钥匙与过关门 / 地绳桥） + L3–L10 占位；" +
                   "PageUp/PageDown 选区域，Home 传送，R 回重生点。");
+    }
+
+    static int CountTiles(Scene scene)
+    {
+        return scene.GetRootGameObjects()
+            .SelectMany(go => go.GetComponentsInChildren<Tilemap>(true))
+            .Sum(map => map.GetUsedTilesCount());
     }
 
     struct MarkerPrefabs
@@ -412,6 +441,15 @@ public static class WorldBuilder
     static Tile EnsureWorldTile(Sprite sprite)
     {
         var tile = AssetDatabase.LoadAssetAtPath<Tile>(TilePath);
+
+        // 字段没变化就不要 SetDirty：写回资源会触发同步 reimport，手上的 Tile 实例会失效，
+        // 之后 SetTile 拿到的是空引用，整张 Tilemap 会被静默画成 0 格（没有地板）。
+        bool needsWrite = tile == null
+                          || tile.sprite != sprite
+                          || tile.color != FloorColor
+                          || tile.colliderType != Tile.ColliderType.Sprite;
+        if (!needsWrite) return tile;
+
         if (tile == null)
         {
             tile = ScriptableObject.CreateInstance<Tile>();
@@ -424,6 +462,8 @@ public static class WorldBuilder
         EditorUtility.SetDirty(tile);
         AssetDatabase.SaveAssets();
 
-        return tile;
+        // 不管 reimport 有没有换实例，一律用重新加载出来的那份铺图。
+        var reloaded = AssetDatabase.LoadAssetAtPath<Tile>(TilePath);
+        return reloaded != null ? reloaded : tile;
     }
 }

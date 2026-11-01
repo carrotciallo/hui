@@ -27,6 +27,8 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 
 场景由脚本生成，所以第一次打开仓库时没有现成场景是正常的；生成一次后正常提交即可。
 
+生成成功的标志是控制台打印 `[World] 场景已生成（地面 N 格）`，当前布局下 N 约 450；打印 `地面 Tilemap 为空` 说明地板没铺上，不要提交那个场景。另外 Project Settings → Editor 里的 **Enter Play Mode Options** 建议关掉：Play 时只重载场景不重载域，编辑器内存里的东西和磁盘上的场景会不一致。
+
 ## 关卡编辑器
 
 打开 `Assets/Scenes/World.unity` 后，菜单 **GameJam → Level Editor**：
