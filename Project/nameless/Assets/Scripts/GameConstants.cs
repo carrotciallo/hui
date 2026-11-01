@@ -34,6 +34,15 @@ public static class GameConstants
     public const float FallGravityScale = GravityScale;
     // √(2·50·2) = 14.14，半隐式欧拉会让顶点偏低，补偿到 14.2
     public const float JumpVelocity = 14.2f;
+
+    /// <summary>让顶点正好到 height 格的起跳初速（补偿离散积分的损失）。</summary>
+    public static float JumpVelocityForHeight(float height)
+    {
+        float h = Mathf.Max(0f, height);
+        float dt = 0.02f;
+        float a = Gravity * dt;
+        return 0.5f * (a + Mathf.Sqrt(a * a + 8f * Gravity * h));
+    }
     public const float HorizontalAirDrag = Gravity;   // 空中水平方向 -g，与竖直方向对称
 
     // ---- 冲刺态 ----

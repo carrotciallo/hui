@@ -117,6 +117,49 @@ public class PlayerMotor : MonoBehaviour
     float knockbackTimer;
     float knockbackDir;
 
+    // ---- 红热态：四条边各自的状态（只有 A 的框有边） ----
+    public enum EdgeState { Normal = 0, Hot1 = 1, Hot2 = 2 }
+
+    [Header("红热")]
+    [SerializeField] int redHotTierIndex = 1;
+    [SerializeField] float redHotDuration = 1.5f;
+    [SerializeField] float dashDistance = GameConstants.DashDistance;
+
+    readonly EdgeState[] edgeStates = new EdgeState[4];   // 上 下 左 右
+    readonly float[] edgeTimers = new float[4];
+
+    PlayerVisual visual;
+    Vector2 preCollisionVelocity;
+
+    public bool CanBeRedHot => scheme == Scheme.WASD;
+
+    public EdgeState GetEdge(int index) =>
+        index >= 0 && index < 4 ? edgeStates[index] : EdgeState.Normal;
+
+    void SetEdge(int index, EdgeState next)
+    {
+        if (index < 0 || index >= 4 || edgeStates[index] == next) return;
+        edgeStates[index] = next;
+        edgeTimers[index] = next == EdgeState.Hot1 ? redHotDuration : 0f;
+        if (visual != null) visual.SetEdge(index, next);
+    }
+
+    void TickEdges()
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            if (edgeStates[i] != EdgeState.Hot1) continue;
+            edgeTimers[i] -= Time.fixedDeltaTime;
+            if (edgeTimers[i] <= 0f) SetEdge(i, EdgeState.Normal);
+        }
+    }
+
+    static int EdgeFor(Vector2 axis)
+    {
+        if (Mathf.Abs(axis.x) > 0.5f) return axis.x > 0f ? 3 : 2;
+        return axis.y > 0f ? 0 : 1;
+    }
+
     void OnEnable() => All.Add(this);
 
     void OnDisable() => All.Remove(this);
@@ -132,6 +175,65 @@ public class PlayerMotor : MonoBehaviour
 
         if (groundMask == 0) groundMask = LayerMask.GetMask("Ground", "Player");
         SpawnPosition = transform.position;
+
+        ApplyGlobalTuning();
+        BuildVisual();
+    }
+
+    /// <summary>从 Resources/GameTuning.asset 覆盖序列化字段：改一处，所有场景生效。</summary>
+    void ApplyGlobalTuning()
+    {
+        var tuning = GameTuning.Current;
+        if (tuning == null) return;
+
+        jumpVelocity = GameConstants.JumpVelocityForHeight(tuning.jumpHeight);
+        maxFallSpeed = tuning.maxFallSpeed;
+        riseGravityScale = tuning.riseGravityScale;
+        fallGravityScale = tuning.fallGravityScale;
+        groundAccel = tuning.groundAccel;
+        airAccel = tuning.airAccel;
+        dashCooldown = tuning.dashCooldown;
+        redHotTierIndex = tuning.redHotTierIndex;
+        redHotDuration = tuning.redHotDuration;
+        dashDistance = tuning.dashDistance;
+    }
+
+    /// <summary>把场景里的方块换成三层视觉：外圈等级 / 中框红热 / 白眼睛朝向。</summary>
+    void BuildVisual()
+    {
+        var existing = GetComponent<SpriteRenderer>();
+        Color color = Color.white;
+        if (existing != null)
+        {
+            color = existing.color;
+            existing.enabled = false;   // 旧方块让位给分层视觉
+        }
+
+        bool hollow = scheme == Scheme.WASD;   // A（大框）空心，B（小块）实心
+        int pixels = Mathf.RoundToInt(GameConstants.PlayerPixels);
+        visual = PlayerVisual.Build(transform, pixels, hollow, color);
+    }
+
+    void LateUpdate()
+    {
+        if (visual == null) return;
+
+        Vector2 v = rb.linearVelocity;
+        visual.SetRingTiers(
+            v.y > 0.01f ? (int)SpeedTierProvider.TierOf(v.y) : 0,
+            v.y < -0.01f ? (int)SpeedTierProvider.TierOf(-v.y) : 0,
+            v.x < -0.01f ? (int)SpeedTierProvider.TierOf(-v.x) : 0,
+            v.x > 0.01f ? (int)SpeedTierProvider.TierOf(v.x) : 0);
+
+        visual.SetAim(AimDirection());
+    }
+
+    Vector2 AimDirection()
+    {
+        if (Mathf.Abs(verticalInput) > 0.01f) return new Vector2(0f, Mathf.Sign(verticalInput));
+        if (Mathf.Abs(moveInput) > 0.01f) return new Vector2(Mathf.Sign(moveInput), 0f);
+        if (!grounded && Mathf.Abs(rb.linearVelocity.y) > 0.5f) return new Vector2(0f, Mathf.Sign(rb.linearVelocity.y));
+        return new Vector2(Mathf.Sign(facing), 0f);
     }
 
     void Update()
@@ -147,6 +249,8 @@ public class PlayerMotor : MonoBehaviour
     void FixedUpdate()
     {
         tierProvider.Tick(Time.fixedDeltaTime);
+        preCollisionVelocity = rb.linearVelocity;   // 碰撞回调里速度已被解算，先用这里存一份
+        TickEdges();
         controlLockTimer = Mathf.Max(0f, controlLockTimer - Time.fixedDeltaTime);
 
         if (suspended)
@@ -626,10 +730,36 @@ public class PlayerMotor : MonoBehaviour
         if (Time.time < nextCollisionTime) return;
         if (Time.time < other.nextCollisionTime) return;
 
+        TryMarkRedHot(other, c);
         SwapStateWith(other);
 
         nextCollisionTime = Time.time + GameConstants.CollisionCooldown;
         other.nextCollisionTime = nextCollisionTime;
+    }
+
+    /// <summary>
+    /// 红热判定：Vp = 同向相减、反向相加（都用碰撞前、沿碰撞轴的分量）。
+    /// Vp 超过门槛就把"参与碰撞的那条边"点亮；热一期间再撞变成永久的红热二。
+    /// </summary>
+    void TryMarkRedHot(PlayerMotor other, Collision2D c)
+    {
+        if (!CanBeRedHot) return;
+
+        Vector2 axis = c.contactCount > 0 ? c.GetContact(0).normal : Vector2.right;
+        if (Mathf.Abs(axis.x) < 0.5f && Mathf.Abs(axis.y) < 0.5f) return;
+
+        float a = Vector2.Dot(preCollisionVelocity, axis);
+        float b = Vector2.Dot(other.preCollisionVelocity, axis);
+
+        float a2 = a * a;
+        float b2 = b * b;
+        float vp = a * b > 0f ? Mathf.Abs(a2 - b2) : a2 + b2;
+
+        float threshold = tierProvider.SpeedFor((SpeedTier)Mathf.Clamp(redHotTierIndex, 0, 4));
+        if (vp < threshold * threshold) return;
+
+        int index = EdgeFor(axis);
+        SetEdge(index, edgeStates[index] == EdgeState.Hot1 ? EdgeState.Hot2 : EdgeState.Hot1);
     }
 
     void SwapStateWith(PlayerMotor other)

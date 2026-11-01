@@ -22,8 +22,15 @@ public class SpeedTierProvider : MonoBehaviour
     /// <summary>当前挡位，由刚体速度实时推导。</summary>
     public SpeedTier Tier => TierOf(body != null ? body.linearVelocity.magnitude : 0f);
 
-    /// <summary>走路速度。挡位不再驱动速度，这里恒为常量。</summary>
-    public float TargetSpeed => GameConstants.WalkSpeed;
+    /// <summary>走路速度。读全局配置，没配置就用常量。</summary>
+    public float TargetSpeed
+    {
+        get
+        {
+            var tuning = GameTuning.Current;
+            return tuning != null ? tuning.walkSpeed : GameConstants.WalkSpeed;
+        }
+    }
 
     /// <summary>速度推导模型下没有"剩余持续时间"这个概念，保留接口给旧调用方。</summary>
     public float HoldRemaining => 0f;
