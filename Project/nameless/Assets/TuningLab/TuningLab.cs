@@ -17,7 +17,7 @@ public class TuningLab : MonoBehaviour
     [Tooltip("地面和墙壁的长度倍数。1 = 原尺寸，4 = 放大四倍。台阶位置不变。")]
     public float roomScale = 1f;
     [Tooltip("打开则改用自由相机（跟随两人中点并按距离缩放）；像素完美相机会关掉。")]
-    public bool freeCamera = false;
+    public bool freeCamera = true;
 
     [Header("重力（单位：格/秒²）")]
     [Tooltip("改它只改手感，不改任何等级门槛——门槛只认格。")]

@@ -17,7 +17,7 @@ public static class TuningLabMenu
     public static void Build()
     {
         if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-        BuildScene(ScenePath, 1f, false);
+        BuildScene(ScenePath, 1f, true);
         EditorUtility.DisplayDialog(
             "Tuning Lab",
             "已生成 " + ScenePath + "\n\n按 Play 开始：\nA  A/D + 空格 + 左Shift\nB  方向键 + / + .",
@@ -51,7 +51,7 @@ public static class TuningLabMenu
         var lab = go.AddComponent<TuningLab>();
         lab.autoBuild = false;          // 已经烘焙成实体，别再自动生成一遍
         lab.roomScale = 1f;
-        lab.freeCamera = false;
+        lab.freeCamera = true;
         lab.BuildAll();
 
         Directory.CreateDirectory(Path.GetDirectoryName(ScenePathBaked));
@@ -69,7 +69,7 @@ public static class TuningLabMenu
     /// <summary>给 -executeMethod 用的无对话框版本。</summary>
     public static void BuildSilent()
     {
-        BuildScene(ScenePath, 1f, false);
+        BuildScene(ScenePath, 1f, true);
         Debug.Log("[TuningLab] scene built: " + ScenePath);
     }
 
