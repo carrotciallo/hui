@@ -622,14 +622,14 @@ public class LabPlayer : MonoBehaviour
         }
         else
         {
-            // B（小块）：P = 上 / L = 左 / ; = 下 / ' = 右，K 冲刺，右 Shift 跳
-            up = kb.pKey.isPressed;
-            down = kb.semicolonKey.isPressed;
-            left = kb.lKey.isPressed;
-            right = kb.quoteKey.isPressed;
-            jumpHeld = kb.rightShiftKey.isPressed;
-            jumpDownThisFrame = kb.rightShiftKey.wasPressedThisFrame;
-            dashDownThisFrame = kb.kKey.wasPressedThisFrame;
+            // B（小块）：方向键控制上下左右，/ 跳，句号 . 冲刺
+            up = kb.upArrowKey.isPressed;
+            down = kb.downArrowKey.isPressed;
+            left = kb.leftArrowKey.isPressed;
+            right = kb.rightArrowKey.isPressed;
+            jumpHeld = kb.slashKey.isPressed;
+            jumpDownThisFrame = kb.slashKey.wasPressedThisFrame;
+            dashDownThisFrame = kb.periodKey.wasPressedThisFrame;
         }
 
         moveX = (right ? 1f : 0f) - (left ? 1f : 0f);

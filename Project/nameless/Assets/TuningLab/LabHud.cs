@@ -81,7 +81,7 @@ public class LabHud : MonoBehaviour
 
         GUILayout.Label("手感调试台", title);
         GUILayout.Label("A（大框）  A/D 移动   W/S 冲刺方向   空格 跳   左Shift 冲刺", small);
-        GUILayout.Label("B（小块）  L 左 / ' 右   P 上 / ; 下   右Shift 跳   K 冲刺", small);
+        GUILayout.Label("B（小块）  方向键 上下左右   /  跳   句号 .  冲刺", small);
         GUILayout.Label("向下冲刺只允许在空中（站在地上按下去无效，不耗充能）", small);
         GUILayout.Label("冲刺方向 竖直输入 > 水平输入 > 空中的竖直速度 > 朝向", small);
         GUILayout.Label("R 重置    P 像素网格", small);
