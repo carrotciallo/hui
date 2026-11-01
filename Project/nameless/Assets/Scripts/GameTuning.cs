@@ -19,6 +19,8 @@ public class GameTuning : ScriptableObject
     public float walkSpeed = 4.7f;
     public float groundAccel = 90f;
     public float airAccel = 45f;
+    [Tooltip("1 = 松手不减速（固定跳跃高度）；小于 1 = 点跳更矮")]
+    [Range(0.1f, 1f)] public float jumpCutMultiplier = 1f;
 
     [Header("冲刺")]
     public float dashDistance = 4f;
@@ -34,7 +36,10 @@ public class GameTuning : ScriptableObject
     static GameTuning current;
     static bool loaded;
 
-    /// <summary>全局实例。没有资产时返回 null，调用方自己决定回落到什么默认值。</summary>
+    /// <summary>
+    /// 全局实例。没有资产时返回一个"代码默认值"的临时实例，
+    /// 这样新物理在没建资产之前也已经生效，不会出现"改了像没改"。
+    /// </summary>
     public static GameTuning Current
     {
         get
@@ -43,6 +48,7 @@ public class GameTuning : ScriptableObject
             {
                 loaded = true;
                 current = Resources.Load<GameTuning>(ResourcePath);
+                if (current == null) current = CreateInstance<GameTuning>();
             }
             return current;
         }

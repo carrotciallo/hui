@@ -196,6 +196,7 @@ public class PlayerMotor : MonoBehaviour
         redHotTierIndex = tuning.redHotTierIndex;
         redHotDuration = tuning.redHotDuration;
         dashDistance = tuning.dashDistance;
+        jumpCutMultiplier = tuning.jumpCutMultiplier;
     }
 
     /// <summary>把场景里的方块换成三层视觉：外圈等级 / 中框红热 / 白眼睛朝向。</summary>
@@ -305,6 +306,10 @@ public class PlayerMotor : MonoBehaviour
         }
 
         Vector2 v = rb.linearVelocity;
+
+        // 空气制动：空中水平方向持续 -g，和竖直方向的重力对称
+        if (!grounded)
+            v.x = Mathf.MoveTowards(v.x, 0f, GameConstants.HorizontalAirDrag * Time.fixedDeltaTime);
 
         if (controlLockTimer <= 0f)
         {
@@ -419,7 +424,7 @@ public class PlayerMotor : MonoBehaviour
 
         dashVelocity = direction * dashSpeed;
         dashExitVelocity = direction * exitSpeed;
-        dashTimer = GameConstants.DashDistance / Mathf.Max(0.01f, dashSpeed);
+        dashTimer = Mathf.Max(0.01f, dashDistance) / Mathf.Max(0.01f, dashSpeed);
         isDashing = true;
         dashSpent = true;
         cooldownPending = false;
@@ -885,7 +890,7 @@ public class PlayerMotor : MonoBehaviour
             right = Key.RightArrow;
             up = Key.UpArrow;
             down = Key.DownArrow;
-            jump = Key.RightAlt;
+            jump = Key.Slash;
             dash = Key.Period;
         }
 
