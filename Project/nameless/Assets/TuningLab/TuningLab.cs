@@ -87,6 +87,9 @@ public class TuningLab : MonoBehaviour
     [Tooltip("P 键切换：叠一层 1 像素的棋盘，用来看最终的像素密度。")]
     public bool showPixelGrid = false;
 
+    [Tooltip("Tab 键切换：相机视野内的整数格网格线。")]
+    public bool showGrid = true;
+
     public LabPlayer PlayerA { get; private set; }
     public LabPlayer PlayerB { get; private set; }
     public Camera Cam { get; private set; }
@@ -225,10 +228,13 @@ public class TuningLab : MonoBehaviour
         if (kb == null) return;
         if (kb.rKey.wasPressedThisFrame) ResetPlayers();
         if (kb.pKey.wasPressedThisFrame) showPixelGrid = !showPixelGrid;
+        if (kb.tabKey.wasPressedThisFrame) showGrid = !showGrid;
     }
 
     void LateUpdate()
     {
+        UpdateGrid();
+
         if (pixelGridGo == null || Cam == null) return;
         pixelGridGo.SetActive(showPixelGrid);
         float h = Cam.orthographicSize * 2f;
@@ -273,16 +279,80 @@ public class TuningLab : MonoBehaviour
 
     void BuildGrid()
     {
-        var root = new GameObject("Grid").transform;
-        root.SetParent(transform, false);
+        // 网格改成每帧按相机视野重建，这里只清空占位。
+        // 线的对象由 UpdateGrid 按需创建并复用。
+    }
 
-        // 1 个美术像素的粗细，这样网格本身就是"像素密度"的尺子
+    readonly System.Collections.Generic.List<SpriteRenderer> gridV = new System.Collections.Generic.List<SpriteRenderer>();
+    readonly System.Collections.Generic.List<SpriteRenderer> gridH = new System.Collections.Generic.List<SpriteRenderer>();
+
+    /// <summary>
+    /// 网格只在相机视野内显示：每帧按当前可见矩形算出整数格范围，
+    /// 复用一组线对象摆过去。自由相机缩放时网格会跟着变密。
+    /// </summary>
+    void UpdateGrid()
+    {
+        Camera cam = Cam != null ? Cam : Camera.main;
+        if (cam == null) return;
+
+        if (!showGrid)
+        {
+            HideAll(gridV);
+            HideAll(gridH);
+            return;
+        }
+
+        float halfH = cam.orthographicSize;
+        float halfW = halfH * cam.aspect;
+        Vector3 center = cam.transform.position;
         float thickness = 1f / CellPixels;
 
-        for (int x = -12; x <= 12; x++)
-            AddLine(root, "V" + x, new Vector2(x, 5f), new Vector2(thickness, 14f));
-        for (int y = -1; y <= 11; y++)
-            AddLine(root, "H" + y, new Vector2(0f, y), new Vector2(24f, thickness));
+        int x0 = Mathf.FloorToInt(center.x - halfW);
+        int x1 = Mathf.CeilToInt(center.x + halfW);
+        int y0 = Mathf.FloorToInt(center.y - halfH);
+        int y1 = Mathf.CeilToInt(center.y + halfH);
+
+        int used = 0;
+        for (int x = x0; x <= x1; x++, used++)
+        {
+            var sr = Line(gridV, used, "GridV");
+            sr.transform.position = new Vector3(x, center.y, 0f);
+            sr.transform.localScale = new Vector3(thickness, halfH * 2f, 1f);
+        }
+        for (int i = used; i < gridV.Count; i++) gridV[i].enabled = false;
+
+        used = 0;
+        for (int y = y0; y <= y1; y++, used++)
+        {
+            var sr = Line(gridH, used, "GridH");
+            sr.transform.position = new Vector3(center.x, y, 0f);
+            sr.transform.localScale = new Vector3(halfW * 2f, thickness, 1f);
+        }
+        for (int i = used; i < gridH.Count; i++) gridH[i].enabled = false;
+    }
+
+    SpriteRenderer Line(System.Collections.Generic.List<SpriteRenderer> pool, int index, string name)
+    {
+        while (pool.Count <= index)
+        {
+            var go = new GameObject(name + "_" + pool.Count);
+            go.transform.SetParent(transform, false);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = White;
+            sr.color = GridColor;
+            sr.sortingOrder = -10;
+            pool.Add(sr);
+        }
+
+        var line = pool[index];
+        line.enabled = true;
+        return line;
+    }
+
+    static void HideAll(System.Collections.Generic.List<SpriteRenderer> pool)
+    {
+        for (int i = 0; i < pool.Count; i++)
+            if (pool[i] != null) pool[i].enabled = false;
     }
 
     /// <summary>
