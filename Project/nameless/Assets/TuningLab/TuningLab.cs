@@ -13,6 +13,12 @@ public class TuningLab : MonoBehaviour
     [Tooltip("时间缩放，仅调试用。也可以在 Play 中直接改 Inspector，HUD 滑块与它是同一个值。")]
     [Range(0.05f, 2f)] public float timeScale = 1f;
 
+    [Header("场地")]
+    [Tooltip("地面和墙壁的长度倍数。1 = 原尺寸，4 = 放大四倍。台阶位置不变。")]
+    public float roomScale = 1f;
+    [Tooltip("打开则改用自由相机（跟随两人中点并按距离缩放）；像素完美相机会关掉。")]
+    public bool freeCamera = false;
+
     [Header("重力（单位：格/秒²）")]
     [Tooltip("改它只改手感，不改任何等级门槛——门槛只认格。")]
     public float gravity = 50f;
@@ -231,7 +237,7 @@ public class TuningLab : MonoBehaviour
         slick = new PhysicsMaterial2D("LabSlick") { friction = 0f, bounciness = 0f };
 
         // 地板：上表面 y = 0
-        AddSolid("Floor", new Vector2(0f, -0.5f), new Vector2(26f, 1f));
+        AddSolid("Floor", new Vector2(0f, -0.5f), new Vector2(26f * roomScale, 1f));
 
         // 楼梯：每级高 2 格、宽 3 格，从 y=2 爬到 y=10。往右走每掉一级就是 2 格落差。
         AddSolid("Step_y02", new Vector2(4.5f, 1.5f), new Vector2(3f, 1f));
@@ -241,8 +247,8 @@ public class TuningLab : MonoBehaviour
         AddSolid("Step_y10", new Vector2(-7.5f, 9.5f), new Vector2(3f, 1f));
 
         // 侧墙
-        AddSolid("WallL", new Vector2(-13.5f, 6f), new Vector2(1f, 16f));
-        AddSolid("WallR", new Vector2(13.5f, 6f), new Vector2(1f, 16f));
+        AddSolid("WallL", new Vector2(-13.5f * roomScale, 8f * roomScale), new Vector2(1f, 16f * roomScale));
+        AddSolid("WallR", new Vector2(13.5f * roomScale, 8f * roomScale), new Vector2(1f, 16f * roomScale));
 
         BuildGrid();
     }
@@ -406,15 +412,25 @@ public class TuningLab : MonoBehaviour
         go.AddComponent<AudioListener>();
         cam.GetUniversalAdditionalCameraData(); // URP 项目里必须有，否则相机不渲染
 
-        // 像素完美：1 格 = 16 像素 = 1 世界单位，正交尺寸由参考分辨率推出来。
-        var ppc = go.AddComponent<PixelPerfectCamera>();
-        ppc.assetsPPU = CellPixels;
-        ppc.refResolutionX = RefWidth;
-        ppc.refResolutionY = RefHeight;
-        ppc.gridSnapping = PixelPerfectCamera.GridSnapping.PixelSnapping;
-        ppc.cropFrame = PixelPerfectCamera.CropFrame.None;
+        if (freeCamera)
+        {
+            // 自由相机：跟随两人中点、按距离缩放
+            var follow = go.AddComponent<LabCamera>();
+            follow.minSize = RefHeight / (2f * CellPixels);
+            follow.maxSize = follow.minSize * 4f;
+            follow.Configure(PlayerA.transform, PlayerB.transform, RoomBounds());
+        }
+        // 固定视角：正交尺寸已在上方设为 13.5 格，不用再加组件
 
         Cam = cam;
+    }
+
+    /// <summary>房间的世界范围，给自由相机做边界限制。</summary>
+    Rect RoomBounds()
+    {
+        float halfW = 13f * roomScale;
+        float height = 16f * roomScale;
+        return Rect.MinMaxRect(-halfW, -1f, halfW, height);
     }
 
     static Sprite White
