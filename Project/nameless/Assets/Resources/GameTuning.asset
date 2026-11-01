@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: daa8eb6c3db9d6e45a908200752b5779, type: 3}
+  m_Name: GameTuning
+  m_EditorClassIdentifier: GameJam.Runtime::GameTuning
+  jumpHeight: 2.2
+  maxFallSpeed: 100
+  riseGravityScale: 5.09684
+  fallGravityScale: 5.09684
+  walkSpeed: 4.7
+  groundAccel: 90
+  airAccel: 45
+  dashDistance: 4
+  dashCooldown: 0.5
+  redHotTierIndex: 1
+  redHotDuration: 1.5
