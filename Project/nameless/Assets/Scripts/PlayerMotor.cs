@@ -750,10 +750,13 @@ public class PlayerMotor : MonoBehaviour
     /// </summary>
     void TryMarkRedHot(PlayerMotor other, Collision2D c)
     {
-        if (!CanBeRedHot) return;
-
-        Vector2 axis = c.contactCount > 0 ? c.GetContact(0).normal : Vector2.right;
-        if (Mathf.Abs(axis.x) < 0.5f && Mathf.Abs(axis.y) < 0.5f) return;
+        // 方向用「我 → 对方」的中心差，不用接触法线：
+        // 法线指向的是"从对方指回我"，会把背面的那条边点亮。
+        Vector2 axis = (Vector2)other.transform.position - (Vector2)transform.position;
+        if (axis.sqrMagnitude < 0.0001f) return;
+        axis = Mathf.Abs(axis.x) >= Mathf.Abs(axis.y)
+            ? new Vector2(Mathf.Sign(axis.x), 0f)
+            : new Vector2(0f, Mathf.Sign(axis.y));
 
         float a = Vector2.Dot(preCollisionVelocity, axis);
         float b = Vector2.Dot(other.preCollisionVelocity, axis);
@@ -765,7 +768,13 @@ public class PlayerMotor : MonoBehaviour
         float threshold = tierProvider.SpeedFor((SpeedTier)Mathf.Clamp(redHotTierIndex, 0, 4));
         if (vp < threshold * threshold) return;
 
-        int index = EdgeFor(axis);
+        MarkEdge(EdgeFor(axis));
+        other.MarkEdge(EdgeFor(-axis));
+    }
+
+    void MarkEdge(int index)
+    {
+        if (!CanBeRedHot) return;
         SetEdge(index, edgeStates[index] == EdgeState.Hot1 ? EdgeState.Hot2 : EdgeState.Hot1);
     }
 

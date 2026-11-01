@@ -32,6 +32,12 @@ public class PlayerVisual : MonoBehaviour
     {
         var go = new GameObject("Visual");
         go.transform.SetParent(root, false);
+
+        // 仓库里的玩家对象被缩放到 PlayerSize（0.8125），
+        // 视觉是按"像素→世界单位"算的，必须把这个缩放抵消掉，否则整套图案会缩一圈、错位。
+        float parentScale = root.lossyScale.x;
+        if (parentScale > 0.0001f) go.transform.localScale = Vector3.one / parentScale;
+
         var visual = go.AddComponent<PlayerVisual>();
         visual.Create(pixels, hollow, color);
         return visual;
