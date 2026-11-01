@@ -48,8 +48,8 @@ public class PlayerMotor : MonoBehaviour
     public bool IsDashing => isDashing;
     public bool IsKnocked => isKnocked;
     public Vector2 DashVelocity => isDashing ? dashVelocity : Vector2.zero;
-    public bool CanDash => !dashSpent && dashCooldownTimer <= 0f && !isDashing && !isKnocked;
-    public float DashCooldownRemaining => dashCooldownTimer;
+    public bool CanDash => charge >= 1f && !isDashing && !isKnocked;
+    public float DashCooldownRemaining => (1f - charge) * dashCooldown;
     public SpeedTier Tier => tierProvider.Tier;
     public SpeedTierProvider SpeedTiers => tierProvider;
     public Vector2 Velocity => rb.linearVelocity;
@@ -108,6 +108,9 @@ public class PlayerMotor : MonoBehaviour
     Vector2 dashVelocity;
     Vector2 dashExitVelocity;
     float nextCollisionTime;
+    float playerContactTimer;
+    float charge = 1f;
+    bool refillArmed;
     float dashCooldownTimer;
     bool cooldownPending;
     bool dashSpent;
@@ -299,7 +302,7 @@ public class PlayerMotor : MonoBehaviour
             return;
         }
 
-        if (dashBufferTimer > 0f && !dashSpent && dashCooldownTimer <= 0f && TryStartDash())
+        if (dashBufferTimer > 0f && charge >= 1f && TryStartDash())
         {
             TickState();
             return;
@@ -426,9 +429,8 @@ public class PlayerMotor : MonoBehaviour
         dashExitVelocity = direction * exitSpeed;
         dashTimer = Mathf.Max(0.01f, dashDistance) / Mathf.Max(0.01f, dashSpeed);
         isDashing = true;
-        dashSpent = true;
-        cooldownPending = false;
-        dashCooldownTimer = 0f;
+        charge = 0f;
+        refillArmed = false;
         dashBufferTimer = 0f;
         bufferTimer = 0f;
         rb.gravityScale = 0f;
@@ -459,24 +461,21 @@ public class PlayerMotor : MonoBehaviour
         isDashing = false;
         if (applyExit) rb.linearVelocity = dashExitVelocity;
         rb.gravityScale = rb.linearVelocity.y < 0f ? fallGravityScale : riseGravityScale;
-
-        if (grounded) dashCooldownTimer = dashCooldown;
-        else cooldownPending = true;
     }
 
+    /// <summary>
+    /// 充能：接触地面或队友一次就"上弦"，之后计时自己跑完；
+    /// 冲刺用掉后回到 0，需要重新接触才能再上弦。
+    /// </summary>
     void TickDashCooldown()
     {
-        if (dashCooldownTimer > 0f)
-        {
-            dashCooldownTimer = Mathf.Max(0f, dashCooldownTimer - Time.fixedDeltaTime);
-            if (dashCooldownTimer <= 0f) dashSpent = false;
-        }
+        playerContactTimer = Mathf.Max(0f, playerContactTimer - Time.fixedDeltaTime);
+        if (grounded || playerContactTimer > 0f) refillArmed = true;
 
-        if (cooldownPending && grounded)
-        {
-            cooldownPending = false;
-            dashCooldownTimer = dashCooldown;
-        }
+        if (refillArmed && charge < 1f)
+            charge = Mathf.Min(1f, charge + Time.fixedDeltaTime / Mathf.Max(0.01f, dashCooldown));
+
+        if (charge >= 1f) refillArmed = false;
     }
 
     void BeginKnockback(PlayerMotor attacker, Vector2 normal, Vector2 point)
@@ -732,6 +731,9 @@ public class PlayerMotor : MonoBehaviour
     void HandlePlayerContact(Collision2D c, bool entering)
     {
         if (!c.collider.TryGetComponent(out PlayerMotor other)) return;
+
+        playerContactTimer = 0.12f;   // 碰到队友 = 充能上弦
+
         if (Time.time < nextCollisionTime) return;
         if (Time.time < other.nextCollisionTime) return;
 
@@ -818,7 +820,6 @@ public class PlayerMotor : MonoBehaviour
         dashVelocity = snapshot.velocity;
         dashExitVelocity = snapshot.exitVelocity;
         dashTimer = snapshot.timer;
-        dashSpent = true;
         rb.gravityScale = 0f;
         rb.linearVelocity = dashVelocity;
     }
@@ -845,9 +846,8 @@ public class PlayerMotor : MonoBehaviour
         controlLockTimer = 0f;
         isDashing = false;
         dashTimer = 0f;
-        dashCooldownTimer = 0f;
-        cooldownPending = false;
-        dashSpent = false;
+        charge = 1f;
+        refillArmed = false;
         isKnocked = false;
         knockbackStage = 0;
         knockbackTimer = 0f;

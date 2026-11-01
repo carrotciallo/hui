@@ -10,13 +10,13 @@ using UnityEngine;
 public class GameTuning : ScriptableObject
 {
     [Header("重力 / 跳跃")]
-    public float jumpHeight = 2f;
+    public float jumpHeight = 2.2f;
     public float maxFallSpeed = 42f;
     public float riseGravityScale = GameConstants.GravityScale;
     public float fallGravityScale = GameConstants.GravityScale;
 
     [Header("移动")]
-    public float walkSpeed = 4.7f;
+    public float walkSpeed = 8f;
     public float groundAccel = 90f;
     public float airAccel = 45f;
     [Tooltip("1 = 松手不减速（固定跳跃高度）；小于 1 = 点跳更矮")]

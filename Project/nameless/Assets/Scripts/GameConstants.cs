@@ -26,8 +26,8 @@ public static class GameConstants
     public static float CellsForSpeed(float speed) => speed * speed / (2f * Gravity);
 
     // ---- 移动 / 跳跃 ----
-    public const float WalkSpeed = 4.7f;
-    public const float JumpHeight = 2f;
+    public const float WalkSpeed = 8f;
+    public const float JumpHeight = 2.2f;
     public const float JumpDistance = 3f;
     // 重力对称：上升和下落用同一个倍率，否则站跳落地会白送能量
     public const float RiseGravityScale = GravityScale;
