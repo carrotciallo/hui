@@ -65,7 +65,14 @@ public class LabPlayer : MonoBehaviour
     /// <summary>这次充能已经被接触"上弦"，之后即使离地也会继续回复。</summary>
     public bool RefillArmed => refillArmed;
     public float Charge { get; private set; } = 1f;
-    public float HalfHeight => col != null ? col.bounds.extents.y : 0.5f;
+    /// <summary>
+    /// 碰撞箱的竖直半径。膛里时碰撞箱是关着的，bounds 会报 0 —— 出膛的间隙全靠这个数，
+    /// 所以进膛时先记下自己的尺寸，不能让人贴着脸放出去
+    /// （那会被"驮着走"当成踩在队友头上，速度直接被覆盖）。
+    /// </summary>
+    public float HalfHeight => col != null && col.enabled
+        ? col.bounds.extents.y
+        : chamberHalf;
     public float FootY => rb.position.y - HalfHeight;
     public Vector2 Velocity => rb.linearVelocity;
     public float Speed => rb.linearVelocity.magnitude;
@@ -138,6 +145,7 @@ public class LabPlayer : MonoBehaviour
 
     LabPlayer loaded;               // 膛里的 B（只有 A 有）
     LabPlayer host;                 // 我在谁的膛里（只有 B 有）
+    float chamberHalf = 0.5f;       // 进膛时记下的竖直半径：碰撞箱关掉后 bounds 读不到
     Vector2 chamberVelocity;        // B 进入时的速度 V前
     Vector2 chamberDir;             // B 进入时的冲刺轴，射出取它的反向
     bool gliding;                   // 水平射出：速度降到零级之前不受重力
@@ -385,6 +393,7 @@ public class LabPlayer : MonoBehaviour
 
     void OnCollisionEnter2D(Collision2D c)
     {
+        if (host != null) return;      // 膛里的人没有碰撞箱，这里的回调只能是进膛那一刻的残留
         bool isPlayer = c.collider != null && c.collider.GetComponent<LabPlayer>() != null;
         if (isPlayer) playerContactTimer = 0.12f;
         else ForgeFromTerrain(c);         // 只有进入的那一帧锻造，贴墙摩擦不算
@@ -394,6 +403,7 @@ public class LabPlayer : MonoBehaviour
 
     void OnCollisionStay2D(Collision2D c)
     {
+        if (host != null) return;
         bool isPlayer = c.collider != null && c.collider.GetComponent<LabPlayer>() != null;
         if (isPlayer) playerContactTimer = 0.12f;
 
@@ -431,14 +441,15 @@ public class LabPlayer : MonoBehaviour
     {
         if (lab == null || other == null) return;
         if (c.collider == null || c.collider.GetComponent<LabPlayer>() == null) return;
-        if (Time.time < nextHitTime) return;
-
-        // ---- 大炮装填优先于动量互换：冲刺态撞进 u 口 = 被吞进膛里 ----
-        // 两名玩家的回调会算出同一对宿主/子弹，谁先跑谁装填，另一边被冷却挡住。
+        // ---- 大炮装填优先于动量互换，也不受对撞冷却限制 ----
+        // 冷却是给"互换"防抖的；两人顶在一起时（B 站在 A 头上起冲）
+        // 把装填一起挡掉，炮就永远吃不到人。
         LabPlayer cannon = canBeRedHot ? this : other;
         LabPlayer dart = canBeRedHot ? other : this;
         if (dart.Suspended) return;
         if (cannon.TryAbsorb(dart)) return;
+
+        if (Time.time < nextHitTime) return;
 
         Vector2 delta = (Vector2)other.transform.position - (Vector2)transform.position;
         if (delta.sqrMagnitude < 0.0001f) return;
@@ -740,6 +751,7 @@ public class LabPlayer : MonoBehaviour
     /// <summary>进膛：不可视、无碰撞箱、运动学跟随宿主，各种逻辑在 Update/FixedUpdate 里早退。</summary>
     void SuspendIn()
     {
+        if (col != null) chamberHalf = col.bounds.extents.y;   // 关掉之后再想量自己就量不到了
         if (visual != null) visual.SetVisible(false);
         col.enabled = false;
         rb.bodyType = RigidbodyType2D.Kinematic;

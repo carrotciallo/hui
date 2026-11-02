@@ -95,7 +95,7 @@ public sealed class LabForgeTests
         Assert.IsNotNull(a.gameObject, "销毁要到帧末，本帧对象还在");
         yield return null;
         yield return null;
-        Assert.IsNull(a, "热二遇红热，A 死亡（GameObject 被销毁）");
+        Assert.IsTrue(a == null, "热二遇红热，A 死亡（GameObject 被销毁）");   // Unity 的假 null：只能靠 == 判，不能让 NUnit 判空
     }
 
     [UnityTest]

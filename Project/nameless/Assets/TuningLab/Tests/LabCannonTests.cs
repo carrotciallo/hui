@@ -33,13 +33,20 @@ public sealed class LabCannonTests
         lab.autoBuild = false;
         labGo.SetActive(true);
 
+        // 不用原生键盘：-nographics 下每帧仍有驱动回写"没人按键"，合成按键会被立刻冲掉。
+        // 自建一台合成键盘，它成为 Keyboard.current，状态才归测试自己管。
+        synthKb = UnityEngine.InputSystem.InputSystem.AddDevice<UnityEngine.InputSystem.Keyboard>();
+
         root = new GameObject("CannonRoot");
         root.transform.SetParent(labGo.transform, false);
     }
 
+    UnityEngine.InputSystem.Keyboard synthKb;
+
     [UnityTearDown]
     public IEnumerator TearDown()
     {
+        if (synthKb != null) UnityEngine.InputSystem.InputSystem.RemoveDevice(synthKb);
         if (labGo != null) Object.Destroy(labGo);
         yield return null;
         yield return null;
@@ -67,6 +74,9 @@ public sealed class LabCannonTests
 
         Assert.IsFalse(a.Loaded, "不冲刺就不装填");
         Assert.IsFalse(b.Suspended);
+
+        // 互换给两人各挂 0.18s 对撞冷却，冲刺只跑 0.09s：不等冷却过就永远撞不进膛
+        yield return StepFixed(12);
 
         // 同样的方向、同样的入口，换成冲刺态就进膛
         yield return LoadInto(a, b, Vector2.down, EntrySpeed);
@@ -124,11 +134,15 @@ public sealed class LabCannonTests
         // A 带着膛里的 B 走
         lab.groundBrake = 0f;
         a.SetVelocity(new Vector2(6f, 0f));
-        yield return null;
-        yield return null;
+        yield return StepFixed(3);
 
-        Assert.AreEqual(a.transform.position.x, b.transform.position.x, 0.05f);
-        Assert.AreEqual(a.transform.position.y, b.transform.position.y, 0.05f);
+        // 膛内跟随是在自己的 FixedUpdate 里抄宿主的位置，宿主这一步之后还会继续走：
+        // 天生差一个物理步，不是漂移。
+        float oneStep = 6f * Time.fixedDeltaTime;
+        Assert.AreEqual(a.GetComponent<Rigidbody2D>().position.x,
+                        b.GetComponent<Rigidbody2D>().position.x, oneStep + 0.01f);
+        Assert.AreEqual(a.GetComponent<Rigidbody2D>().position.y,
+                        b.GetComponent<Rigidbody2D>().position.y, 0.05f);
     }
 
     // 发射 -------------------------------------------------------------
@@ -155,6 +169,13 @@ public sealed class LabCannonTests
         Assert.IsFalse(a.Loaded);
         Assert.IsFalse(b.Suspended);
         Assert.IsTrue(b.GetComponent<Collider2D>().enabled);
+
+        // 射出必须活过接下来的物理步：手感的"没速度"＝第一帧之后被别的结算清零
+        yield return StepFixed(3);
+        Assert.Greater(b.Velocity.y, 0f, "几步之后还在往上");
+        Assert.GreaterOrEqual(b.Velocity.magnitude, expected - lab.gravity * 3 * Time.fixedDeltaTime - 0.5f,
+                              "出膛速度只能被重力减，不能被结算清零");
+        Assert.AreEqual(a.transform.position.x, b.transform.position.x, 0.05f, "竖直射出不能横向弹开");
     }
 
     [UnityTest]
@@ -187,22 +208,24 @@ public sealed class LabCannonTests
 
         yield return WaitUntil(() => a.Loaded, 3f);
         a.Fire();
+        float fireTime = Time.time;
 
         float vOut = b.Velocity.magnitude;
         Assert.AreEqual(Mathf.Sqrt(v * v + 2f * lab.gravity * lab.tierSpacingCells), vOut, 0.05f);
 
         float fireFootY = b.FootY;
         float apex = fireFootY;
-        float elapsed = 0f;
-        while (elapsed < 1.5f)
+        int guard = 0;
+        while (Time.time - fireTime < 1.5f && guard++ < 3000)
         {
-            yield return null;
+            yield return new UnityEngine.WaitForFixedUpdate();
             apex = Mathf.Max(apex, b.FootY);
-            elapsed += Time.deltaTime;
         }
 
         float gained = apex - fireFootY;
-        Assert.AreEqual(lab.CellsForSpeed(vOut), gained, 0.1f, "上升高度 = 出膛速度的折算格数");
+        // 顶点是逐物理步采样出来的，峰值在两步之间：单步位移 vOut×dt 就是天生的采样误差
+        float sampleError = vOut * Time.fixedDeltaTime;
+        Assert.AreEqual(lab.CellsForSpeed(vOut), gained, sampleError + 0.05f, "上升高度 = 出膛速度的折算格数");
         // 自由落体只有 drop - 1 格（最后 1 格是定速冲刺，不涨速度），
         // 再加一个等级间距的 4 格，所以是 drop + 3 ≈ "x + 4 格（大约）"。
         Assert.AreEqual(drop + 3f, gained, 0.6f, "出膛后上升 ≈ 落体高度 + 一个等级间距");
@@ -224,8 +247,9 @@ public sealed class LabCannonTests
         Assert.AreEqual(Mathf.Abs(b.Velocity.x),
             Mathf.Sqrt(EntrySpeed * EntrySpeed + 2f * lab.gravity * lab.tierSpacingCells), 0.05f);
 
-        yield return null;
+        yield return StepFixed(1);
         Assert.AreEqual(0f, b.GetComponent<Rigidbody2D>().gravityScale, 0.0001f, "水平射出：不受重力");
+        Assert.Greater(Mathf.Abs(b.Velocity.x), EntrySpeed * 0.9f, "射出后第一物理步不能掉速");
 
         float startY = b.transform.position.y;
         yield return WaitUntil(() => b.HorizontalSpeed < lab.V0Speed, 3f);
@@ -246,7 +270,7 @@ public sealed class LabCannonTests
         Shatter(a, LabPlayer.Edge.Bottom);
         yield return LoadInto(a, b, Vector2.down, EntrySpeed);
 
-        Shatter(a, LabPlayer.Edge.Top);        // u → L：二者分开
+        Shatter(a, LabPlayer.Edge.Left);         // u → L：二者分开（下+左 = 相邻）
 
         Assert.AreEqual(LabForm.Converter, a.Form);
         Assert.IsFalse(a.Loaded);
@@ -272,13 +296,123 @@ public sealed class LabCannonTests
         Assert.IsFalse(b.Suspended, "膛里的人不能跟着宿主一起没");
         Assert.IsTrue(b.GetComponent<Collider2D>().enabled);
 
-        yield return null;
-        yield return null;
-        Assert.IsNull(a, "A 已销毁");
+        yield return StepFixed(2);
+        Assert.IsTrue(a == null, "A 已销毁");      // Unity 的假 null：只能靠 == 判，不能让 NUnit 判空
         Assert.IsNotNull(b);
     }
 
+    // 真实按键路径（Play 里就是这么玩的）--------------------------------
+
+    [UnityTest]
+    public IEnumerator RealKeysDashInThenFireKeepsSpeed()
+    {
+        // 和手动验收同序：口朝↑（F1 第一次碎的是上边）→ B 落 6 格 → 按 . 冲刺进膛 → 再按 . 开炮
+        const float drop = 6f;
+
+        MakeFloor();
+        var a = MakeFrame();
+        var b = MakeChunk();
+        Link(a, b);
+        Shatter(a, LabPlayer.Edge.Top);
+        Assert.AreEqual("u 大炮 口朝↑", a.FormLabel);
+
+        float startY = a.transform.position.y + AHalf + BHalf + drop;
+        b.Teleport(new Vector2(0f, startY));
+
+        yield return WaitUntil(() => b.FootY <= startY - (drop - 1.2f), 3f);
+        yield return PressPeriod();                                   // B 的冲刺键
+        if (!b.InDashState && !a.Loaded && !PeriodHeldAfterStep())
+            Assert.Ignore("无头编辑器里按键路径测不到：合成键盘的按下状态在一个物理步内就被播放器循环冲掉，" +
+                          "Update 永远收不到 wasPressedThisFrame。真实按键只能进编辑器手动验收。");
+        Assert.IsTrue(b.InDashState || a.Loaded, "按下 . 应进入冲刺态（输入没接管就是按键路径断了）");
+        yield return WaitUntil(() => a.Loaded || !b.InDashState, 3f);
+        Assert.IsTrue(a.Loaded, "按键冲刺撞进口里应装填");
+
+        float vIn = a.ChamberVelocity.magnitude;
+        Assert.Greater(vIn, 5f, "记录的进入速度不该接近 0");
+
+        yield return PressPeriod();                                   // B 的冲刺键 = 开炮
+        Assert.IsFalse(a.Loaded, "开炮后膛应空");
+        Assert.IsFalse(b.Suspended);
+
+        float vOut = b.Velocity.magnitude;
+        Assert.Greater(vOut, vIn, "出膛必须比进入快");
+        Assert.Greater(b.Velocity.y, 0f, "从上面进来 → 往上面出去");
+        Assert.AreEqual(Mathf.Sqrt(vIn * vIn + 2f * lab.gravity * lab.tierSpacingCells), vOut, 0.3f);
+
+        // 关键：出膛之后要真的跑过物理步。手感的"没速度"= 第一发出去就被别的结算抹掉。
+        yield return StepFixed(3);
+        Assert.Greater(b.Velocity.y, 0f, "几步之后还在往上，不该被对撞换速打回 0");
+        Assert.Greater(b.Velocity.magnitude, vOut * 0.7f, "出膛速度不能被外力一口吃掉");
+
+        float fireFootY = b.FootY;
+        float apex = fireFootY;
+        for (int i = 0; i < 150; i++)
+        {
+            yield return new UnityEngine.WaitForFixedUpdate();
+            apex = Mathf.Max(apex, b.FootY);
+        }
+        Assert.GreaterOrEqual(apex - fireFootY, vIn * vIn / (2f * lab.gravity) + 2f,
+                              "上升高度至少要覆盖进入速度 + 一段增量");
+    }
+
+    [UnityTest]
+    public IEnumerator FormChangeReleasesWithEntrySpeed()
+    {
+        MakeFloor();
+        var a = MakeFrame();
+        var b = MakeChunk();
+        Link(a, b);
+        Shatter(a, LabPlayer.Edge.Bottom);
+        yield return LoadInto(a, b, Vector2.down, EntrySpeed);
+
+        Shatter(a, LabPlayer.Edge.Left);        // 碎边组合变了 → 不再是 u → 退膛
+
+        Assert.IsFalse(a.Loaded);
+        Assert.IsFalse(b.Suspended);
+        Assert.AreEqual(EntrySpeed, b.Velocity.magnitude, 0.5f,
+                        "退膛必须带进入时的速度，不能把人原地放下");
+    }
+
     // 工具 -------------------------------------------------------------
+
+    /// <summary>按一次 B 的句号键（走 ReadInput → 冲刺进入 / 开炮的真实路径）。</summary>
+    /// <remarks>
+    /// 键盘的键是位域，InputState.Change 拒写，只能排队整份 KeyboardState；
+    /// 无头编辑器的播放器循环会在同一个物理步里把状态冲掉，按下边沿传不到 Update。
+    /// </remarks>
+    static IEnumerator PressPeriod(int holdSteps = 3)
+    {
+        var kb = UnityEngine.InputSystem.Keyboard.current;
+        Assert.IsNotNull(kb, "无头模式也要有合成键盘，否则这条用例测不到输入路径");
+
+        var down = new UnityEngine.InputSystem.LowLevel.KeyboardState();
+        down.Press(UnityEngine.InputSystem.Key.Period);
+        for (int i = 0; i < holdSteps; i++)
+        {
+            UnityEngine.InputSystem.InputSystem.QueueStateEvent(kb, down);
+            UnityEngine.InputSystem.InputSystem.Update();
+            yield return StepFixed(1);
+        }
+
+        UnityEngine.InputSystem.InputSystem.QueueStateEvent(
+            kb, new UnityEngine.InputSystem.LowLevel.KeyboardState());
+        UnityEngine.InputSystem.InputSystem.Update();
+        yield return StepFixed(1);
+    }
+
+    /// <summary>排完按下事件、走过一个物理步之后键还在不在 —— 用来区分「用例写坏了」和「环境根本收不到按键」。</summary>
+    static bool PeriodHeldAfterStep()
+    {
+        var kb = UnityEngine.InputSystem.Keyboard.current;
+        return kb != null && kb.periodKey.isPressed;
+    }
+
+    /// <summary>走 n 个真正的物理步：batchmode 里 yield return null 可能一步都不走。</summary>
+    static IEnumerator StepFixed(int n)
+    {
+        for (int i = 0; i < n; i++) yield return new UnityEngine.WaitForFixedUpdate();
+    }
 
     /// <summary>把 B 以冲刺态送进膛里：dir = 进入方向，speed = 进入速度。</summary>
     IEnumerator LoadInto(LabPlayer a, LabPlayer b, Vector2 dir, float speed, float gap = 1.5f)
@@ -359,13 +493,14 @@ public sealed class LabCannonTests
 
     static IEnumerator WaitUntil(System.Func<bool> condition, float timeoutSeconds)
     {
-        float elapsed = 0f;
-        while (!condition() && elapsed < timeoutSeconds)
+        int steps = 0;
+        int maxSteps = Mathf.CeilToInt(timeoutSeconds / Mathf.Max(0.0001f, Time.fixedDeltaTime));
+        while (!condition() && steps < maxSteps)
         {
-            elapsed += Time.deltaTime;
-            yield return null;
+            yield return new UnityEngine.WaitForFixedUpdate();
+            steps++;
         }
 
-        Assert.IsTrue(condition(), $"等待条件超时（{timeoutSeconds}s）");
+        Assert.IsTrue(condition(), $"等待条件超时（{timeoutSeconds}s / {steps} 个物理步）");
     }
 }
