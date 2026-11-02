@@ -17,6 +17,10 @@ public sealed class LabLevelData
     public Vector2 spawnA = new Vector2(8f, 0f);
     /// <summary>B 的落点（脚底），不是中心。</summary>
     public Vector2 spawnB = new Vector2(10f, 0f);
+    /// <summary>自由相机跟随的最小正交尺寸（格，半高）。</summary>
+    public float cameraMinSize = TuningLab.DefaultCameraMinSize;
+    /// <summary>自由相机跟随的最大正交尺寸（格，半高）。</summary>
+    public float cameraMaxSize = TuningLab.DefaultCameraMaxSize;
     public List<Vector2Int> solids = new List<Vector2Int>();
     public List<LabRopeSpec> ropes = new List<LabRopeSpec>();
 
@@ -62,6 +66,12 @@ public sealed class LabLevelData
         if (solids == null) solids = new List<Vector2Int>();
         if (ropes == null) ropes = new List<LabRopeSpec>();
 
+        // 旧场景里没有这两个字段时读出来是 0：回落到 Tuning Lab 默认，避免相机被锁死在 0.1。
+        if (cameraMinSize <= 0f) cameraMinSize = TuningLab.DefaultCameraMinSize;
+        if (cameraMaxSize <= 0f) cameraMaxSize = TuningLab.DefaultCameraMaxSize;
+        cameraMinSize = Mathf.Clamp(cameraMinSize, 0.1f, 128f);
+        cameraMaxSize = Mathf.Clamp(cameraMaxSize, cameraMinSize, 128f);
+
         solids.Sort(CompareCells);
 
         int write = 0;
@@ -92,6 +102,8 @@ public sealed class LabLevelData
             bounds = new RectInt(-13, -1, 26, 17);
             spawnA = new Vector2(8f, 0f);
             spawnB = new Vector2(10f, 0f);
+            cameraMinSize = TuningLab.DefaultCameraMinSize;
+            cameraMaxSize = TuningLab.DefaultCameraMaxSize;
             solids = new List<Vector2Int>();
             ropes = new List<LabRopeSpec>();
             return;
@@ -100,6 +112,8 @@ public sealed class LabLevelData
         bounds = other.bounds;
         spawnA = other.spawnA;
         spawnB = other.spawnB;
+        cameraMinSize = other.cameraMinSize;
+        cameraMaxSize = other.cameraMaxSize;
         solids = new List<Vector2Int>(other.solids ?? new List<Vector2Int>());
         ropes = new List<LabRopeSpec>(other.ropes ?? new List<LabRopeSpec>());
         Normalize();

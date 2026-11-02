@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System.Text;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 
 /// <summary>
@@ -62,11 +63,30 @@ public static class LabLevelPlayCheck
             return;
         }
 
+        // 会切到临时场景，先把当前场景的修改问一遍。
+        if (!batch && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+
         if (!LabLevelScene.CreateSilent(CheckPath))
         {
             Debug.LogError("[LabLevelPlayCheck] 无法生成验证场景。");
             if (batch) EditorApplication.Exit(1);
             return;
+        }
+
+        // 故意用非默认值，证明 TuningLab.BuildCamera 真的读了关卡数据，而不是读死 6.75 / 27。
+        var level = Object.FindAnyObjectByType<LabLevel>();
+        if (level != null)
+        {
+            level.Data.cameraMinSize = 8f;
+            level.Data.cameraMaxSize = 34f;
+            level.Data.Normalize();
+            EditorUtility.SetDirty(level);
+            var scene = level.gameObject.scene;
+            if (scene.IsValid())
+            {
+                EditorSceneManager.MarkSceneDirty(scene);
+                EditorSceneManager.SaveScene(scene);
+            }
         }
 
         ResetSession();
@@ -256,10 +276,18 @@ public static class LabLevelPlayCheck
             var follow = lab.Cam.GetComponent<LabCamera>();
             Check(sb, ref fails, follow != null, "相机有 LabCamera");
             if (follow != null && level != null)
+            {
                 Check(sb, ref fails,
                     Mathf.Abs(follow.bounds.xMin - level.Data.bounds.x) < 0.001f &&
                     Mathf.Abs(follow.bounds.yMin - level.Data.bounds.y) < 0.001f,
                     "相机 clamp 用了关卡范围");
+                Check(sb, ref fails,
+                    Mathf.Abs(follow.minSize - level.Data.cameraMinSize) < 0.001f,
+                    "相机 minSize 用了关卡值");
+                Check(sb, ref fails,
+                    Mathf.Abs(follow.maxSize - level.Data.cameraMaxSize) < 0.001f,
+                    "相机 maxSize 用了关卡值");
+            }
         }
 
         sb.AppendLine(fails == 0 ? "全部通过。" : ("失败 " + fails + " 项。"));

@@ -43,6 +43,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     int ropeChainId;
     bool showGrid = true;
     bool showSpawns = true;
+    bool showCameraFrames = true;
     Vector2 windowScroll;
     Vector2 ropeScroll;
 
@@ -175,6 +176,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawSpawns();
         EditorGUILayout.Space();
         DrawBounds();
+        EditorGUILayout.Space();
+        DrawCamera();
         EditorGUILayout.Space();
         DrawActions();
         DrawValidation();
@@ -432,15 +435,79 @@ public sealed class LabLevelEditorWindow : EditorWindow
             MessageType.None);
     }
 
+    void DrawCamera()
+    {
+        EditorGUILayout.LabelField("相机跟随尺寸", EditorStyles.boldLabel);
+        var data = level.Data;
+
+        float min = data.cameraMinSize;
+        float max = data.cameraMaxSize;
+
+        EditorGUI.BeginChangeCheck();
+        min = EditorGUILayout.FloatField("最小 size（格）", min);
+        max = EditorGUILayout.FloatField("最大 size（格）", max);
+        EditorGUILayout.MinMaxSlider("跟随范围", ref min, ref max, 0.5f, 128f);
+        if (EditorGUI.EndChangeCheck())
+        {
+            Record("改相机尺寸");
+            data.cameraMinSize = Mathf.Clamp(min, 0.5f, 128f);
+            data.cameraMaxSize = Mathf.Clamp(max, data.cameraMinSize, 128f);
+            MarkDirty();
+        }
+
+        const float aspect = 16f / 9f;
+        EditorGUILayout.LabelField("最小视野",
+            string.Format("{0:0.##} 格高 × {1:0.#} 格宽（16:9）",
+                data.cameraMinSize * 2f, data.cameraMinSize * 2f * aspect));
+        EditorGUILayout.LabelField("最大视野",
+            string.Format("{0:0.##} 格高 × {1:0.#} 格宽（16:9）",
+                data.cameraMaxSize * 2f, data.cameraMaxSize * 2f * aspect));
+        EditorGUILayout.LabelField("1080p 像素缩放",
+            string.Format("{0:0.##}× – {1:0.##}×",
+                1080f / (data.cameraMinSize * 2f * TuningLab.CellPixels),
+                1080f / (data.cameraMaxSize * 2f * TuningLab.CellPixels)));
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (GUILayout.Button("Tuning Lab 默认"))
+            {
+                Record("相机尺寸回基准");
+                data.cameraMinSize = TuningLab.DefaultCameraMinSize;
+                data.cameraMaxSize = TuningLab.DefaultCameraMaxSize;
+                MarkDirty();
+            }
+            if (GUILayout.Button("固定为最小"))
+            {
+                Record("相机固定为最小尺寸");
+                data.cameraMaxSize = data.cameraMinSize;
+                MarkDirty();
+            }
+        }
+
+        showCameraFrames = EditorGUILayout.ToggleLeft("在 Scene 视图画出最小/最大视野（以出生点中心示意）", showCameraFrames);
+
+        if (lab != null && !lab.freeCamera)
+        {
+            EditorGUILayout.HelpBox(
+                "TuningLab.freeCamera = false 时用的是固定相机，这里的尺寸范围不生效。",
+                MessageType.Warning);
+        }
+
+        EditorGUILayout.HelpBox(
+            "size 是正交相机的半高（格），视野高度 = 2 × size；这是跟随范围，不是相机夹具。\n" +
+            "只有整数像素缩放才逐像素对齐；非整数倍只适合概览或调试。",
+            MessageType.None);
+    }
+
     void DrawActions()
     {
         EditorGUILayout.LabelField("关卡", EditorStyles.boldLabel);
 
-        if (GUILayout.Button("从 Tuning Lab 重置（地形 + 绳 + 出生点 + 范围）", GUILayout.Height(28f)))
+        if (GUILayout.Button("从 Tuning Lab 重置（地形 + 绳 + 出生点 + 相机）", GUILayout.Height(28f)))
         {
             if (!EditorUtility.DisplayDialog(
                     "重置关卡",
-                    "用 Tuning Lab 基准房间覆盖当前地形、绳、出生点和相机范围？",
+                    "用 Tuning Lab 基准房间覆盖当前地形、绳、出生点、相机范围和相机尺寸？",
                     "重置", "取消")) return;
 
             Record("从 Tuning Lab 重置关卡");
@@ -529,6 +596,13 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
         if (data.bounds.width <= 0 || data.bounds.height <= 0)
             issues.Add("相机范围的宽/高必须大于 0。");
+
+        if (data.cameraMinSize <= 0f)
+            issues.Add("相机最小 size 必须大于 0。");
+        if (data.cameraMaxSize < data.cameraMinSize)
+            issues.Add("相机最大 size 不能小于最小 size。");
+        if (data.cameraMaxSize > 128f)
+            issues.Add("相机最大 size 超过 128 格，画面会小到看不清。");
 
         if (data.solids == null || data.solids.Count == 0)
             issues.Add("关卡没有任何地形。");
@@ -633,6 +707,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawBoundsHandle(data);
         DrawRopeHandles(data);
         if (showSpawns) DrawSpawnHandles(data);
+        if (showCameraFrames) DrawCameraFrames(data);
 
         Event e = Event.current;
         Vector3 point = ScenePoint(e.mousePosition);
@@ -894,6 +969,28 @@ public sealed class LabLevelEditorWindow : EditorWindow
     {
         DrawPlayerMarker(data.spawnA, TuningLab.A_Pixels / (float)TuningLab.CellPixels, "A", TuningLab.ColorA);
         DrawPlayerMarker(data.spawnB, TuningLab.B_Pixels / (float)TuningLab.CellPixels, "B", TuningLab.ColorB);
+    }
+
+    void DrawCameraFrames(LabLevelData data)
+    {
+        // 以出生点估算相机起点：脚底 + 两名玩家半高的平均 + LabCamera.offset(0, 1)
+        Vector2 mid = (data.spawnA + data.spawnB) * 0.5f;
+        mid.y += (TuningLab.A_Pixels + TuningLab.B_Pixels) / (4f * TuningLab.CellPixels);
+        mid.y += 1f;
+        var center = new Vector3(mid.x, mid.y, 0f);
+
+        DrawCameraFrame(center, data.cameraMinSize, new Color(0.3f, 0.9f, 1f, 0.55f), "最小视野");
+        if (data.cameraMaxSize > data.cameraMinSize + 0.01f)
+            DrawCameraFrame(center, data.cameraMaxSize, new Color(1f, 0.6f, 0.2f, 0.3f), "最大视野");
+    }
+
+    static void DrawCameraFrame(Vector3 center, float size, Color color, string label)
+    {
+        float height = size * 2f;
+        float width = height * (16f / 9f);
+        Handles.color = color;
+        Handles.DrawWireCube(center, new Vector3(width, height, 0.01f));
+        Handles.Label(new Vector3(center.x - width * 0.5f + 0.5f, center.y + height * 0.5f - 0.5f, 0f), label);
     }
 
     void DrawPlayerMarker(Vector2 feet, float size, string label, Color color)

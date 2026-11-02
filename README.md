@@ -34,7 +34,7 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 1. 菜单 **GameJam → New Level From Tuning Lab**：复制 `Assets/Scenes/TuningLab.unity`（继承调参值/相机/玩家），清掉生成物，挂上 `LabLevel` 并写入基准房间数据，存到 `Assets/Scenes/Levels/`。
 2. 菜单 **GameJam → Tuning Lab Level Editor**：在 Scene 视图里编辑这份 `LabLevel`。
 3. 工具：按 1–6 切铺地形 / 擦地形 / 矩形 / 竖绳 / 出生点 A / 出生点 B；`G` 网格、`Home` 取景、`[` `]` 调绳长；左键拖动绘制，支持撤销。
-4. 左侧面板可改相机范围、出生点、绳长；**校验摆放** 会查出生点是否在地形里、绳是否越界；**从 Tuning Lab 重置** 用基准房间覆盖当前关卡。
+4. 左侧面板可改相机范围、相机跟随尺寸（最小/最大 size）、出生点、绳长；**校验摆放** 会查出生点是否在地形里、绳是否越界；**从 Tuning Lab 重置** 用基准房间覆盖当前关卡。
 
 如果已经有一份 Tuning Lab 副本（例如 `Bake Tuning Lab To Editable Scene` 生成的场景），用 **GameJam → Convert Current Scene To Level** 就地转成关卡；`TuningLab.unity` 基准场景本身禁止转换。
 

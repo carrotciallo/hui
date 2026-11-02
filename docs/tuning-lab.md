@@ -105,6 +105,8 @@ HUD 右上角会显示当前实际缩放倍数，**不是整数就会标红**—
    - 1–6 切工具：铺地形 / 擦地形 / 矩形 / 竖绳 / 出生点 A / 出生点 B
    - `G` 网格，`Home` 取景，`[` `]` 调绳长；左键拖动绘制，支持撤销
    - 面板里可改相机范围、出生点、绳；**校验摆放** 查出生点/绳越界；**从 Tuning Lab 重置** 恢复基准房间
+   - **相机跟随尺寸**：每个关卡可单独调相机的最小/最大正交 size（格），面板会显示 16:9 视野格数和 1080p 像素缩放；
+     Scene 视图可画出以出生点为中心的最小/最大视野框。size 是半高，视野高度 = 2 × size；这是跟随范围，不是相机夹具
 3. Play：`TuningLab` 按 `LabLevel` 生成地形和绳，走的是和调试台相同的 `BuildRoom` 路径。
 
 已经有 Tuning Lab 副本（例如 `Bake Tuning Lab To Editable Scene` 烘焙出来的场景）时，用
@@ -195,7 +197,7 @@ Assets/TuningLab/
 ├── LabPlayer.cs       方块玩家：移动、跳、冲刺、撞击
 ├── LabHud.cs          IMGUI 面板和读数
 ├── Level/
-│   ├── LabLevelData.cs     关卡数据：实心格 / 绳 / 出生点 / 相机范围；格 → 合并矩形
+│   ├── LabLevelData.cs     关卡数据：实心格 / 绳 / 出生点 / 相机范围与跟随尺寸；格 → 合并矩形
 │   ├── LabLevel.cs         把数据建成真实 BoxCollider2D / LabVerticalRope；编辑器预览 + Play 共用
 │   └── Editor/
 │       ├── LabLevelScene.cs        从 TuningLab.unity 派生关卡场景

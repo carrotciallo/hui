@@ -78,6 +78,11 @@ public class TuningLab : MonoBehaviour
     public const int RefWidth = 384;
     public const int RefHeight = 216;
 
+    /// <summary>自由相机默认的最小正交尺寸（格，半高）：216 / (2×16) = 6.75，即 13.5 格高。</summary>
+    public const float DefaultCameraMinSize = RefHeight / (2f * CellPixels);
+    /// <summary>自由相机默认的最大正交尺寸（格，半高）：4 倍最小 = 27，即 54 格高。</summary>
+    public const float DefaultCameraMaxSize = DefaultCameraMinSize * 4f;
+
     /// <summary>A（大框）：14×14，墙厚 2，内腔 10。留 1 像素余量才能进 1 格宽的通道。</summary>
     public const int A_Pixels = 14;
     /// <summary>B（小块）：10×10，正好填满 A 的内腔（14 - 2×2）。</summary>
@@ -365,6 +370,8 @@ public class TuningLab : MonoBehaviour
         data.bounds = ToRectInt(BaselineBounds);
         data.spawnA = SpawnAFeet;
         data.spawnB = SpawnBFeet;
+        data.cameraMinSize = DefaultCameraMinSize;
+        data.cameraMaxSize = DefaultCameraMaxSize;
         data.Normalize();
 
         if (sink.Failures > 0)
@@ -631,8 +638,10 @@ public class TuningLab : MonoBehaviour
         {
             // 自由相机：跟随两人中点、按距离缩放
             var follow = go.AddComponent<LabCamera>();
-            follow.minSize = RefHeight / (2f * CellPixels);
-            follow.maxSize = follow.minSize * 4f;
+            float minSize = level != null ? level.Data.cameraMinSize : DefaultCameraMinSize;
+            float maxSize = level != null ? level.Data.cameraMaxSize : DefaultCameraMaxSize;
+            follow.minSize = Mathf.Max(0.1f, minSize);
+            follow.maxSize = Mathf.Max(follow.minSize, maxSize);
             follow.Configure(PlayerA.transform, PlayerB.transform,
                              level != null ? level.CameraBounds : RoomBounds());
         }

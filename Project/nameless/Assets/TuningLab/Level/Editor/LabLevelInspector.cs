@@ -23,6 +23,8 @@ public sealed class LabLevelInspector : Editor
         EditorGUILayout.LabelField("合并后碰撞矩形", level.MergedRectCount.ToString());
         EditorGUILayout.LabelField("竖绳", level.RopeCount.ToString());
         EditorGUILayout.LabelField("相机范围", data.bounds.ToString());
+        EditorGUILayout.LabelField("相机跟随 size",
+            data.cameraMinSize.ToString("0.##") + " – " + data.cameraMaxSize.ToString("0.##") + " 格");
         EditorGUILayout.LabelField("A 落点", data.spawnA.ToString());
         EditorGUILayout.LabelField("B 落点", data.spawnB.ToString());
 

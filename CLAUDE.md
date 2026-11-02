@@ -55,7 +55,7 @@ git diff Project/nameless/ProjectSettings/EditorBuildSettings.asset
 | GameJam → Build Forms Test Scene | `Assets/Scenes/Forms.unity` |
 | GameJam → New Level From Tuning Lab | `Assets/Scenes/Levels/*.unity`（复制 TuningLab 场景 + 写入基准 `LabLevel`） |
 | GameJam → Convert Current Scene To Level | 把当前 Tuning Lab 副本就地转成关卡（基准场景禁止） |
-| GameJam → Tuning Lab Level Editor | 编辑当前派生场景的 `LabLevel`（地形 / 绳 / 出生点 / 相机范围） |
+| GameJam → Tuning Lab Level Editor | 编辑当前派生场景的 `LabLevel`（地形 / 绳 / 出生点 / 相机范围与跟随尺寸） |
 | GameJam → Run Level Baseline Self Check | 纯数据自检：73 格 ↔ 8 块矩形往返 |
 | GameJam → Run Level Play Check | 临时派生场景 → 进 Play 用真实物理验一遍 |
 

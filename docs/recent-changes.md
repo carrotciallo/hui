@@ -9,6 +9,7 @@
 - 新增 `Assets/TuningLab/Level/`：`LabLevelData`（格 / 绳 / 出生点 / 相机范围）、`LabLevel`（数据 → 合并 `BoxCollider2D` / `LabVerticalRope`，编辑器预览与 Play 共用）
 - 新增 **GameJam → New Level From Tuning Lab**：复制 `TuningLab.unity`（继承调参值/相机/玩家），挂 `LabLevel` 并用 `TuningLab.CaptureBaseline()` 写入基准房间；关卡场景必须从调试台派生
 - 新增 **GameJam → Tuning Lab Level Editor**：1 格网格铺/擦地形、矩形填充、放竖绳、设出生点、改相机范围，支持撤销、校验和"从 Tuning Lab 重置"
+- 关卡编辑器增加**相机跟随尺寸**调节：每个 `LabLevel` 独立保存最小/最大正交 size，面板显示 16:9 视野格数与 1080p 像素缩放，Scene 视图可画出最小/最大视野框
 - 新增 **GameJam → Run Level Baseline Self Check** 与 **GameJam → Run Level Play Check**（纯数据 / 真实物理两条验证）
 - `TuningLab` 的场地描述抽成 `DescribeRoom`，基准场景与 `CaptureBaseline` 读同一段代码，避免两套规格
 - 旧的 `GameJam → Level Editor`（编辑 `World.unity`）规则未对齐，暂不使用

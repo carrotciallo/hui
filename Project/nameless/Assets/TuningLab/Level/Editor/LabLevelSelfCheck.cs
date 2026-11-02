@@ -56,6 +56,12 @@ public static class LabLevelSelfCheck
             "相机范围 = " + data.bounds);
         Expect(sb, ref failures, SamePoint(data.spawnA, TuningLab.SpawnAFeet), "A 落点 = " + data.spawnA);
         Expect(sb, ref failures, SamePoint(data.spawnB, TuningLab.SpawnBFeet), "B 落点 = " + data.spawnB);
+        Expect(sb, ref failures,
+            Mathf.Abs(data.cameraMinSize - TuningLab.DefaultCameraMinSize) < 0.0001f,
+            "相机最小 size = " + TuningLab.DefaultCameraMinSize);
+        Expect(sb, ref failures,
+            Mathf.Abs(data.cameraMaxSize - TuningLab.DefaultCameraMaxSize) < 0.0001f,
+            "相机最大 size = " + TuningLab.DefaultCameraMaxSize);
 
         sb.AppendLine();
         sb.AppendLine("=== 2. 格子 → 合并矩形（应精确还原 8 块）===");
@@ -132,6 +138,18 @@ public static class LabLevelSelfCheck
         Expect(sb, ref failures, aligned.solids.Count == 26, "地板 = 26 格，实际 " + aligned.solids.Count);
         Expect(sb, ref failures, !aligned.AddAlignedRect(new Vector2(-54f, 32f), new Vector2(1f, 64f)),
             "4 倍场地的墙（不对齐）被拒绝");
+
+        var cameraClamp = new LabLevelData { cameraMinSize = 10f, cameraMaxSize = 5f };
+        cameraClamp.Normalize();
+        Expect(sb, ref failures, cameraClamp.cameraMaxSize >= cameraClamp.cameraMinSize,
+            "最大 size 被抬到最小 size");
+
+        var legacy = new LabLevelData { cameraMinSize = 0f, cameraMaxSize = 0f };
+        legacy.Normalize();
+        Expect(sb, ref failures,
+            Mathf.Abs(legacy.cameraMinSize - TuningLab.DefaultCameraMinSize) < 0.0001f &&
+            Mathf.Abs(legacy.cameraMaxSize - TuningLab.DefaultCameraMaxSize) < 0.0001f,
+            "缺失的相机值回落到 Tuning Lab 默认");
 
         sb.AppendLine();
         sb.AppendLine("=== 5. 基准出生点 / 绳 / 范围 ===");
