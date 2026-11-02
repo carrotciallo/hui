@@ -286,6 +286,7 @@ public static class LabLevelScene
         if (level == null) level = lab.gameObject.AddComponent<LabLevel>();
         level.ApplyBaseline();
         CopyCameraDefaults(lab, level.Data);
+        EnsureDefaultPartition(level.Data);
         level.ClearGenerated();          // 预览物体不写进场景，打开场景时 OnEnable 会重建
 
         lab.level = level;
@@ -334,6 +335,15 @@ public static class LabLevelScene
             rect.height = -rect.height;
         }
         return rect;
+    }
+
+    /// <summary>新关卡至少有一个覆盖整块编辑范围的分区，B 一出生就有相机范围可用。</summary>
+    public static void EnsureDefaultPartition(LabLevelData data)
+    {
+        if (data == null) return;
+        data.Normalize();
+        if (data.partitions.Count > 0) return;
+        data.AddPartition(data.bounds, "Level 1");
     }
 
     static T FindInScene<T>(Scene scene) where T : Component

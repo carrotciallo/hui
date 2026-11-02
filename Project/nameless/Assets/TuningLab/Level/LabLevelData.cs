@@ -23,6 +23,8 @@ public sealed class LabLevelData
     public float cameraMaxSize = TuningLab.DefaultCameraMaxSize;
     public List<Vector2Int> solids = new List<Vector2Int>();
     public List<LabRopeSpec> ropes = new List<LabRopeSpec>();
+    /// <summary>连续关卡分区。每个分区的 bounds 同时是它的相机范围；B 进入哪个分区就用哪个分区。</summary>
+    public List<LabLevelPartition> partitions = new List<LabLevelPartition>();
 
     public bool HasCell(Vector2Int cell) => solids != null && solids.Contains(cell);
 
@@ -65,12 +67,26 @@ public sealed class LabLevelData
     {
         if (solids == null) solids = new List<Vector2Int>();
         if (ropes == null) ropes = new List<LabRopeSpec>();
+        if (partitions == null) partitions = new List<LabLevelPartition>();
 
         // 旧场景里没有这两个字段时读出来是 0：回落到 Tuning Lab 默认，避免相机被锁死在 0.1。
         if (cameraMinSize <= 0f) cameraMinSize = TuningLab.DefaultCameraMinSize;
         if (cameraMaxSize <= 0f) cameraMaxSize = TuningLab.DefaultCameraMaxSize;
         cameraMinSize = Mathf.Clamp(cameraMinSize, 0.1f, 128f);
         cameraMaxSize = Mathf.Clamp(cameraMaxSize, cameraMinSize, 128f);
+
+        for (int i = partitions.Count - 1; i >= 0; i--)
+        {
+            var partition = partitions[i];
+            if (partition == null)
+            {
+                partitions.RemoveAt(i);
+                continue;
+            }
+
+            partition.bounds = NormalizeRect(partition.bounds);
+            if (string.IsNullOrEmpty(partition.name)) partition.name = "Level " + (i + 1);
+        }
 
         solids.Sort(CompareCells);
 
@@ -106,6 +122,7 @@ public sealed class LabLevelData
             cameraMaxSize = TuningLab.DefaultCameraMaxSize;
             solids = new List<Vector2Int>();
             ropes = new List<LabRopeSpec>();
+            partitions = new List<LabLevelPartition>();
             return;
         }
 
@@ -116,6 +133,19 @@ public sealed class LabLevelData
         cameraMaxSize = other.cameraMaxSize;
         solids = new List<Vector2Int>(other.solids ?? new List<Vector2Int>());
         ropes = new List<LabRopeSpec>(other.ropes ?? new List<LabRopeSpec>());
+        partitions = new List<LabLevelPartition>();
+        if (other.partitions != null)
+        {
+            foreach (var partition in other.partitions)
+            {
+                if (partition == null) continue;
+                partitions.Add(new LabLevelPartition
+                {
+                    name = partition.name,
+                    bounds = partition.bounds
+                });
+            }
+        }
         Normalize();
     }
 
@@ -124,6 +154,117 @@ public sealed class LabLevelData
         var copy = new LabLevelData();
         copy.CopyFrom(this);
         return copy;
+    }
+
+    public static Rect ToRect(RectInt rect)
+        => new Rect(rect.x, rect.y, rect.width, rect.height);
+
+    public static RectInt NormalizeRect(RectInt rect)
+    {
+        if (rect.width < 0)
+        {
+            rect.x += rect.width;
+            rect.width = -rect.width;
+        }
+        if (rect.height < 0)
+        {
+            rect.y += rect.height;
+            rect.height = -rect.height;
+        }
+        if (rect.width <= 0) rect.width = 1;
+        if (rect.height <= 0) rect.height = 1;
+        return rect;
+    }
+
+    /// <summary>B 的判定：点在哪个分区的 bounds 里；没有返回 -1。</summary>
+    public int FindPartition(Vector2 point)
+    {
+        if (partitions == null) return -1;
+        for (int i = 0; i < partitions.Count; i++)
+        {
+            var partition = partitions[i];
+            if (partition != null && ToRect(partition.bounds).Contains(point)) return i;
+        }
+        return -1;
+    }
+
+    public LabLevelPartition AddPartition(RectInt bounds, string name = null)
+    {
+        if (partitions == null) partitions = new List<LabLevelPartition>();
+        var partition = new LabLevelPartition
+        {
+            name = string.IsNullOrEmpty(name) ? "Level " + (partitions.Count + 1) : name,
+            bounds = NormalizeRect(bounds)
+        };
+        partitions.Add(partition);
+        return partition;
+    }
+
+    /// <summary>
+    /// 移动分区。moveContents = true 时，把旧 bounds 里的地形、绳、出生点一起平移；
+    /// 判定用格中心 / 绳中心 / 出生点，避免边界格被误带走。
+    /// </summary>
+    public bool MovePartition(int index, Vector2Int delta, bool moveContents)
+    {
+        if (partitions == null || index < 0 || index >= partitions.Count) return false;
+        var partition = partitions[index];
+        if (partition == null || delta == Vector2Int.zero) return false;
+
+        Rect oldRect = ToRect(partition.bounds);
+        partition.bounds = new RectInt(
+            partition.bounds.x + delta.x,
+            partition.bounds.y + delta.y,
+            partition.bounds.width,
+            partition.bounds.height);
+
+        if (!moveContents) return true;
+
+        var shift = new Vector2(delta.x, delta.y);
+
+        if (solids != null)
+        {
+            for (int i = 0; i < solids.Count; i++)
+            {
+                var cell = solids[i];
+                if (oldRect.Contains(new Vector2(cell.x + 0.5f, cell.y + 0.5f)))
+                    solids[i] = cell + delta;
+            }
+        }
+
+        if (ropes != null)
+        {
+            for (int i = 0; i < ropes.Count; i++)
+            {
+                var rope = ropes[i];
+                if (!oldRect.Contains(rope.center)) continue;
+                rope.center += shift;
+                ropes[i] = rope;
+            }
+        }
+
+        if (oldRect.Contains(spawnA)) spawnA += shift;
+        if (oldRect.Contains(spawnB)) spawnB += shift;
+
+        return true;
+    }
+
+    /// <summary>删除分区。deleteContents = true 时清掉分区里的地形和绳；出生点保留。</summary>
+    public bool DeletePartition(int index, bool deleteContents)
+    {
+        if (partitions == null || index < 0 || index >= partitions.Count) return false;
+
+        var partition = partitions[index];
+        if (partition != null && deleteContents)
+        {
+            Rect rect = ToRect(partition.bounds);
+            if (solids != null)
+                solids.RemoveAll(cell => rect.Contains(new Vector2(cell.x + 0.5f, cell.y + 0.5f)));
+            if (ropes != null)
+                ropes.RemoveAll(rope => rect.Contains(rope.center));
+        }
+
+        partitions.RemoveAt(index);
+        return true;
     }
 
     /// <summary>
@@ -268,4 +409,15 @@ public struct LabRopeSpec
         this.cells = cells;
         this.chainId = chainId;
     }
+}
+
+/// <summary>
+/// 连续关卡分区。bounds 就是这一关的相机 clamp 范围：
+/// B 进入哪个分区的 bounds，相机就用哪个分区的大小。移动分区时可以一起移动里面的物件。
+/// </summary>
+[System.Serializable]
+public sealed class LabLevelPartition
+{
+    public string name = "Level";
+    public RectInt bounds = new RectInt(0, 0, 16, 12);
 }

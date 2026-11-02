@@ -55,13 +55,13 @@ git diff Project/nameless/ProjectSettings/EditorBuildSettings.asset
 | GameJam → Build Forms Test Scene | `Assets/Scenes/Forms.unity` |
 | GameJam → New Level From Tuning Lab | `Assets/Scenes/Levels/*.unity`（复制 TuningLab 场景 + 写入基准 `LabLevel`） |
 | GameJam → Convert Current Scene To Level | 把当前 Tuning Lab 副本就地转成关卡（基准场景禁止） |
-| GameJam → Tuning Lab Level Editor | 编辑当前派生场景的 `LabLevel`（地形 / 绳 / 出生点 / 相机范围与跟随尺寸） |
+| GameJam → Tuning Lab Level Editor | 编辑当前派生场景的 `LabLevel`（地形 / 绳 / 关卡分区 / 出生点 / 相机范围与跟随尺寸） |
 | GameJam → Run Level Baseline Self Check | 纯数据自检：73 格 ↔ 8 块矩形往返 |
 | GameJam → Run Level Play Check | 临时派生场景 → 进 Play 用真实物理验一遍 |
 
 改关卡内容走 **Tuning Lab Level Editor**，不要手改 `TuningLab.unity`（基准场景）或 `World.unity`；旧测试房仍然改对应 builder 再重新生成。
 
-连续关卡相机：`TuningLab` Inspector 的「相机默认」+「关卡相机分区」按 **B 的位置**选当前关卡，切换 `bounds` / `minSize` / `maxSize`；没有分区时才用 `LabLevelData` 的单关相机设置。
+连续关卡：在关卡编辑器的「关卡分区」里新建 / 移动 / 调大小 / 删除分区，分区的 `bounds` 就是相机范围；按 **B 的位置**选当前分区。TuningLab Inspector 只保留「相机默认」（B 不在任何分区时用），没有分区时仍按单关相机设置走。
 
 ### 测试
 

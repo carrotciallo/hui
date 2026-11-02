@@ -223,10 +223,6 @@ public class TuningLab : MonoBehaviour
     [Tooltip("分区切换时 bounds / size 的混合速度；0 = 立即切换。")]
     public float cameraFrameBlend = 8f;
 
-    [Header("关卡相机分区")]
-    [Tooltip("按 B 的位置判定关卡。area = B 的判定区域，bounds = 相机 clamp；列表顺序即优先级。")]
-    public List<LabCameraLevel> cameraLevels = new List<LabCameraLevel>();
-
     void Awake()
     {
         if (level == null) level = GetComponent<LabLevel>();
@@ -240,17 +236,6 @@ public class TuningLab : MonoBehaviour
         defaultCameraBounds = NormalizeRect(defaultCameraBounds);
         if (defaultCameraBounds.width <= 0f || defaultCameraBounds.height <= 0f)
             defaultCameraBounds = BaselineBounds;
-
-        if (cameraLevels == null) cameraLevels = new List<LabCameraLevel>();
-        for (int i = 0; i < cameraLevels.Count; i++)
-        {
-            var cameraLevel = cameraLevels[i];
-            if (cameraLevel == null) continue;
-
-            cameraLevel.area = NormalizeRect(cameraLevel.area);
-            cameraLevel.bounds = NormalizeRect(cameraLevel.bounds);
-            NormalizeSizes(ref cameraLevel.minSize, ref cameraLevel.maxSize);
-        }
     }
 
     void OnDrawGizmosSelected()
@@ -258,16 +243,16 @@ public class TuningLab : MonoBehaviour
         Gizmos.color = new Color(0.3f, 0.9f, 1f, 0.8f);
         DrawGizmoRect(defaultCameraBounds);
 
-        if (cameraLevels == null) return;
-        for (int i = 0; i < cameraLevels.Count; i++)
-        {
-            var cameraLevel = cameraLevels[i];
-            if (cameraLevel == null) continue;
+        if (level == null) return;
+        var partitions = level.Data.partitions;
+        if (partitions == null) return;
 
+        for (int i = 0; i < partitions.Count; i++)
+        {
+            var partition = partitions[i];
+            if (partition == null) continue;
             Gizmos.color = new Color(1f, 0.8f, 0.2f, 0.9f);
-            DrawGizmoRect(cameraLevel.area);
-            Gizmos.color = new Color(1f, 0.4f, 0.15f, 0.45f);
-            DrawGizmoRect(cameraLevel.bounds);
+            DrawGizmoRect(LabLevelData.ToRect(partition.bounds));
         }
     }
 
@@ -465,37 +450,40 @@ public class TuningLab : MonoBehaviour
 
     /// <summary>
     /// 当前相机应该使用的 bounds / size。B 的 position 是关卡判定点：
-    ///   有相机分区时：先找包含 B 的分区；B 不在任何分区里就用 TuningLab 默认值。
-    ///   没有分区时：有 LabLevel 就用单关数据（LabLevelData），否则用默认值。
+    ///   有 LabLevel + 关卡分区时：B 在哪个分区的 bounds 里，就用哪个分区的大小当相机范围；
+    ///   B 不在任何分区里就用 TuningLab 默认值。
+    ///   没有分区时：有 LabLevel 就用单关数据，否则用默认值。
     /// </summary>
     public void GetCameraFrame(Vector2 probePosition, out Rect bounds, out float minSize, out float maxSize)
     {
-        if (cameraLevels != null && cameraLevels.Count > 0)
+        if (level != null)
         {
-            for (int i = 0; i < cameraLevels.Count; i++)
+            var data = level.Data;
+            if (data.partitions != null && data.partitions.Count > 0)
             {
-                var cameraLevel = cameraLevels[i];
-                if (cameraLevel == null || !cameraLevel.area.Contains(probePosition)) continue;
+                for (int i = 0; i < data.partitions.Count; i++)
+                {
+                    var partition = data.partitions[i];
+                    if (partition == null) continue;
 
-                bounds = cameraLevel.bounds;
-                if (bounds.width <= 0f || bounds.height <= 0f) bounds = defaultCameraBounds;
-                minSize = cameraLevel.minSize;
-                maxSize = cameraLevel.maxSize;
+                    Rect partitionBounds = LabLevelData.ToRect(partition.bounds);
+                    if (!partitionBounds.Contains(probePosition)) continue;
+
+                    bounds = partitionBounds;
+                    minSize = data.cameraMinSize;
+                    maxSize = data.cameraMaxSize;
+                    NormalizeFrame(ref bounds, ref minSize, ref maxSize);
+                    return;
+                }
+
+                bounds = defaultCameraBounds;
+                minSize = defaultCameraMinSize;
+                maxSize = defaultCameraMaxSize;
                 NormalizeFrame(ref bounds, ref minSize, ref maxSize);
                 return;
             }
 
-            bounds = defaultCameraBounds;
-            minSize = defaultCameraMinSize;
-            maxSize = defaultCameraMaxSize;
-            NormalizeFrame(ref bounds, ref minSize, ref maxSize);
-            return;
-        }
-
-        if (level != null)
-        {
-            var data = level.Data;
-            bounds = new Rect(data.bounds.x, data.bounds.y, data.bounds.width, data.bounds.height);
+            bounds = LabLevelData.ToRect(data.bounds);
             minSize = data.cameraMinSize;
             maxSize = data.cameraMaxSize;
             NormalizeFrame(ref bounds, ref minSize, ref maxSize);
@@ -784,21 +772,6 @@ public class TuningLab : MonoBehaviour
         // 固定视角：正交尺寸已在上方设为 13.5 格，不用再加组件
 
         Cam = cam;
-    }
-
-    [System.Serializable]
-    public sealed class LabCameraLevel
-    {
-        [Tooltip("关卡名，只用于 Inspector 识别。")]
-        public string name = "Level";
-        [Tooltip("B 的位置落在这个矩形内，就判定为这一关（世界坐标，1 格 = 1 单位）。")]
-        public Rect area = new Rect(0f, 0f, 10f, 10f);
-        [Tooltip("这一关的相机 clamp 范围。")]
-        public Rect bounds = Rect.MinMaxRect(-5f, -1f, 5f, 10f);
-        [Tooltip("这一关的相机最小正交尺寸（格，半高）。")]
-        public float minSize = TuningLab.DefaultCameraMinSize;
-        [Tooltip("这一关的相机最大正交尺寸（格，半高）。")]
-        public float maxSize = TuningLab.DefaultCameraMaxSize;
     }
 
     /// <summary>TuningLab 生成整个场地用的白块精灵；LabLevel 的预览也用它，保证两边同形。</summary>

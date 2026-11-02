@@ -171,6 +171,57 @@ public static class LabLevelSelfCheck
             "内容范围包含两面墙 = " + content);
 
         sb.AppendLine();
+        sb.AppendLine("=== 6. 关卡分区：移动（带物件）/ 删除 ===");
+        var partitioned = new LabLevelData();
+        partitioned.partitions.Add(new LabLevelPartition { name = "A", bounds = new RectInt(0, 0, 10, 10) });
+        partitioned.partitions.Add(new LabLevelPartition { name = "B", bounds = new RectInt(20, 0, 10, 10) });
+        partitioned.AddCell(new Vector2Int(1, 1));
+        partitioned.AddCell(new Vector2Int(21, 1));
+        partitioned.ropes.Add(new LabRopeSpec(new Vector2(5f, 5f), 2));
+        partitioned.ropes.Add(new LabRopeSpec(new Vector2(25f, 5f), 2));
+        partitioned.spawnA = new Vector2(2f, 0f);
+        partitioned.spawnB = new Vector2(22f, 0f);
+
+        Expect(sb, ref failures, partitioned.FindPartition(new Vector2(5f, 5f)) == 0,
+            "B=5,5 命中分区 0");
+        Expect(sb, ref failures, partitioned.FindPartition(new Vector2(25f, 5f)) == 1,
+            "B=25,5 命中分区 1");
+
+        var partitionA = partitioned.partitions[0];
+        Expect(sb, ref failures, partitioned.MovePartition(0, new Vector2Int(3, 4), true),
+            "移动分区 A");
+        Expect(sb, ref failures,
+            partitionA.bounds.x == 3 && partitionA.bounds.y == 4 &&
+            partitionA.bounds.width == 10 && partitionA.bounds.height == 10,
+            "分区 A 移到 (3,4)，大小不变");
+        Expect(sb, ref failures, partitioned.HasCell(new Vector2Int(4, 5)),
+            "A 里的地形跟着移动");
+        Expect(sb, ref failures, !partitioned.HasCell(new Vector2Int(1, 1)),
+            "旧位置的地形清掉");
+        Expect(sb, ref failures, SamePoint(partitioned.ropes[0].center, new Vector2(8f, 9f)),
+            "A 里的绳跟着移动");
+        Expect(sb, ref failures, SamePoint(partitioned.spawnA, new Vector2(5f, 4f)),
+            "A 里的出生点跟着移动");
+        Expect(sb, ref failures, partitioned.HasCell(new Vector2Int(21, 1)),
+            "分区 B 的地形不动");
+        Expect(sb, ref failures, SamePoint(partitioned.ropes[1].center, new Vector2(25f, 5f)),
+            "分区 B 的绳不动");
+        Expect(sb, ref failures, SamePoint(partitioned.spawnB, new Vector2(22f, 0f)),
+            "分区 B 的出生点不动");
+
+        Expect(sb, ref failures, partitioned.DeletePartition(0, true),
+            "删除分区 A（带内容）");
+        Expect(sb, ref failures, partitioned.partitions.Count == 1,
+            "只剩分区 B");
+        Expect(sb, ref failures, !partitioned.HasCell(new Vector2Int(4, 5)),
+            "A 里的地形被删");
+        Expect(sb, ref failures, partitioned.ropes.Count == 1 &&
+            SamePoint(partitioned.ropes[0].center, new Vector2(25f, 5f)),
+            "只剩 B 的绳");
+        Expect(sb, ref failures, partitioned.FindPartition(new Vector2(25f, 5f)) == 0,
+            "删除后 B 分区索引变成 0");
+
+        sb.AppendLine();
         fails = failures;
         sb.AppendLine(failures == 0 ? "全部通过。" : ("失败 " + failures + " 项。"));
         return sb;

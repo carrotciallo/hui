@@ -102,7 +102,7 @@ HUD 右上角会显示当前实际缩放倍数，**不是整数就会标红**—
 1. **GameJam → New Level From Tuning Lab**：复制 `TuningLab.unity`，挂 `LabLevel`，用
    `TuningLab.CaptureBaseline()` 把上面这块场地抓成关卡数据。
 2. **GameJam → Tuning Lab Level Editor**：在 Scene 视图里改 `LabLevel`。
-   - 1–6 切工具：铺地形 / 擦地形 / 矩形 / 竖绳 / 出生点 A / 出生点 B
+   - 1–7 切工具：铺地形 / 擦地形 / 矩形 / 竖绳 / 出生点 A / 出生点 B / 关卡分区
    - `G` 网格，`Home` 取景，`[` `]` 调绳长；左键拖动绘制，支持撤销
    - 面板里可改相机范围、出生点、绳；**校验摆放** 查出生点/绳越界；**从 Tuning Lab 重置** 恢复基准房间
    - **相机跟随尺寸**：每个关卡可单独调相机的最小/最大正交 size（格），面板会显示 16:9 视野格数和 1080p 像素缩放；
@@ -112,19 +112,21 @@ HUD 右上角会显示当前实际缩放倍数，**不是整数就会标红**—
 已经有 Tuning Lab 副本（例如 `Bake Tuning Lab To Editable Scene` 烘焙出来的场景）时，用
 **GameJam → Convert Current Scene To Level** 就地转成关卡；`TuningLab.unity` 基准场景本身禁止转换。
 
-## 连续关卡：相机分区
+## 连续关卡：关卡分区
 
-一个连续场景里可以摆多个关卡段，相机范围随关卡切换。判定点固定是 **B 的位置**：
+全部关卡放在一个 scene 里，用「关卡分区」切分。判定点固定是 **B 的位置**。
 
-- `TuningLab` Inspector → **相机默认**：`defaultCameraMinSize` / `defaultCameraMaxSize` / `defaultCameraBounds`。
-  B 不在任何分区里时用这组值；新建关卡也会把它写进 `LabLevelData` 作为起始值。
-- `TuningLab` Inspector → **关卡相机分区**：每项有 `name`、`area`（B 的判定矩形）、`bounds`（相机夹具）、
-  `minSize` / `maxSize`。列表顺序即优先级，第一个包含 B 的分区生效。
-- 相机跟随的仍是 A/B 中点，但“当前在哪个关卡”只看 B；切换分区时 `bounds` / size 按
-  `cameraFrameBlend` 混合，避免直接跳。
-- 选中 TuningLab 时 Scene 视图会画出默认范围（青）、每个分区的 `area`（黄）和 `bounds`（橙）。
-- 没有分区时，单关场景仍用 `LabLevelData` 的相机范围/尺寸；一旦有分区，以分区为准，B 出界用默认值。
-  关卡编辑器面板会对这种情况给出提示。
+在 **GameJam → Tuning Lab Level Editor** 的「关卡分区」面板：
+
+- **新建**：点「新建分区」，或在 Scene 视图用分区工具（快捷键 `7`）在空白处拖出矩形。
+- **命名 / 调大小**：面板里的名称和 X/Y/宽/高；修改 X/Y 会移动分区，修改宽/高只改大小。
+- **移动**：在 Scene 视图拖动分区内部；勾选「移动时带上里面的物件」时，分区 bounds 里的地形、绳、出生点会一起平移。
+- **删除**：面板里删除；可以选择只删分区，或连分区里的地形/绳一起删（出生点保留）。
+- **相机**：分区的 bounds **就是相机 clamp 范围**。B 进入哪个分区，相机就用哪个分区的 bounds；
+  缩放仍用 `LabLevelData` 的相机跟随尺寸；B 不在任何分区时用 TuningLab Inspector 的「相机默认」。
+- 新关卡默认有一个覆盖编辑范围的 `Level 1` 分区；旧关卡没有分区时仍按单关相机设置走。
+
+选中 TuningLab 时，Scene 视图会画出默认范围（青）和所有关卡分区（黄）；关卡编辑器里当前选中的分区会加亮。
 
 基准的粒度是**格**：地板 26 格、5 级台阶各 3 格、两面墙各 1×16 格、绳在 (9, 2) 长 4 格。
 `GameJam → Run Level Baseline Self Check` 会把这份数据抓出来，验证 73 个实心格能精确合并回 8 块，
@@ -212,7 +214,7 @@ Assets/TuningLab/
 ├── LabHud.cs          IMGUI 面板和读数
 ├── LabCamera.cs       自由相机：跟随 A/B 中点；B 的位置决定当前关卡分区
 ├── Level/
-│   ├── LabLevelData.cs     关卡数据：实心格 / 绳 / 出生点 / 相机范围与跟随尺寸；格 → 合并矩形
+│   ├── LabLevelData.cs     关卡数据：实心格 / 绳 / 关卡分区 / 出生点 / 相机范围与跟随尺寸；格 → 合并矩形
 │   ├── LabLevel.cs         把数据建成真实 BoxCollider2D / LabVerticalRope；编辑器预览 + Play 共用
 │   └── Editor/
 │       ├── LabLevelScene.cs        从 TuningLab.unity 派生关卡场景

@@ -22,7 +22,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Rect = 2,
         Rope = 3,
         SpawnA = 4,
-        SpawnB = 5
+        SpawnB = 5,
+        Partition = 6
     }
 
     const int EditMargin = 8;                 // 相机范围外还能画多少格
@@ -31,7 +32,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     static readonly string[] ToolLabels =
     {
-        "铺地形", "擦地形", "矩形", "竖绳", "出生点 A", "出生点 B"
+        "铺地形", "擦地形", "矩形", "竖绳", "出生点 A", "出生点 B", "关卡分区"
     };
 
     LabLevel level;
@@ -51,6 +52,14 @@ public sealed class LabLevelEditorWindow : EditorWindow
     Vector2Int rectStart;
     Vector2Int rectEnd;
     Vector2Int lastCell;
+
+    int partitionIndex = -1;
+    bool movePartitionContents = true;
+    bool partitionCreating;
+    int partitionDragIndex = -1;
+    Vector2Int partitionDragLast;
+    Vector2Int partitionCreateStart;
+    Vector2Int partitionCreateEnd;
 
     bool validated;
     readonly List<string> issues = new List<string>();
@@ -123,6 +132,10 @@ public sealed class LabLevelEditorWindow : EditorWindow
         if (level != null && level != previous && !Application.isPlaying)
             level.RebuildPreview();
 
+        int count = level != null && level.Data.partitions != null ? level.Data.partitions.Count : 0;
+        if (count == 0) partitionIndex = -1;
+        else if (partitionIndex >= count) partitionIndex = count - 1;
+
         Repaint();
     }
 
@@ -170,6 +183,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawTools();
         EditorGUILayout.Space();
         DrawTerrain();
+        EditorGUILayout.Space();
+        DrawPartitions();
         EditorGUILayout.Space();
         DrawRopes();
         EditorGUILayout.Space();
@@ -299,6 +314,12 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.SpawnB:
                 EditorGUILayout.HelpBox("左键设置 B 的落点（脚底）。必须在相机范围内。", MessageType.None);
                 break;
+            case Tool.Partition:
+                EditorGUILayout.HelpBox(
+                    "左键空白处拖出新分区；在分区内部拖动可移动分区（默认带上里面的地形/绳/出生点）。\n" +
+                    "改名 / 调大小 / 删除在下面的「关卡分区」面板里。",
+                    MessageType.None);
+                break;
         }
 
         if (GUILayout.Button("跳到关卡")) FrameLevel();
@@ -318,6 +339,112 @@ public sealed class LabLevelEditorWindow : EditorWindow
             level.Data.ClearCells();
             AfterStructuralEdit();
         }
+    }
+
+    void DrawPartitions()
+    {
+        EditorGUILayout.LabelField("关卡分区", EditorStyles.boldLabel);
+        var data = level.Data;
+        if (data.partitions == null) data.partitions = new List<LabLevelPartition>();
+
+        EditorGUILayout.HelpBox(
+            "分区的 bounds 就是相机范围：B 进入哪个分区，相机就用哪个分区。\n" +
+            "移动分区时可选择把里面的地形/绳/出生点一起带走。",
+            MessageType.None);
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (GUILayout.Button("新建分区")) CreatePartitionAtView();
+            using (new EditorGUI.DisabledScope(partitionIndex < 0 || partitionIndex >= data.partitions.Count))
+            {
+                if (GUILayout.Button("删除选中")) DeleteSelectedPartition();
+            }
+        }
+
+        for (int i = 0; i < data.partitions.Count; i++)
+        {
+            var partition = data.partitions[i];
+            if (partition == null) continue;
+            string label = (i == partitionIndex ? "▶ " : "") + partition.name + "   " + partition.bounds;
+            if (GUILayout.Button(label)) partitionIndex = i;
+        }
+
+        if (data.partitions.Count == 0)
+            EditorGUILayout.LabelField("（没有分区：相机用单关范围/尺寸）");
+
+        if (partitionIndex >= 0 && partitionIndex < data.partitions.Count)
+        {
+            var partition = data.partitions[partitionIndex];
+            if (partition != null)
+            {
+                EditorGUI.BeginChangeCheck();
+                string name = EditorGUILayout.TextField("名称", partition.name);
+                int x = EditorGUILayout.IntField("X", partition.bounds.x);
+                int y = EditorGUILayout.IntField("Y", partition.bounds.y);
+                int width = EditorGUILayout.IntField("宽", partition.bounds.width);
+                int height = EditorGUILayout.IntField("高", partition.bounds.height);
+                movePartitionContents = EditorGUILayout.ToggleLeft("移动时带上里面的物件", movePartitionContents);
+
+                if (EditorGUI.EndChangeCheck())
+                {
+                    var oldBounds = partition.bounds;
+                    var next = new RectInt(x, y, Mathf.Max(1, width), Mathf.Max(1, height));
+                    var delta = new Vector2Int(next.x - oldBounds.x, next.y - oldBounds.y);
+
+                    Record("改关卡分区");
+                    if (delta != Vector2Int.zero && movePartitionContents)
+                        data.MovePartition(partitionIndex, delta, true);
+
+                    partition.name = name;
+                    partition.bounds = next;
+                    data.Normalize();
+                    AfterStructuralEdit();
+                }
+            }
+        }
+
+        EditorGUILayout.HelpBox(
+            "B 不在任何分区里时，相机用 TuningLab Inspector 的「相机默认」。",
+            MessageType.None);
+    }
+
+    void CreatePartitionAtView()
+    {
+        var view = SceneView.lastActiveSceneView;
+        Vector2 center = view != null
+            ? new Vector2(view.pivot.x, view.pivot.y)
+            : new Vector2(
+                level.Data.bounds.x + level.Data.bounds.width * 0.5f,
+                level.Data.bounds.y + level.Data.bounds.height * 0.5f);
+
+        var bounds = new RectInt(
+            Mathf.FloorToInt(center.x) - 8,
+            Mathf.FloorToInt(center.y) - 6,
+            16, 12);
+
+        Record("新建关卡分区");
+        level.Data.AddPartition(bounds);
+        partitionIndex = level.Data.partitions.Count - 1;
+        AfterStructuralEdit();
+    }
+
+    void DeleteSelectedPartition()
+    {
+        var data = level.Data;
+        if (partitionIndex < 0 || partitionIndex >= data.partitions.Count) return;
+
+        int choice = EditorUtility.DisplayDialogComplex(
+            "删除关卡分区",
+            "同时删除分区里的地形和绳？",
+            "删除分区和内容",
+            "只删分区",
+            "取消");
+        if (choice == 2) return;
+
+        Record("删除关卡分区");
+        data.DeletePartition(partitionIndex, choice == 0);
+        partitionIndex = Mathf.Min(partitionIndex, data.partitions.Count - 1);
+        AfterStructuralEdit();
     }
 
     void DrawRopes()
@@ -399,7 +526,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     void DrawBounds()
     {
-        EditorGUILayout.LabelField("单关相机范围（clamp）", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("编辑范围 / 单关相机范围（clamp）", EditorStyles.boldLabel);
         var data = level.Data;
 
         EditorGUI.BeginChangeCheck();
@@ -437,34 +564,34 @@ public sealed class LabLevelEditorWindow : EditorWindow
         }
 
         EditorGUILayout.HelpBox(
-            "Tuning Lab 基准的两面墙在相机范围外 1 格，这是基准行为；范围管相机 clamp，不限制画地形。\n" +
-            "如果 TuningLab 定义了相机分区，这个范围只作为编辑范围，相机 clamp 由分区/默认值接管。",
+            "Tuning Lab 基准的两面墙在相机范围外 1 格，这是基准行为；范围管编辑/绘制，不限制画地形。\n" +
+            "有关卡分区时，分区的 bounds 才是相机范围；这里的范围只作为编辑范围和没有分区时的单关相机范围。",
             MessageType.None);
     }
 
     void DrawCamera()
     {
-        EditorGUILayout.LabelField("单关相机跟随尺寸", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("相机跟随尺寸（全关卡）", EditorStyles.boldLabel);
         var data = level.Data;
 
-        bool hasZones = lab != null && lab.cameraLevels != null && lab.cameraLevels.Count > 0;
-        if (!hasZones)
+        int partitionCount = data.partitions != null ? data.partitions.Count : 0;
+        if (partitionCount > 0)
         {
             EditorGUILayout.HelpBox(
-                "单关模式：相机用这里的范围/尺寸。\n" +
-                "连续关卡请用 TuningLab Inspector 的「相机默认」和「关卡相机分区」。",
-                MessageType.None);
+                string.Format(
+                    "已定义 {0} 个关卡分区：相机 clamp 用 B 所在分区的 bounds；下面的跟随尺寸对所有分区生效。\n" +
+                    "B 不在任何分区时用 TuningLab Inspector 的「相机默认」。",
+                    partitionCount),
+                MessageType.Info);
+            if (GUILayout.Button("选中 TuningLab 编辑相机默认"))
+                Selection.activeGameObject = lab != null ? lab.gameObject : null;
         }
         else
         {
             EditorGUILayout.HelpBox(
-                string.Format(
-                    "TuningLab 已定义 {0} 个相机分区：相机按 B 的位置选分区，B 不在分区时用 TuningLab 默认。\n" +
-                    "分区模式下，下面的单关相机设置不生效。",
-                    lab.cameraLevels.Count),
-                MessageType.Warning);
-            if (GUILayout.Button("选中 TuningLab 编辑相机默认/分区"))
-                Selection.activeGameObject = lab.gameObject;
+                "没有分区：相机用下面的单关范围/尺寸。\n" +
+                "连续关卡请在「关卡分区」里新建分区。",
+                MessageType.None);
         }
 
         float defaultMin = lab != null ? lab.defaultCameraMinSize : TuningLab.DefaultCameraMinSize;
@@ -535,16 +662,17 @@ public sealed class LabLevelEditorWindow : EditorWindow
     {
         EditorGUILayout.LabelField("关卡", EditorStyles.boldLabel);
 
-        if (GUILayout.Button("从 Tuning Lab 重置（地形 + 绳 + 出生点 + 相机）", GUILayout.Height(28f)))
+        if (GUILayout.Button("从 Tuning Lab 重置（地形 + 绳 + 出生点 + 相机 + 分区）", GUILayout.Height(28f)))
         {
             if (!EditorUtility.DisplayDialog(
                     "重置关卡",
-                    "用 Tuning Lab 基准房间覆盖当前地形、绳、出生点、相机范围和相机尺寸？",
+                    "用 Tuning Lab 基准房间覆盖当前地形、绳、出生点、相机范围/尺寸和关卡分区？",
                     "重置", "取消")) return;
 
             Record("从 Tuning Lab 重置关卡");
             level.ApplyBaseline();
             if (lab != null) LabLevelScene.CopyCameraDefaults(lab, level.Data);
+            LabLevelScene.EnsureDefaultPartition(level.Data);
             AfterStructuralEdit();
         }
 
@@ -628,7 +756,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         var data = level.Data;
 
         if (data.bounds.width <= 0 || data.bounds.height <= 0)
-            issues.Add("相机范围的宽/高必须大于 0。");
+            issues.Add("编辑范围的宽/高必须大于 0。");
 
         if (data.cameraMinSize <= 0f)
             issues.Add("相机最小 size 必须大于 0。");
@@ -636,6 +764,39 @@ public sealed class LabLevelEditorWindow : EditorWindow
             issues.Add("相机最大 size 不能小于最小 size。");
         if (data.cameraMaxSize > 128f)
             issues.Add("相机最大 size 超过 128 格，画面会小到看不清。");
+
+        if (data.partitions != null)
+        {
+            var partitionRects = new List<Rect>();
+            for (int i = 0; i < data.partitions.Count; i++)
+            {
+                var partition = data.partitions[i];
+                if (partition == null)
+                {
+                    issues.Add("第 " + i + " 个关卡分区是空引用。");
+                    continue;
+                }
+
+                if (partition.bounds.width <= 0 || partition.bounds.height <= 0)
+                    issues.Add("关卡分区「" + partition.name + "」宽/高必须大于 0。");
+
+                Rect rect = LabLevelData.ToRect(partition.bounds);
+                for (int j = 0; j < partitionRects.Count; j++)
+                {
+                    if (!partitionRects[j].Overlaps(rect)) continue;
+                    issues.Add("关卡分区 " + j + " 和 " + i + " 重叠；B 会命中列表里靠前的那个。");
+                }
+                partitionRects.Add(rect);
+            }
+
+            if (data.partitions.Count > 0)
+            {
+                Vector2 probe = data.spawnB;
+                probe.y += TuningLab.B_Pixels / (2f * TuningLab.CellPixels);
+                if (data.FindPartition(probe) < 0)
+                    issues.Add("B 出生点不在任何关卡分区里，开局相机会用 TuningLab 默认范围。");
+            }
+        }
 
         if (data.solids == null || data.solids.Count == 0)
             issues.Add("关卡没有任何地形。");
@@ -664,9 +825,9 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 }
 
                 if (rope.center.x < data.bounds.xMin || rope.center.x > data.bounds.xMax)
-                    issues.Add("第 " + i + " 根绳的 x 不在相机范围内。");
+                    issues.Add("第 " + i + " 根绳的 x 不在编辑范围内。");
                 if (rope.Bottom < data.bounds.yMin || rope.Top > data.bounds.yMax)
-                    issues.Add("第 " + i + " 根绳的上下端不在相机范围内。");
+                    issues.Add("第 " + i + " 根绳的上下端不在编辑范围内。");
             }
         }
 
@@ -674,8 +835,9 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
         if (issues.Count == 0)
         {
-            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳。",
-                level.SolidCellCount, level.MergedRectCount, level.RopeCount), level);
+            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 个关卡分区。",
+                level.SolidCellCount, level.MergedRectCount, level.RopeCount,
+                data.partitions != null ? data.partitions.Count : 0), level);
         }
         else
         {
@@ -688,7 +850,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     void CheckSpawn(string name, Vector2 feet, LabLevelData data)
     {
         if (!data.ContainsPoint(feet))
-            issues.Add(name + " 出生点不在相机范围内：" + feet);
+            issues.Add(name + " 出生点不在编辑范围内：" + feet);
 
         var cell = new Vector2Int(Mathf.FloorToInt(feet.x), Mathf.FloorToInt(feet.y));
         if (data.HasCell(cell))
@@ -738,6 +900,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         var data = level.Data;
         if (showGrid) DrawGrid(data);
         DrawBoundsHandle(data);
+        DrawPartitionHandles(data);
         DrawRopeHandles(data);
         if (showSpawns) DrawSpawnHandles(data);
         if (showCameraFrames) DrawCameraFrames(data);
@@ -758,7 +921,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         switch (e.type)
         {
             case EventType.MouseDown when e.button == 0 && !e.alt:
-                if (!inArea) return;
+                if (tool != Tool.Partition && !inArea) return;
                 BeginGesture(cell, inBounds, view);
                 e.Use();
                 break;
@@ -829,11 +992,21 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 }
                 MarkDirty();
                 break;
+
+            case Tool.Partition:
+                BeginPartition(cell);
+                break;
         }
     }
 
     void ContinueGesture(Vector2Int cell)
     {
+        if (tool == Tool.Partition)
+        {
+            ContinuePartition(cell);
+            return;
+        }
+
         switch (tool)
         {
             case Tool.Paint:
@@ -853,6 +1026,12 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     void EndGesture()
     {
+        if (tool == Tool.Partition)
+        {
+            EndPartition();
+            return;
+        }
+
         if (tool == Tool.Rect)
         {
             var data = level.Data;
@@ -869,6 +1048,89 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 }
         }
 
+        gesture = false;
+        level.Data.Normalize();
+        level.RebuildPreview();
+        EditorUtility.SetDirty(level);
+        MarkSceneDirty();
+        validated = false;
+        Repaint();
+    }
+
+    void BeginPartition(Vector2Int cell)
+    {
+        var data = level.Data;
+        int index = data.FindPartition(new Vector2(cell.x + 0.5f, cell.y + 0.5f));
+
+        if (index >= 0)
+        {
+            partitionIndex = index;
+            partitionCreating = false;
+            partitionDragIndex = index;
+            partitionDragLast = cell;
+            Record("移动关卡分区");
+        }
+        else
+        {
+            partitionIndex = -1;
+            partitionCreating = true;
+            partitionDragIndex = -1;
+            partitionCreateStart = cell;
+            partitionCreateEnd = cell;
+        }
+
+        gesture = true;
+        Repaint();
+    }
+
+    void ContinuePartition(Vector2Int cell)
+    {
+        if (partitionCreating)
+        {
+            if (partitionCreateEnd == cell) return;
+            partitionCreateEnd = cell;
+            Repaint();
+            return;
+        }
+
+        if (partitionDragIndex < 0) return;
+
+        var delta = cell - partitionDragLast;
+        if (delta == Vector2Int.zero) return;
+
+        if (!level.Data.MovePartition(partitionDragIndex, delta, movePartitionContents)) return;
+
+        partitionDragLast = cell;
+        level.Data.Normalize();
+        level.RebuildPreview();
+        EditorUtility.SetDirty(level);
+        MarkSceneDirty();
+        validated = false;
+        Repaint();
+    }
+
+    void EndPartition()
+    {
+        if (partitionCreating)
+        {
+            int x0 = Mathf.Min(partitionCreateStart.x, partitionCreateEnd.x);
+            int y0 = Mathf.Min(partitionCreateStart.y, partitionCreateEnd.y);
+            int width = Mathf.Abs(partitionCreateEnd.x - partitionCreateStart.x) + 1;
+            int height = Mathf.Abs(partitionCreateEnd.y - partitionCreateStart.y) + 1;
+
+            if (width <= 1 && height <= 1)
+            {
+                width = 16;
+                height = 12;
+            }
+
+            Record("新建关卡分区");
+            level.Data.AddPartition(new RectInt(x0, y0, width, height));
+            partitionIndex = level.Data.partitions.Count - 1;
+            partitionCreating = false;
+        }
+
+        partitionDragIndex = -1;
         gesture = false;
         level.Data.Normalize();
         level.RebuildPreview();
@@ -927,6 +1189,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case KeyCode.Alpha4: tool = Tool.Rope; break;
             case KeyCode.Alpha5: tool = Tool.SpawnA; break;
             case KeyCode.Alpha6: tool = Tool.SpawnB; break;
+            case KeyCode.Alpha7: tool = Tool.Partition; break;
+            case KeyCode.Delete:
+                if (tool != Tool.Partition || partitionIndex < 0) return false;
+                DeleteSelectedPartition();
+                break;
             case KeyCode.G: showGrid = !showGrid; break;
             case KeyCode.Home: FrameLevel(); break;
             case KeyCode.LeftBracket: ropeLength = Mathf.Max(1, ropeLength - 1); break;
@@ -934,6 +1201,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case KeyCode.Escape:
                 if (!gesture) return false;
                 gesture = false;
+                partitionCreating = false;
+                partitionDragIndex = -1;
                 break;
             default:
                 return false;
@@ -982,7 +1251,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Handles.DrawLine(p1, p2);
         Handles.DrawLine(p2, p3);
         Handles.DrawLine(p3, p0);
-        Handles.Label(new Vector3(b.x + 0.5f, b.y + b.height - 0.5f, 0f), "相机范围");
+        Handles.Label(new Vector3(b.x + 0.5f, b.y + b.height - 0.5f, 0f), "编辑范围");
     }
 
     void DrawRopeHandles(LabLevelData data)
@@ -1004,6 +1273,63 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawPlayerMarker(data.spawnB, TuningLab.B_Pixels / (float)TuningLab.CellPixels, "B", TuningLab.ColorB);
     }
 
+    void DrawPartitionHandles(LabLevelData data)
+    {
+        if (data.partitions == null) return;
+
+        for (int i = 0; i < data.partitions.Count; i++)
+        {
+            var partition = data.partitions[i];
+            if (partition == null) continue;
+
+            Rect rect = LabLevelData.ToRect(partition.bounds);
+            bool selected = i == partitionIndex;
+            Handles.color = selected
+                ? new Color(1f, 0.85f, 0.3f, 0.95f)
+                : new Color(1f, 0.75f, 0.2f, 0.35f);
+            Handles.DrawWireCube(rect.center, new Vector3(rect.width, rect.height, 0.01f));
+
+            string label = string.IsNullOrEmpty(partition.name) ? "Level" : partition.name;
+            Handles.Label(new Vector3(rect.xMin + 0.5f, rect.yMax - 0.5f, 0f),
+                (selected ? "▶ " : "") + label);
+        }
+
+        if (!partitionCreating) return;
+
+        int x0 = Mathf.Min(partitionCreateStart.x, partitionCreateEnd.x);
+        int y0 = Mathf.Min(partitionCreateStart.y, partitionCreateEnd.y);
+        int x1 = Mathf.Max(partitionCreateStart.x, partitionCreateEnd.x);
+        int y1 = Mathf.Max(partitionCreateStart.y, partitionCreateEnd.y);
+        DrawFilledRect(x0, y0, x1, y1,
+            new Color(1f, 0.85f, 0.3f, 0.12f),
+            new Color(1f, 0.85f, 0.3f, 0.9f));
+    }
+
+    void DrawPartitionHover(Vector2Int cell)
+    {
+        var data = level.Data;
+
+        if (partitionCreating)
+        {
+            int x0 = Mathf.Min(partitionCreateStart.x, partitionCreateEnd.x);
+            int y0 = Mathf.Min(partitionCreateStart.y, partitionCreateEnd.y);
+            int x1 = Mathf.Max(partitionCreateStart.x, partitionCreateEnd.x);
+            int y1 = Mathf.Max(partitionCreateStart.y, partitionCreateEnd.y);
+            DrawFilledRect(x0, y0, x1, y1,
+                new Color(1f, 0.85f, 0.3f, 0.15f),
+                new Color(1f, 0.85f, 0.3f, 0.9f));
+            return;
+        }
+
+        int index = data.FindPartition(new Vector2(cell.x + 0.5f, cell.y + 0.5f));
+        Handles.color = index >= 0
+            ? new Color(1f, 0.85f, 0.3f, 0.9f)
+            : new Color(0.4f, 0.9f, 1f, 0.7f);
+        Handles.DrawWireCube(CellCenter(cell), Vector3.one);
+        if (index >= 0)
+            Handles.Label(CellCenter(cell) + Vector3.up * 0.8f, "拖动移动");
+    }
+
     void DrawCameraFrames(LabLevelData data)
     {
         // 以出生点估算相机起点：脚底 + 两名玩家半高的平均 + LabCamera.offset(0, 1)
@@ -1015,8 +1341,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         float min = data.cameraMinSize;
         float max = data.cameraMaxSize;
 
-        // 分区模式下，B 的位置决定开局用哪一关；视野框要按那个分区画，不能按 LabLevelData。
-        if (lab != null && lab.cameraLevels != null && lab.cameraLevels.Count > 0)
+        // B 的位置决定开局用哪一关；视野框要按那个分区画，不能只看 LabLevelData。
+        if (lab != null)
         {
             Vector2 probe = data.spawnB;
             probe.y += TuningLab.B_Pixels / (2f * TuningLab.CellPixels);
@@ -1049,6 +1375,12 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     void DrawHover(Vector2Int cell, bool inArea, bool inBounds, LabLevelData data)
     {
+        if (tool == Tool.Partition)
+        {
+            DrawPartitionHover(cell);
+            return;
+        }
+
         if (!inArea) return;
 
         Color color = ToolColor();
@@ -1130,6 +1462,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Rope: return new Color(0.85f, 0.65f, 0.35f, 0.95f);
             case Tool.SpawnA: return TuningLab.ColorA;
             case Tool.SpawnB: return TuningLab.ColorB;
+            case Tool.Partition: return new Color(1f, 0.85f, 0.3f, 0.95f);
             default: return new Color(1f, 0.85f, 0.3f, 0.95f);
         }
     }

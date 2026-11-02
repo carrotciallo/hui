@@ -73,45 +73,32 @@ public static class LabLevelPlayCheck
             return;
         }
 
-        // 故意用非默认值，证明 TuningLab.BuildCamera 真的读了关卡数据，而不是读死 6.75 / 27。
+        // 故意用非默认值：关卡数据 8/34，分区 bounds 是 -20,-5,60,40，TuningLab 默认 7/30。
+        // B 出生点在这个分区里，所以相机应该用分区的 bounds + 关卡数据的 8/34。
         var level = Object.FindAnyObjectByType<LabLevel>();
         if (level != null)
         {
+            level.Data.Normalize();
             level.Data.cameraMinSize = 8f;
             level.Data.cameraMaxSize = 34f;
-            level.Data.Normalize();
+            level.Data.partitions.Clear();
+            level.Data.AddPartition(new RectInt(-20, -5, 60, 40), "PlayCheckZone");
+
+            var lab = Object.FindAnyObjectByType<TuningLab>();
+            if (lab != null)
+            {
+                lab.defaultCameraMinSize = 7f;
+                lab.defaultCameraMaxSize = 30f;
+                lab.defaultCameraBounds = new Rect(-13f, -1f, 26f, 17f);
+                EditorUtility.SetDirty(lab);
+            }
+
             EditorUtility.SetDirty(level);
             var scene = level.gameObject.scene;
             if (scene.IsValid())
             {
                 EditorSceneManager.MarkSceneDirty(scene);
                 EditorSceneManager.SaveScene(scene);
-            }
-
-            // 再放一个覆盖 B 出生点的相机分区：9 / 36 应该覆盖关卡值 8 / 34 和默认值 7 / 30。
-            var lab = Object.FindAnyObjectByType<TuningLab>();
-            if (lab != null)
-            {
-                lab.defaultCameraMinSize = 7f;
-                lab.defaultCameraMaxSize = 30f;
-                if (lab.cameraLevels == null)
-                    lab.cameraLevels = new System.Collections.Generic.List<TuningLab.LabCameraLevel>();
-                lab.cameraLevels.Clear();
-                lab.cameraLevels.Add(new TuningLab.LabCameraLevel
-                {
-                    name = "PlayCheckZone",
-                    area = new Rect(-100f, -100f, 200f, 200f),
-                    bounds = new Rect(level.Data.bounds.x, level.Data.bounds.y,
-                                      level.Data.bounds.width, level.Data.bounds.height),
-                    minSize = 9f,
-                    maxSize = 36f
-                });
-                EditorUtility.SetDirty(lab);
-                if (scene.IsValid())
-                {
-                    EditorSceneManager.MarkSceneDirty(scene);
-                    EditorSceneManager.SaveScene(scene);
-                }
             }
         }
 
@@ -303,31 +290,33 @@ public static class LabLevelPlayCheck
             Check(sb, ref fails, follow != null, "相机有 LabCamera");
             if (follow != null && level != null)
             {
-                Check(sb, ref fails,
-                    Mathf.Abs(follow.bounds.xMin - level.Data.bounds.x) < 0.001f &&
-                    Mathf.Abs(follow.bounds.yMin - level.Data.bounds.y) < 0.001f,
-                    "相机 clamp 用了关卡范围");
+                Rect expectedBounds = LabLevelData.ToRect(level.Data.bounds);
+                string boundsSource = "单关范围";
 
-                float expectedMin = level.Data.cameraMinSize;
-                float expectedMax = level.Data.cameraMaxSize;
-                string source = "关卡值";
-                if (lab.cameraLevels != null && lab.cameraLevels.Count > 0 && lab.cameraLevels[0] != null)
+                if (level.Data.partitions != null && level.Data.partitions.Count > 0)
                 {
-                    var zone = lab.cameraLevels[0];
-                    if (lab.PlayerB != null && zone.area.Contains(lab.PlayerB.transform.position))
+                    var partition = level.Data.partitions[0];
+                    if (partition != null && lab.PlayerB != null &&
+                        LabLevelData.ToRect(partition.bounds).Contains(lab.PlayerB.transform.position))
                     {
-                        expectedMin = zone.minSize;
-                        expectedMax = zone.maxSize;
-                        source = "当前关卡分区";
+                        expectedBounds = LabLevelData.ToRect(partition.bounds);
+                        boundsSource = "当前关卡分区";
                     }
                 }
 
                 Check(sb, ref fails,
-                    Mathf.Abs(follow.minSize - expectedMin) < 0.001f,
-                    "相机 minSize 用了" + source);
+                    Mathf.Abs(follow.bounds.xMin - expectedBounds.xMin) < 0.001f &&
+                    Mathf.Abs(follow.bounds.yMin - expectedBounds.yMin) < 0.001f &&
+                    Mathf.Abs(follow.bounds.width - expectedBounds.width) < 0.001f &&
+                    Mathf.Abs(follow.bounds.height - expectedBounds.height) < 0.001f,
+                    "相机 clamp 用了" + boundsSource);
+
                 Check(sb, ref fails,
-                    Mathf.Abs(follow.maxSize - expectedMax) < 0.001f,
-                    "相机 maxSize 用了" + source);
+                    Mathf.Abs(follow.minSize - level.Data.cameraMinSize) < 0.001f,
+                    "相机 minSize 用了关卡值");
+                Check(sb, ref fails,
+                    Mathf.Abs(follow.maxSize - level.Data.cameraMaxSize) < 0.001f,
+                    "相机 maxSize 用了关卡值");
             }
         }
 
