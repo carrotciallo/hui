@@ -6,13 +6,7 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/Prototype.unity
-    guid: e6553f8100bed7a48acdfbdb5cf2bd5a
-  - enabled: 1
     path: Assets/Scenes/TuningLab.unity
     guid: ced7ea3baa2750940ba6cfa8a33b79bf
-  - enabled: 1
-    path: Assets/Scenes/MaterialLab.unity
-    guid: 34f98d1711509714e99e5e7f1e4f0119
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
