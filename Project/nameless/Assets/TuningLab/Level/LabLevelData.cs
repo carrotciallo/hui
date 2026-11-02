@@ -176,6 +176,27 @@ public sealed class LabLevelData
         return rect;
     }
 
+    public static bool Overlaps(RectInt a, RectInt b)
+    {
+        return a.x < b.x + b.width && a.x + a.width > b.x
+            && a.y < b.y + b.height && a.y + a.height > b.y;
+    }
+
+    /// <summary>这个 bounds 是否和任何已有分区重叠；ignoreIndex 用于移动/改大小自己。</summary>
+    public bool OverlapsAny(RectInt bounds, int ignoreIndex = -1)
+    {
+        if (partitions == null) return false;
+        bounds = NormalizeRect(bounds);
+
+        for (int i = 0; i < partitions.Count; i++)
+        {
+            if (i == ignoreIndex) continue;
+            var partition = partitions[i];
+            if (partition != null && Overlaps(bounds, partition.bounds)) return true;
+        }
+        return false;
+    }
+
     /// <summary>B 的判定：点在哪个分区的 bounds 里；没有返回 -1。</summary>
     public int FindPartition(Vector2 point)
     {
@@ -191,24 +212,24 @@ public sealed class LabLevelData
     public LabLevelPartition AddPartition(RectInt bounds, string name = null)
     {
         if (partitions == null) partitions = new List<LabLevelPartition>();
+        bounds = NormalizeRect(bounds);
+        if (OverlapsAny(bounds)) return null;
+
         var partition = new LabLevelPartition
         {
             name = string.IsNullOrEmpty(name) ? "Level " + (partitions.Count + 1) : name,
-            bounds = NormalizeRect(bounds)
+            bounds = bounds
         };
         partitions.Add(partition);
         return partition;
     }
 
-    /// <summary>
-    /// 移动分区。moveContents = true 时，把旧 bounds 里的地形、绳、出生点一起平移；
-    /// 判定用格中心 / 绳中心 / 出生点，避免边界格被误带走。
-    /// </summary>
-    public bool MovePartition(int index, Vector2Int delta, bool moveContents)
+    /// <summary>只平移 bounds 和里面的物件，不做重叠检查。调用方必须先验证目标位置。</summary>
+    public void TranslatePartition(int index, Vector2Int delta, bool moveContents)
     {
-        if (partitions == null || index < 0 || index >= partitions.Count) return false;
+        if (partitions == null || index < 0 || index >= partitions.Count) return;
         var partition = partitions[index];
-        if (partition == null || delta == Vector2Int.zero) return false;
+        if (partition == null || delta == Vector2Int.zero) return;
 
         Rect oldRect = ToRect(partition.bounds);
         partition.bounds = new RectInt(
@@ -217,7 +238,7 @@ public sealed class LabLevelData
             partition.bounds.width,
             partition.bounds.height);
 
-        if (!moveContents) return true;
+        if (!moveContents) return;
 
         var shift = new Vector2(delta.x, delta.y);
 
@@ -244,7 +265,37 @@ public sealed class LabLevelData
 
         if (oldRect.Contains(spawnA)) spawnA += shift;
         if (oldRect.Contains(spawnB)) spawnB += shift;
+    }
 
+    /// <summary>移动分区。目标位置和其它分区重叠时直接拒绝，不会移动里面的物件。</summary>
+    public bool MovePartition(int index, Vector2Int delta, bool moveContents)
+    {
+        if (partitions == null || index < 0 || index >= partitions.Count) return false;
+        var partition = partitions[index];
+        if (partition == null || delta == Vector2Int.zero) return false;
+
+        var next = new RectInt(
+            partition.bounds.x + delta.x,
+            partition.bounds.y + delta.y,
+            partition.bounds.width,
+            partition.bounds.height);
+        if (OverlapsAny(next, index)) return false;
+
+        TranslatePartition(index, delta, moveContents);
+        return true;
+    }
+
+    /// <summary>改分区大小。和其它分区重叠时直接拒绝。</summary>
+    public bool ResizePartition(int index, RectInt bounds)
+    {
+        if (partitions == null || index < 0 || index >= partitions.Count) return false;
+        var partition = partitions[index];
+        if (partition == null) return false;
+
+        bounds = NormalizeRect(bounds);
+        if (OverlapsAny(bounds, index)) return false;
+
+        partition.bounds = bounds;
         return true;
     }
 

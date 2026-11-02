@@ -84,6 +84,9 @@ public class TuningLab : MonoBehaviour
     /// <summary>自由相机默认的最大正交尺寸（格，半高）：4 倍最小 = 27，即 54 格高。</summary>
     public const float DefaultCameraMaxSize = DefaultCameraMinSize * 4f;
 
+    /// <summary>B 不在任何关卡分区时使用的“无夹具”范围；足够大，等价于不 clamp。</summary>
+    public static readonly Rect NoCameraBounds = Rect.MinMaxRect(-100000f, -100000f, 100000f, 100000f);
+
     /// <summary>A（大框）：14×14，墙厚 2，内腔 10。留 1 像素余量才能进 1 格宽的通道。</summary>
     public const int A_Pixels = 14;
     /// <summary>B（小块）：10×10，正好填满 A 的内腔（14 - 2×2）。</summary>
@@ -214,11 +217,11 @@ public class TuningLab : MonoBehaviour
     public LabLevel level;
 
     [Header("相机默认")]
-    [Tooltip("默认相机最小正交尺寸（格，半高）。没有相机分区、或 B 不在任何分区时使用；有 LabLevel 且没有分区时，相机用关卡编辑器的单关设置。")]
+    [Tooltip("默认相机最小正交尺寸（格，半高）。没有 LabLevel 时使用；有 LabLevel 时用关卡编辑器的相机跟随尺寸。")]
     public float defaultCameraMinSize = DefaultCameraMinSize;
-    [Tooltip("默认相机最大正交尺寸（格，半高）。没有相机分区、或 B 不在任何分区时使用。")]
+    [Tooltip("默认相机最大正交尺寸（格，半高）。没有 LabLevel 时使用；有 LabLevel 时用关卡编辑器的相机跟随尺寸。")]
     public float defaultCameraMaxSize = DefaultCameraMaxSize;
-    [Tooltip("默认相机 clamp 范围（世界坐标，1 格 = 1 单位）。没有相机分区、或 B 不在任何分区时使用。")]
+    [Tooltip("默认相机 clamp 范围（世界坐标，1 格 = 1 单位）。没有 LabLevel 时使用；有关卡分区但 B 出界时不夹相机。")]
     public Rect defaultCameraBounds = Rect.MinMaxRect(-13f, -1f, 13f, 16f);
     [Tooltip("分区切换时 bounds / size 的混合速度；0 = 立即切换。")]
     public float cameraFrameBlend = 8f;
@@ -451,7 +454,7 @@ public class TuningLab : MonoBehaviour
     /// <summary>
     /// 当前相机应该使用的 bounds / size。B 的 position 是关卡判定点：
     ///   有 LabLevel + 关卡分区时：B 在哪个分区的 bounds 里，就用哪个分区的大小当相机范围；
-    ///   B 不在任何分区里就用 TuningLab 默认值。
+    ///   B 不在任何分区里就不夹相机（NoCameraBounds），只用默认 min/max 跟两人相对位置缩放。
     ///   没有分区时：有 LabLevel 就用单关数据，否则用默认值。
     /// </summary>
     public void GetCameraFrame(Vector2 probePosition, out Rect bounds, out float minSize, out float maxSize)
@@ -476,9 +479,9 @@ public class TuningLab : MonoBehaviour
                     return;
                 }
 
-                bounds = defaultCameraBounds;
-                minSize = defaultCameraMinSize;
-                maxSize = defaultCameraMaxSize;
+                bounds = NoCameraBounds;
+                minSize = data.cameraMinSize;
+                maxSize = data.cameraMaxSize;
                 NormalizeFrame(ref bounds, ref minSize, ref maxSize);
                 return;
             }

@@ -55,6 +55,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     int partitionIndex = -1;
     bool movePartitionContents = true;
+    string partitionMessage;
     bool partitionCreating;
     int partitionDragIndex = -1;
     Vector2Int partitionDragLast;
@@ -372,6 +373,9 @@ public sealed class LabLevelEditorWindow : EditorWindow
         if (data.partitions.Count == 0)
             EditorGUILayout.LabelField("（没有分区：相机用单关范围/尺寸）");
 
+        if (!string.IsNullOrEmpty(partitionMessage))
+            EditorGUILayout.HelpBox(partitionMessage, MessageType.Warning);
+
         if (partitionIndex >= 0 && partitionIndex < data.partitions.Count)
         {
             var partition = data.partitions[partitionIndex];
@@ -390,13 +394,23 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     var oldBounds = partition.bounds;
                     var next = new RectInt(x, y, Mathf.Max(1, width), Mathf.Max(1, height));
                     var delta = new Vector2Int(next.x - oldBounds.x, next.y - oldBounds.y);
+                    bool boundsChanged = next.x != oldBounds.x || next.y != oldBounds.y ||
+                                         next.width != oldBounds.width || next.height != oldBounds.height;
+
+                    if (boundsChanged && data.OverlapsAny(next, partitionIndex))
+                    {
+                        partitionMessage = "新位置/大小和其它关卡分区重叠，未应用。";
+                        Repaint();
+                        return;
+                    }
 
                     Record("改关卡分区");
                     if (delta != Vector2Int.zero && movePartitionContents)
-                        data.MovePartition(partitionIndex, delta, true);
+                        data.TranslatePartition(partitionIndex, delta, true);
 
                     partition.name = name;
                     partition.bounds = next;
+                    partitionMessage = null;
                     data.Normalize();
                     AfterStructuralEdit();
                 }
@@ -404,7 +418,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         }
 
         EditorGUILayout.HelpBox(
-            "B 不在任何分区里时，相机用 TuningLab Inspector 的「相机默认」。",
+            "分区之间不能重叠。B 不在任何分区里时，相机不加范围，只用关卡的相机跟随尺寸跟两人相对位置缩放。",
             MessageType.None);
     }
 
@@ -422,9 +436,23 @@ public sealed class LabLevelEditorWindow : EditorWindow
             Mathf.FloorToInt(center.y) - 6,
             16, 12);
 
+        if (level.Data.OverlapsAny(bounds))
+        {
+            partitionMessage = "视图中心的新分区会和现有分区重叠，先移动/缩小已有分区，或用分区工具在空白处拖。";
+            Repaint();
+            return;
+        }
+
         Record("新建关卡分区");
-        level.Data.AddPartition(bounds);
+        if (level.Data.AddPartition(bounds) == null)
+        {
+            partitionMessage = "新建分区失败：和其它分区重叠。";
+            Repaint();
+            return;
+        }
+
         partitionIndex = level.Data.partitions.Count - 1;
+        partitionMessage = null;
         AfterStructuralEdit();
     }
 
@@ -444,6 +472,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Record("删除关卡分区");
         data.DeletePartition(partitionIndex, choice == 0);
         partitionIndex = Mathf.Min(partitionIndex, data.partitions.Count - 1);
+        partitionMessage = null;
         AfterStructuralEdit();
     }
 
@@ -580,7 +609,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             EditorGUILayout.HelpBox(
                 string.Format(
                     "已定义 {0} 个关卡分区：相机 clamp 用 B 所在分区的 bounds；下面的跟随尺寸对所有分区生效。\n" +
-                    "B 不在任何分区时用 TuningLab Inspector 的「相机默认」。",
+                    "B 不在任何分区时不夹相机，仍用关卡的相机跟随尺寸跟两人相对位置缩放。",
                     partitionCount),
                 MessageType.Info);
             if (GUILayout.Button("选中 TuningLab 编辑相机默认"))
@@ -1098,8 +1127,14 @@ public sealed class LabLevelEditorWindow : EditorWindow
         var delta = cell - partitionDragLast;
         if (delta == Vector2Int.zero) return;
 
-        if (!level.Data.MovePartition(partitionDragIndex, delta, movePartitionContents)) return;
+        if (!level.Data.MovePartition(partitionDragIndex, delta, movePartitionContents))
+        {
+            partitionMessage = "移动被拒绝：分区不能和其它分区重叠。";
+            Repaint();
+            return;
+        }
 
+        partitionMessage = null;
         partitionDragLast = cell;
         level.Data.Normalize();
         level.RebuildPreview();
@@ -1109,24 +1144,45 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Repaint();
     }
 
+    RectInt PreviewPartitionBounds()
+    {
+        int x0 = Mathf.Min(partitionCreateStart.x, partitionCreateEnd.x);
+        int y0 = Mathf.Min(partitionCreateStart.y, partitionCreateEnd.y);
+        int width = Mathf.Abs(partitionCreateEnd.x - partitionCreateStart.x) + 1;
+        int height = Mathf.Abs(partitionCreateEnd.y - partitionCreateStart.y) + 1;
+
+        if (width <= 1 && height <= 1)
+        {
+            width = 16;
+            height = 12;
+        }
+
+        return new RectInt(x0, y0, width, height);
+    }
+
     void EndPartition()
     {
         if (partitionCreating)
         {
-            int x0 = Mathf.Min(partitionCreateStart.x, partitionCreateEnd.x);
-            int y0 = Mathf.Min(partitionCreateStart.y, partitionCreateEnd.y);
-            int width = Mathf.Abs(partitionCreateEnd.x - partitionCreateStart.x) + 1;
-            int height = Mathf.Abs(partitionCreateEnd.y - partitionCreateStart.y) + 1;
-
-            if (width <= 1 && height <= 1)
+            var bounds = PreviewPartitionBounds();
+            if (level.Data.OverlapsAny(bounds))
             {
-                width = 16;
-                height = 12;
+                partitionMessage = "新分区会和已有分区重叠，未创建。";
+            }
+            else
+            {
+                Record("新建关卡分区");
+                if (level.Data.AddPartition(bounds) != null)
+                {
+                    partitionIndex = level.Data.partitions.Count - 1;
+                    partitionMessage = null;
+                }
+                else
+                {
+                    partitionMessage = "新建分区失败：和其它分区重叠。";
+                }
             }
 
-            Record("新建关卡分区");
-            level.Data.AddPartition(new RectInt(x0, y0, width, height));
-            partitionIndex = level.Data.partitions.Count - 1;
             partitionCreating = false;
         }
 
@@ -1296,13 +1352,13 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
         if (!partitionCreating) return;
 
-        int x0 = Mathf.Min(partitionCreateStart.x, partitionCreateEnd.x);
-        int y0 = Mathf.Min(partitionCreateStart.y, partitionCreateEnd.y);
-        int x1 = Mathf.Max(partitionCreateStart.x, partitionCreateEnd.x);
-        int y1 = Mathf.Max(partitionCreateStart.y, partitionCreateEnd.y);
-        DrawFilledRect(x0, y0, x1, y1,
-            new Color(1f, 0.85f, 0.3f, 0.12f),
-            new Color(1f, 0.85f, 0.3f, 0.9f));
+        RectInt bounds = PreviewPartitionBounds();
+        bool overlaps = data.OverlapsAny(bounds);
+        Color fill = overlaps ? new Color(1f, 0.25f, 0.2f, 0.2f) : new Color(1f, 0.85f, 0.3f, 0.12f);
+        Color line = overlaps ? new Color(1f, 0.3f, 0.25f, 0.9f) : new Color(1f, 0.85f, 0.3f, 0.9f);
+        DrawFilledRect(bounds.x, bounds.y, bounds.x + bounds.width - 1, bounds.y + bounds.height - 1, fill, line);
+        Handles.Label(new Vector3(bounds.x + 0.5f, bounds.y + bounds.height - 0.5f, 0f),
+            overlaps ? "重叠，不能创建" : "新分区 " + bounds.width + "×" + bounds.height);
     }
 
     void DrawPartitionHover(Vector2Int cell)
@@ -1311,13 +1367,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
         if (partitionCreating)
         {
-            int x0 = Mathf.Min(partitionCreateStart.x, partitionCreateEnd.x);
-            int y0 = Mathf.Min(partitionCreateStart.y, partitionCreateEnd.y);
-            int x1 = Mathf.Max(partitionCreateStart.x, partitionCreateEnd.x);
-            int y1 = Mathf.Max(partitionCreateStart.y, partitionCreateEnd.y);
-            DrawFilledRect(x0, y0, x1, y1,
-                new Color(1f, 0.85f, 0.3f, 0.15f),
-                new Color(1f, 0.85f, 0.3f, 0.9f));
+            RectInt bounds = PreviewPartitionBounds();
+            bool overlaps = data.OverlapsAny(bounds);
+            Color fill = overlaps ? new Color(1f, 0.25f, 0.2f, 0.25f) : new Color(1f, 0.85f, 0.3f, 0.15f);
+            Color line = overlaps ? new Color(1f, 0.3f, 0.25f, 0.95f) : new Color(1f, 0.85f, 0.3f, 0.9f);
+            DrawFilledRect(bounds.x, bounds.y, bounds.x + bounds.width - 1, bounds.y + bounds.height - 1, fill, line);
             return;
         }
 

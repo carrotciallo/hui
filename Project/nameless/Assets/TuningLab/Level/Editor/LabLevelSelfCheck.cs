@@ -187,6 +187,18 @@ public static class LabLevelSelfCheck
         Expect(sb, ref failures, partitioned.FindPartition(new Vector2(25f, 5f)) == 1,
             "B=25,5 命中分区 1");
 
+        Expect(sb, ref failures, partitioned.AddPartition(new RectInt(5, 5, 10, 10)) == null,
+            "重叠的新分区被拒绝");
+        Expect(sb, ref failures, !partitioned.MovePartition(0, new Vector2Int(20, 0), true),
+            "移动进另一个分区被拒绝");
+        Expect(sb, ref failures, !partitioned.ResizePartition(0, new RectInt(0, 0, 25, 10)),
+            "放大到重叠被拒绝");
+
+        var touching = new LabLevelData();
+        touching.AddPartition(new RectInt(0, 0, 10, 10), "A");
+        Expect(sb, ref failures, touching.AddPartition(new RectInt(10, 0, 10, 10), "B") != null,
+            "贴边不算重叠，可以相邻");
+
         var partitionA = partitioned.partitions[0];
         Expect(sb, ref failures, partitioned.MovePartition(0, new Vector2Int(3, 4), true),
             "移动分区 A");
@@ -220,6 +232,41 @@ public static class LabLevelSelfCheck
             "只剩 B 的绳");
         Expect(sb, ref failures, partitioned.FindPartition(new Vector2(25f, 5f)) == 0,
             "删除后 B 分区索引变成 0");
+
+        sb.AppendLine();
+        sb.AppendLine("=== 7. 相机分区内 / B 出界 ===");
+        var probeGo = new GameObject("CameraFrameProbe");
+        probeGo.SetActive(false);
+        var probeLab = probeGo.AddComponent<TuningLab>();
+        probeLab.autoBuild = false;
+        var probeLevel = probeGo.AddComponent<LabLevel>();
+        probeLab.level = probeLevel;
+
+        probeLevel.Data.cameraMinSize = 8f;
+        probeLevel.Data.cameraMaxSize = 34f;
+        probeLab.defaultCameraMinSize = 7f;
+        probeLab.defaultCameraMaxSize = 30f;
+        probeLevel.Data.AddPartition(new RectInt(0, 0, 10, 10), "P");
+        probeLevel.Data.Normalize();
+        probeGo.SetActive(true);
+
+        probeLab.GetCameraFrame(new Vector2(5f, 5f), out Rect inBounds, out float inMin, out float inMax);
+        Expect(sb, ref failures,
+            Mathf.Abs(inBounds.x) < 0.001f && Mathf.Abs(inBounds.y) < 0.001f &&
+            Mathf.Abs(inBounds.width - 10f) < 0.001f && Mathf.Abs(inBounds.height - 10f) < 0.001f,
+            "B 在分区内 → 分区 bounds 当相机范围");
+        Expect(sb, ref failures,
+            Mathf.Abs(inMin - 8f) < 0.001f && Mathf.Abs(inMax - 34f) < 0.001f,
+            "B 在分区内 → 用关卡 min/max");
+
+        probeLab.GetCameraFrame(new Vector2(50f, 50f), out Rect outBounds, out float outMin, out float outMax);
+        Expect(sb, ref failures, outBounds.width > 1000f && outBounds.height > 1000f,
+            "B 出界 → 没有相机范围约束");
+        Expect(sb, ref failures,
+            Mathf.Abs(outMin - 8f) < 0.001f && Mathf.Abs(outMax - 34f) < 0.001f,
+            "B 出界 → 仍用关卡 min/max");
+
+        Object.DestroyImmediate(probeGo);
 
         sb.AppendLine();
         fails = failures;

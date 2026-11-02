@@ -61,7 +61,7 @@ git diff Project/nameless/ProjectSettings/EditorBuildSettings.asset
 
 改关卡内容走 **Tuning Lab Level Editor**，不要手改 `TuningLab.unity`（基准场景）或 `World.unity`；旧测试房仍然改对应 builder 再重新生成。
 
-连续关卡：在关卡编辑器的「关卡分区」里新建 / 移动 / 调大小 / 删除分区，分区的 `bounds` 就是相机范围；按 **B 的位置**选当前分区。TuningLab Inspector 只保留「相机默认」（B 不在任何分区时用），没有分区时仍按单关相机设置走。
+连续关卡：在关卡编辑器的「关卡分区」里新建 / 移动 / 调大小 / 删除分区，分区的 `bounds` 就是相机范围；按 **B 的位置**选当前分区，分区不能重叠。B 不在任何分区时不夹相机，只用关卡的相机跟随尺寸跟两人相对位置缩放。TuningLab Inspector 的「相机默认」用于没有 `LabLevel` 的基准场景和新建关卡的初始值。
 
 ### 测试
 
