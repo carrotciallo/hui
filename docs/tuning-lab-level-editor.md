@@ -4,6 +4,17 @@
 > **Tuning Lab 是唯一基准，所有关卡从一个 Tuning Lab 派生场景里用「关卡分区」组织。**
 > 本文记录这套东西的边界、代码地图、扩展方法、调试/验证流程和踩过的坑。
 
+## 现有场景
+
+| 场景 | 用途 |
+| --- | --- |
+| `Assets/Scenes/TuningLab.unity` | 规则基准场景，禁止手改；改规则改 `Assets/TuningLab/` 代码 |
+| `Assets/Scenes/Levels/Level_01.unity` | **正式关卡**，将来的游戏地图，内容往上堆 |
+| `Assets/Scenes/Levels/ddebug room.unity` | **调试房**：给程序验证新组件用，可以随意改坏，不按关卡内容维护 |
+
+新增正式关卡走 `GameJam → New Level From Tuning Lab`。
+验新组件先在 `ddebug room` 里试通，再往 `Level_01` 上放，避免把没定稿的东西混进正式地图。
+
 ## 0. 一句话
 
 规则、玩家、相机、碰撞全部只跑 `Assets/TuningLab` 这一套；关卡场景必须从 `TuningLab.unity` 派生；
