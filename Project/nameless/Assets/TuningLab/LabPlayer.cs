@@ -328,7 +328,7 @@ public class LabPlayer : MonoBehaviour
     {
         bool isPlayer = c.collider != null && c.collider.GetComponent<LabPlayer>() != null;
         if (isPlayer) playerContactTimer = 0.12f;
-        else RecordTerrainImpact(c);      // 地形撞击按法线分量结算
+        else ForgeFromTerrain(c);         // 只有进入的那一帧锻造，贴墙摩擦不算
 
         TryResolveHit(c);
     }
@@ -342,10 +342,11 @@ public class LabPlayer : MonoBehaviour
     }
 
     /// <summary>
-    /// 撞墙 / 撞地 / 撞天花板：只取沿接触法线的速度分量来算等级。
+    /// 撞墙 / 撞地 / 撞天花板：只取沿接触法线的速度分量来算等级，顺便结算锻造。
     /// 合速度 v3 但只是横向飞得快的人，撞地板时竖直分量可能还是 v0。
+    /// 法线从物件指向自己，取反才是被砸的那一条边。
     /// </summary>
-    void RecordTerrainImpact(Collision2D c)
+    void ForgeFromTerrain(Collision2D c)
     {
         if (lab == null || c.contactCount == 0) return;
 
@@ -362,6 +363,9 @@ public class LabPlayer : MonoBehaviour
         LastImpactSpeed = impact;
         LastImpactTier = lab.TierOfSpeed(impact);
         LastImpactTime = Time.time;
+
+        if (impact < lab.ForgeSpeed) return;
+        StrikeEdge(EdgeFor(-n), impact >= lab.RedHotSpeed);
     }
 
     void TryResolveHit(Collision2D c)
@@ -399,15 +403,15 @@ public class LabPlayer : MonoBehaviour
             bool sameDir = a * b > 0f;
             Vp = sameDir ? Mathf.Abs(a2 - b2) : a2 + b2;
 
-            float threshold = lab.SpeedForCells(lab.Boundary(lab.redHotTierIndex));
+            float threshold = lab.RedHotSpeed;
             threshold *= threshold;
 
             redHot = Vp >= threshold;
             if (redHot)
             {
                 // 红热只在 A（大框）上判定：有"边"这个概念的只有它
-                if (canBeRedHot) MarkEdge(EdgeFor(axis));
-                if (other.canBeRedHot) other.MarkEdge(LabPlayer.EdgeFor(-axis));
+                StrikeEdge(EdgeFor(axis), true);
+                other.StrikeEdge(EdgeFor(-axis), true);
             }
         }
 
@@ -512,17 +516,24 @@ public class LabPlayer : MonoBehaviour
     // ---- 红热态 ----
 
     public enum Edge { Top = 0, Bottom = 1, Left = 2, Right = 3 }
-    public enum EdgeState { Normal = 0, Hot1 = 1, Hot2 = 2 }
+    public enum EdgeState { Normal = 0, Hot1 = 1, Hot2 = 2, Spirit = 3 }
 
     readonly EdgeState[] edgeStates = new EdgeState[4];
     readonly float[] edgeTimers = new float[4];
 
     public EdgeState GetEdge(Edge e) => edgeStates[(int)e];
+    public bool IsSpirit(Edge e) => edgeStates[(int)e] == EdgeState.Spirit;
     public bool AnyHot => edgeStates[0] != EdgeState.Normal || edgeStates[1] != EdgeState.Normal
                        || edgeStates[2] != EdgeState.Normal || edgeStates[3] != EdgeState.Normal;
 
-    /// <summary>红热态变化的外抛接口，后续"红热 2 再变化"直接挂这里。</summary>
+    /// <summary>红热态变化的外抛接口。形态由"哪几条边成了灵体"决定，挂这里。</summary>
     public event System.Action<LabPlayer, Edge, EdgeState, EdgeState> EdgeStateChanged;
+
+    /// <summary>
+    /// 热二的边再吃一记红热级撞击：框塌到本体。实验台还没有生命系统，
+    /// 这里只将事件抛出，谁接入谁决定后果。
+    /// </summary>
+    public event System.Action<LabPlayer, Edge> EdgeCollapsed;
 
     public void SetEdge(Edge e, EdgeState next)
     {
@@ -535,11 +546,33 @@ public class LabPlayer : MonoBehaviour
         if (EdgeStateChanged != null) EdgeStateChanged(this, e, prev, next);
     }
 
-    void MarkEdge(Edge e)
+    /// <summary>
+    /// 一记撞击落在某条边上。hot = 到了红热门槛，否则只到了锻造门槛。
+    /// 常态→热一→热二都是加热；热二遇冷→灵体（砸碎）；热二遇热→框塌到本体；灵体不可复锻。
+    /// </summary>
+    public void StrikeEdge(Edge e, bool hot)
     {
-        int i = (int)e;
-        if (edgeStates[i] == EdgeState.Hot1) SetEdge(e, EdgeState.Hot2);        // 热 1 再撞 → 永久热 2
-        else if (edgeStates[i] == EdgeState.Normal) SetEdge(e, EdgeState.Hot1);
+        if (!canBeRedHot) return;            // 没有"边"这个概念的只有不参与
+
+        switch (edgeStates[(int)e])
+        {
+            case EdgeState.Normal:
+                if (hot) SetEdge(e, EdgeState.Hot1);
+                break;
+            case EdgeState.Hot1:
+                if (hot) SetEdge(e, EdgeState.Hot2);        // 热 1 再撞 → 永久热 2
+                break;
+            case EdgeState.Hot2:
+                if (hot) { if (EdgeCollapsed != null) EdgeCollapsed(this, e); }
+                else SetEdge(e, EdgeState.Spirit);
+                break;
+        }
+    }
+
+    /// <summary>四条边全部回到常态（复活时用）。</summary>
+    public void ResetEdges()
+    {
+        for (int i = 0; i < 4; i++) SetEdge((Edge)i, EdgeState.Normal);
     }
 
     public static Edge EdgeFor(Vector2 axis)
@@ -572,6 +605,7 @@ public class LabPlayer : MonoBehaviour
         dashTimer = 0f;
         dashPhase = DashPhase.None;
         refillArmed = false;
+        ResetEdges();
         LandedNetDescent = 0f;
         LandedApexDescent = 0f;
         LaunchFootY = FootY;

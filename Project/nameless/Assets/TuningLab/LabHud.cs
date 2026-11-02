@@ -18,16 +18,33 @@ public class LabHud : MonoBehaviour
     TuningLab.HitInfo lastHit;
     bool hasHit;
 
+    int collapseCount;
+    string lastCollapse = "";
+
     public void Bind(TuningLab target)
     {
+        UnbindEdges();
         if (lab != null) lab.PlayerHit -= OnPlayerHit;
         lab = target;
         if (lab != null) lab.PlayerHit += OnPlayerHit;
+        if (lab != null)
+        {
+            if (lab.PlayerA != null) lab.PlayerA.EdgeCollapsed += OnEdgeCollapsed;
+            if (lab.PlayerB != null) lab.PlayerB.EdgeCollapsed += OnEdgeCollapsed;
+        }
+    }
+
+    void UnbindEdges()
+    {
+        if (lab == null) return;
+        if (lab.PlayerA != null) lab.PlayerA.EdgeCollapsed -= OnEdgeCollapsed;
+        if (lab.PlayerB != null) lab.PlayerB.EdgeCollapsed -= OnEdgeCollapsed;
     }
 
     void OnDisable()
     {
         if (lab != null) lab.PlayerHit -= OnPlayerHit;
+        UnbindEdges();
     }
 
     // 这里演示"其它机制靠碰撞触发"：订阅事件就行，不用改 LabPlayer。
@@ -36,6 +53,23 @@ public class LabHud : MonoBehaviour
         hitCount++;
         lastHit = info;
         hasHit = true;
+    }
+
+    void OnEdgeCollapsed(LabPlayer p, LabPlayer.Edge e)
+    {
+        collapseCount++;
+        lastCollapse = (p == lab.PlayerA ? "A" : "B") + " 的" + EdgeName(e);
+    }
+
+    static string EdgeName(LabPlayer.Edge e)
+    {
+        switch (e)
+        {
+            case LabPlayer.Edge.Top: return "上边";
+            case LabPlayer.Edge.Bottom: return "下边";
+            case LabPlayer.Edge.Left: return "左边";
+            default: return "右边";
+        }
     }
 
     void EnsureStyles()
@@ -112,6 +146,7 @@ public class LabHud : MonoBehaviour
         lab.tierFirstCells = Slider("首级门槛(格)", lab.tierFirstCells, 0.5f, 10f, "0.0");
         lab.tierSpacingCells = Slider("每级间距(格)", lab.tierSpacingCells, 0.5f, 6f, "0.0");
         lab.redHotTierIndex = Mathf.RoundToInt(Slider("红热门槛级", lab.redHotTierIndex, 0f, 4f, "0"));
+        lab.forgeTierIndex = Mathf.RoundToInt(Slider("锻造门槛级", lab.forgeTierIndex, 0f, 4f, "0"));
         lab.redHotDuration = Slider("红热1持续(秒)", lab.redHotDuration, 0.2f, 6f, "0.00");
 
         GUILayout.Space(6f);
@@ -135,6 +170,7 @@ public class LabHud : MonoBehaviour
         lab.tierFirstCells = 4f;
         lab.tierSpacingCells = 4f;
         lab.redHotTierIndex = 1;
+        lab.forgeTierIndex = 0;
         lab.redHotDuration = 1.5f;
         lab.maxFallSpeed = TierMath.SpeedForCells(17f, g);
     }
@@ -180,8 +216,12 @@ public class LabHud : MonoBehaviour
         GUILayout.Label("  零级同向 → 冲刺 Vd1，结束 V前", small);
         GUILayout.Label("  非零级同向 → 冲刺 V前，结束 V前", small);
 
-        GUILayout.Label(string.Format("红热      Vp ≥ {0:0}（v{1} 门槛）→ 参与碰撞的边变红",
-            Mathf.Pow(lab.SpeedForCells(lab.Boundary(lab.redHotTierIndex)), 2f), lab.redHotTierIndex), small);
+        GUILayout.Label(string.Format("红热      Vp ≥ {0:0}（v{1} 门槛）→ 参与碰撞的边加热",
+            lab.RedHotSpeed * lab.RedHotSpeed, lab.redHotTierIndex), small);
+        GUILayout.Label(string.Format("锻造      撞场景沿轴 v ≥ {0:0}（v{1} 门槛）→ 常态①→热②→遇冷砸碎◇→遇热塌框",
+            lab.ForgeSpeed, Mathf.Min(lab.forgeTierIndex, lab.redHotTierIndex)), small);
+        if (collapseCount > 0)
+            GUILayout.Label(string.Format("  塌框 {0} 次   最近 {1}", collapseCount, lastCollapse), WarnStyle());
         GUILayout.Label("碰撞      速度 + 冲刺态 整体互换（动量守恒）", small);
         if (hasHit)
         {
@@ -236,6 +276,7 @@ public class LabHud : MonoBehaviour
     {
         if (s == LabPlayer.EdgeState.Hot2) return "②";
         if (s == LabPlayer.EdgeState.Hot1) return "①";
+        if (s == LabPlayer.EdgeState.Spirit) return "◇";
         return "·";
     }
 
@@ -273,7 +314,7 @@ public class LabHud : MonoBehaviour
         // 只认轴的游戏里，真正可用的是这两个分轴等级；上面那个合速度等级只是"总量"
         if (p.canBeRedHot)
         {
-            GUILayout.Label(string.Format("　红热  上{0} 下{1} 左{2} 右{3}",
+            GUILayout.Label(string.Format("　边框  上{0} 下{1} 左{2} 右{3}   ◇=碎",
                 EdgeGlyph(p.GetEdge(LabPlayer.Edge.Top)),
                 EdgeGlyph(p.GetEdge(LabPlayer.Edge.Bottom)),
                 EdgeGlyph(p.GetEdge(LabPlayer.Edge.Left)),

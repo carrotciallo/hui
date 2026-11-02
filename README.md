@@ -114,6 +114,9 @@ A（P1）的形态：`1`–`6` 依次切普通 / `u` 大炮 / `L` 转换器 / `|
 
 ## 当前实现的范围
 
+> **下面这份清单对应的是 PR #17 之前的 `Assets/Scripts`，那套代码已删除，只作历史参考。**
+> 现在的唯一基准是 `Assets/TuningLab`（[ADR-0006](docs/adr/0006-lab-single-baseline.md)），现行规则看 [冲刺与对撞-现行规则](docs/冲刺与对撞-现行规则.md)，做关卡看 [tuning-lab-level-editor](docs/tuning-lab-level-editor.md)。这份清单待按实验台重写。
+
 - 世界尺度：1 单位 = 1 格 = 16px，人物 13px；取景和测量都按格
 - 速度驱动的动态刚体（`Rigidbody2D`），水平用 `Mathf.MoveTowards` 逼近目标速度，不是直接赋值，这样物理推挤才有机会生效
 - 跳跃：coyote time、跳跃缓冲、可变跳跃高度、上升/下落不同重力；按规格调到跳高 2 格、跳远 3 格；短按也有 0.1s 的最小起跳时间，不会一按就半高

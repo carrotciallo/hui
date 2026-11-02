@@ -1,0 +1,19 @@
+{
+    "name": "GameJam.Lab.LevelEditor",
+    "rootNamespace": "",
+    "references": [
+        "GameJam.Lab",
+        "GameJam.Lab.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
