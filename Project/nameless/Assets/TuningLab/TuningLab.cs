@@ -120,6 +120,8 @@ public class TuningLab : MonoBehaviour
     public float RedHotSpeed => SpeedForCells(Boundary(redHotTierIndex));
     /// <summary>锻造门槛（速度）：场景撞击的下限，永不高于红热门槛。</summary>
     public float ForgeSpeed => SpeedForCells(Boundary(Mathf.Min(forgeTierIndex, redHotTierIndex)));
+    /// <summary>大炮发射的增量 = 一个等级间距的 v²（= 2·g·间距格数）。v' = √(Vb² + 这个数)。</summary>
+    public float CannonBoostV2 => 2f * gravity * Mathf.Max(0.01f, tierSpacingCells);
 
     // ---- 等级门槛：等距生成，不再手填数组 ----
     float[] cachedBounds;
@@ -306,6 +308,8 @@ public class TuningLab : MonoBehaviour
         if (kb.rKey.wasPressedThisFrame) ResetPlayers();
         if (kb.pKey.wasPressedThisFrame) showPixelGrid = !showPixelGrid;
         if (kb.tabKey.wasPressedThisFrame) showGrid = !showGrid;
+        if (kb.f1Key.wasPressedThisFrame && PlayerA != null) PlayerA.DebugShatterNextEdge();
+        if (kb.f2Key.wasPressedThisFrame && PlayerA != null) PlayerA.ResetEdges();
     }
 
     void LateUpdate()

@@ -116,9 +116,10 @@ public class LabHud : MonoBehaviour
         GUILayout.Label("手感调试台", title);
         GUILayout.Label("A（大框）  A/D 移动   W/S 冲刺方向   空格 跳   左Shift 冲刺", small);
         GUILayout.Label("B（小块）  方向键 上下左右   /  跳   句号 .  冲刺", small);
+        GUILayout.Label("膛里装了 B 时：B 的移动无效，句号 . 变成开炮", small);
         GUILayout.Label("向下冲刺只允许在空中（站在地上按下去无效，不耗充能）", small);
         GUILayout.Label("冲刺方向 竖直输入 > 水平输入 > 空中的竖直速度 > 朝向", small);
-        GUILayout.Label("R 重置    P 像素网格", small);
+        GUILayout.Label("R 重置    P 像素网格    F1 碎一条边（演示形态）    F2 恢复边框", small);
         GUILayout.Space(6f);
 
         lab.timeScale = Slider("时间缩放", lab.timeScale, 0.05f, 2f, "0.00");
@@ -193,9 +194,11 @@ public class LabHud : MonoBehaviour
         GUILayout.BeginArea(new Rect(Screen.width - w - 10f, 10f, w, Screen.height - 20f), GUI.skin.box);
 
         GUILayout.Label("读数", title);
-        DrawPlayer(lab.PlayerA, "P1");
+        if (lab.PlayerA == null) GUILayout.Label("P1 塌框死亡：相机改绑 P2，尺寸不再伸缩", WarnStyle());
+        else DrawPlayer(lab.PlayerA, "P1");
         GUILayout.Space(6f);
-        DrawPlayer(lab.PlayerB, "P2");
+        if (lab.PlayerB == null) GUILayout.Label("P2 塌框死亡：相机改绑 P1，尺寸不再伸缩", WarnStyle());
+        else DrawPlayer(lab.PlayerB, "P2");
 
         GUILayout.Space(10f);
         GUILayout.Label("诊断", title);
@@ -221,7 +224,10 @@ public class LabHud : MonoBehaviour
         GUILayout.Label(string.Format("锻造      撞场景沿轴 v ≥ {0:0}（v{1} 门槛）→ 常态①→热②→遇冷砸碎◇→遇热塌框",
             lab.ForgeSpeed, Mathf.Min(lab.forgeTierIndex, lab.redHotTierIndex)), small);
         if (collapseCount > 0)
-            GUILayout.Label(string.Format("  塌框 {0} 次   最近 {1}", collapseCount, lastCollapse), WarnStyle());
+            GUILayout.Label(string.Format("  塌框 {0} 次   最近 {1}（热二遇红热 = 死亡）", collapseCount, lastCollapse), WarnStyle());
+        GUILayout.Label(string.Format("大炮      v' = √(Vb² + {0:0})   一个等级间距 = {1:0.0} 格   方向 = 进入方向的反向",
+            lab.CannonBoostV2, lab.tierSpacingCells), small);
+        GUILayout.Label("  碎 1 条边 = u 大炮，相邻 2 = L，相对 2 = =/‖，只剩 1 = 矛，全碎 = 灵体", small);
         GUILayout.Label("碰撞      速度 + 冲刺态 整体互换（动量守恒）", small);
         if (hasHit)
         {
@@ -272,6 +278,16 @@ public class LabHud : MonoBehaviour
         GUILayout.EndArea();
     }
 
+    /// <summary>膛内状态：是否装填、是否可装填，以及这一发会打出多大速度。</summary>
+    string ChamberText(LabPlayer a)
+    {
+        if (a.Loaded)
+            return string.Format("已装填  Vb={0:0.0} → v'={1:0.0}（B 的句号开炮）",
+                a.ChamberVelocity.magnitude, a.LaunchSpeed);
+        if (a.CanLoad) return "空膛  可装填（B 以冲刺态撞进口里）";
+        return "不装填（不是 u 形）";
+    }
+
     static string EdgeGlyph(LabPlayer.EdgeState s)
     {
         if (s == LabPlayer.EdgeState.Hot2) return "②";
@@ -319,6 +335,14 @@ public class LabHud : MonoBehaviour
                 EdgeGlyph(p.GetEdge(LabPlayer.Edge.Bottom)),
                 EdgeGlyph(p.GetEdge(LabPlayer.Edge.Left)),
                 EdgeGlyph(p.GetEdge(LabPlayer.Edge.Right))), small);
+            GUILayout.Label("　形态  " + p.FormLabel, small);
+            GUILayout.Label("　大炮  " + ChamberText(p), small);
+        }
+        else if (p.Suspended)
+        {
+            GUILayout.Label(string.Format("　膛内  跟着 {0}，移动无效，句号开炮。存速 {1:0.0} → 出膛 {2:0.0}",
+                p.Host == lab.PlayerA ? "A" : "B",
+                p.Host.ChamberVelocity.magnitude, p.Host.LaunchSpeed), small);
         }
 
         GUILayout.Label(string.Format("　水平 v{0} ({1:0.0})　　竖直 v{2} ({3:0.0})",

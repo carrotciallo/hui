@@ -26,6 +26,10 @@ public class LabPlayer : MonoBehaviour
     public bool Touching => grounded || playerContactTimer > 0f;
     /// <summary>水平冲刺后速度仍处于 v1 区间、重力被关掉的状态。</summary>
     public bool Hovering => dashPhase == DashPhase.Dash;
+    /// <summary>冲刺态：位移恒定、不受外力。大炮只吃这个状态撞进来的 B。</summary>
+    public bool InDashState => dashPhase == DashPhase.Dash;
+    /// <summary>本次冲刺的方向（单轴）。</summary>
+    public Vector2 DashDirection => dashDir;
 
     /// <summary>
     /// 当前冲刺意图方向 —— 眼睛显示的就是它，冲刺用的也是它。
@@ -85,6 +89,30 @@ public class LabPlayer : MonoBehaviour
 
     public float HitFlash { get; private set; }
 
+    // ---- 形态与膛内（Issue #14 / #15）----
+
+    /// <summary>哪几条边碎成了灵体；形态完全由它算出来。</summary>
+    public int SpiritMask => spiritMask;
+    public LabForm Form => form;
+    /// <summary>形态读数，带朝向，给 HUD 用。</summary>
+    public string FormLabel => LabForms.Label(spiritMask, form);
+    /// <summary>炮口朝向 = 唯一（或最后）碎掉的那条边。</summary>
+    public Vector2 MouthNormal => LabForms.EdgeNormal(LabForms.MouthEdge(spiritMask));
+
+    /// <summary>膛里有人（A 侧）。</summary>
+    public bool Loaded => loaded != null;
+    /// <summary>我被装在大炮膛里（B 侧）：不移动、不充能、不算地面。</summary>
+    public bool Suspended => host != null;
+    public LabPlayer Host => host;
+    /// <summary>大炮形态且膛空 = 可以装填，但还要求 B 处于冲刺态。</summary>
+    public bool CanLoad => canBeRedHot && form == LabForm.Cannon && loaded == null;
+    /// <summary>进入时记下的速度 V前；膛空时是零。</summary>
+    public Vector2 ChamberVelocity => loaded != null ? loaded.chamberVelocity : Vector2.zero;
+    /// <summary>下一发的出膛速度：√(Vb² + 一个等级间距的 v²)。</summary>
+    public float LaunchSpeed => lab == null || loaded == null
+        ? 0f
+        : Mathf.Sqrt(Mathf.Max(0f, loaded.chamberVelocity.sqrMagnitude + lab.CannonBoostV2));
+
     Rigidbody2D rb;
     Collider2D col;
     Collider2D support;
@@ -104,6 +132,15 @@ public class LabPlayer : MonoBehaviour
     DashPhase dashPhase;
     bool refillArmed;
     Vector2 lastFixedVelocity;
+
+    int spiritMask;
+    LabForm form = LabForm.Normal;
+
+    LabPlayer loaded;               // 膛里的 B（只有 A 有）
+    LabPlayer host;                 // 我在谁的膛里（只有 B 有）
+    Vector2 chamberVelocity;        // B 进入时的速度 V前
+    Vector2 chamberDir;             // B 进入时的冲刺轴，射出取它的反向
+    bool gliding;                   // 水平射出：速度降到零级之前不受重力
 
     float moveX;
     float vertInput;
@@ -128,6 +165,13 @@ public class LabPlayer : MonoBehaviour
     void Update()
     {
         ReadInput();
+
+        // 膛里的 B：移动无效，冲刺键改成给宿主开炮。
+        if (host != null)
+        {
+            if (dashDownThisFrame) host.Fire();
+            return;
+        }
 
         if (jumpDownThisFrame && lab != null) jumpBuffer = lab.jumpBufferTime;
         else jumpBuffer = Mathf.Max(0f, jumpBuffer - Time.deltaTime);
@@ -155,6 +199,14 @@ public class LabPlayer : MonoBehaviour
         if (lab == null) return;
         float dt = Time.fixedDeltaTime;
         var v = rb.linearVelocity;
+
+        // 膛内：既不算地面、也不回复充能，只是被宿主带着走。
+        if (host != null)
+        {
+            rb.position = host.rb.position;
+            transform.position = host.transform.position;
+            return;
+        }
 
         bool wasGrounded = grounded;
         grounded = ProbeGround();
@@ -212,6 +264,7 @@ public class LabPlayer : MonoBehaviour
             }
 
             Charge = 0f;
+            gliding = false;
             dashLock = lab.dashLockTime;
             dashDir = dir;
             dashSpeedNow = dashSpeed;
@@ -300,7 +353,13 @@ public class LabPlayer : MonoBehaviour
             v.x = other.Velocity.x + moveX * lab.walkSpeed;
 
         // 冲刺态在上面的早退里已经把重力关掉了，走到这里一定是常规状态
-        rb.gravityScale = lab.GravityScale;
+        // 水平射出：速度降到零级之前不受重力（Issue #15）
+        if (gliding && Mathf.Abs(v.x) >= lab.V0Speed) rb.gravityScale = 0f;
+        else
+        {
+            gliding = false;
+            rb.gravityScale = lab.GravityScale;
+        }
 
         rb.linearVelocity = v;
         // 撞地形时用它算分量：碰撞回调触发时速度已经被物理解算改掉（贴地时竖直分量已经是 0）
@@ -373,6 +432,13 @@ public class LabPlayer : MonoBehaviour
         if (lab == null || other == null) return;
         if (c.collider == null || c.collider.GetComponent<LabPlayer>() == null) return;
         if (Time.time < nextHitTime) return;
+
+        // ---- 大炮装填优先于动量互换：冲刺态撞进 u 口 = 被吞进膛里 ----
+        // 两名玩家的回调会算出同一对宿主/子弹，谁先跑谁装填，另一边被冷却挡住。
+        LabPlayer cannon = canBeRedHot ? this : other;
+        LabPlayer dart = canBeRedHot ? other : this;
+        if (dart.Suspended) return;
+        if (cannon.TryAbsorb(dart)) return;
 
         Vector2 delta = (Vector2)other.transform.position - (Vector2)transform.position;
         if (delta.sqrMagnitude < 0.0001f) return;
@@ -535,6 +601,9 @@ public class LabPlayer : MonoBehaviour
     /// </summary>
     public event System.Action<LabPlayer, Edge> EdgeCollapsed;
 
+    /// <summary>形态变化（碎边组合变了）。膛内的退出逻辑挂这里。</summary>
+    public event System.Action<LabPlayer, LabForm> FormChanged;
+
     public void SetEdge(Edge e, EdgeState next)
     {
         int i = (int)e;
@@ -542,8 +611,23 @@ public class LabPlayer : MonoBehaviour
         if (prev == next) return;
         edgeStates[i] = next;
         edgeTimers[i] = next == EdgeState.Hot1 ? lab.redHotDuration : 0f;
+
+        if (next == EdgeState.Spirit) spiritMask |= 1 << i;
+        else spiritMask &= ~(1 << i);
+
         if (visual != null) visual.SetEdge(e, next);
         if (EdgeStateChanged != null) EdgeStateChanged(this, e, prev, next);
+        UpdateForm();
+    }
+
+    /// <summary>碎边组合一变，形态跟着变；不再是 u 形就把膛里的人放出去。</summary>
+    void UpdateForm()
+    {
+        LabForm next = LabForms.Of(spiritMask);
+        if (next == form) return;
+        form = next;
+        if (form != LabForm.Cannon) Eject();
+        if (FormChanged != null) FormChanged(this, form);
     }
 
     /// <summary>
@@ -563,8 +647,17 @@ public class LabPlayer : MonoBehaviour
                 if (hot) SetEdge(e, EdgeState.Hot2);        // 热 1 再撞 → 永久热 2
                 break;
             case EdgeState.Hot2:
-                if (hot) { if (EdgeCollapsed != null) EdgeCollapsed(this, e); }
-                else SetEdge(e, EdgeState.Spirit);
+                if (hot)
+                {
+                    Eject();                       // 膛里的人不能跟着宿主一起没
+                    EdgeCollapsed?.Invoke(this, e);
+                    Destroy(gameObject);             // 热二再遭遇红色碰撞，角色直接死亡
+                }
+                else
+                {
+                    // Hot2 再遭遇冷碰撞，对应的框掉落并变为 Spirit。
+                    SetEdge(e, EdgeState.Spirit);
+                }
                 break;
         }
     }
@@ -593,8 +686,110 @@ public class LabPlayer : MonoBehaviour
 
     public void SetHitCooldown(float until) => nextHitTime = until;
 
+    // ------------------------------------------------------------------
+    // 大炮（Issue #15）：冲刺态进入 → 存速 → 反向射出
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// 膛空的大炮只吃"冲刺态"撞进来的 B；不在这个状态就退回原来的动量互换。
+    /// 装填成功返回 true，这次碰撞不再走进挡位互换。
+    /// </summary>
+    bool TryAbsorb(LabPlayer b)
+    {
+        if (!CanLoad || b == null || b.host != null) return false;
+        if (!b.InDashState) return false;
+
+        loaded = b;
+        b.host = this;
+        b.chamberVelocity = b.PreImpactVelocity;     // 进入时的 v前
+        b.chamberDir = b.dashDir;                    // 冲刺轴：射出方向取它的反向
+        b.SuspendIn();
+
+        nextHitTime = Time.time + 0.18f;
+        b.SetHitCooldown(Time.time + 0.18f);
+        return true;
+    }
+
+    /// <summary>
+    /// 开炮：v' = √(Vb² + 一个等级间距的 v²)，不看 A 自己的速度；
+    /// 方向取进入方向的反向 —— 从它进来的那个口退出去。
+    /// </summary>
+    public void Fire()
+    {
+        var b = loaded;
+        if (b == null || lab == null) return;
+
+        loaded = null;
+        float speed = Mathf.Sqrt(Mathf.Max(0f, b.chamberVelocity.sqrMagnitude + lab.CannonBoostV2));
+        Vector2 dir = -b.chamberDir;
+        b.Wake(rb.position + dir * (HalfHeight + b.HalfHeight + 0.05f), dir * speed);
+        b.gliding = Mathf.Abs(dir.x) > 0.5f;         // 只有水平射出才免重力
+    }
+
+    /// <summary>A 结构改变（u→L、u→=）或死亡：没开出去的人按进入时的速度退回膛外。</summary>
+    void Eject()
+    {
+        var b = loaded;
+        if (b == null) return;
+        loaded = null;
+
+        Vector2 dir = b.chamberDir.sqrMagnitude > 0.0001f ? -b.chamberDir : Vector2.up;
+        b.Wake(rb.position + dir * (HalfHeight + b.HalfHeight + 0.05f), b.chamberVelocity);
+    }
+
+    /// <summary>进膛：不可视、无碰撞箱、运动学跟随宿主，各种逻辑在 Update/FixedUpdate 里早退。</summary>
+    void SuspendIn()
+    {
+        if (visual != null) visual.SetVisible(false);
+        col.enabled = false;
+        rb.bodyType = RigidbodyType2D.Kinematic;
+        rb.gravityScale = 0f;
+        rb.linearVelocity = Vector2.zero;
+
+        grounded = false;
+        support = null;
+        playerContactTimer = 0f;
+        dashPhase = DashPhase.None;
+        dashTimer = 0f;
+        dashLock = 0f;
+        gliding = false;
+    }
+
+    /// <summary>出膛：碰撞箱和动力学交还给 B，落到炮口外侧，免得和 A 的整块碰撞箱重叠被弹开。</summary>
+    void Wake(Vector2 position, Vector2 velocity)
+    {
+        host = null;
+        chamberVelocity = Vector2.zero;
+        chamberDir = Vector2.zero;
+
+        if (visual != null) visual.SetVisible(true);
+        col.enabled = true;
+        rb.bodyType = RigidbodyType2D.Dynamic;
+        rb.position = position;
+        transform.position = position;
+        rb.gravityScale = lab != null ? lab.GravityScale : 5.1f;
+        rb.linearVelocity = velocity;
+
+        grounded = false;
+        refillArmed = false;
+    }
+
+    /// <summary>调试：把下一条边直接砸成灵体，用来演示碎边组合 → 形态（F1）。</summary>
+    public void DebugShatterNextEdge()
+    {
+        if (!canBeRedHot) return;
+        for (int i = 0; i < 4; i++)
+        {
+            if (edgeStates[i] == EdgeState.Spirit) continue;
+            SetEdge((Edge)i, EdgeState.Spirit);
+            return;
+        }
+    }
+
     public void Teleport(Vector2 position)
     {
+        if (host != null) host.Eject();      // 我在别人膛里：先把我放出去
+
         rb.position = position;
         rb.linearVelocity = Vector2.zero;
         transform.position = position;
@@ -605,6 +800,7 @@ public class LabPlayer : MonoBehaviour
         dashTimer = 0f;
         dashPhase = DashPhase.None;
         refillArmed = false;
+        gliding = false;
         ResetEdges();
         LandedNetDescent = 0f;
         LandedApexDescent = 0f;

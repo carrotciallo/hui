@@ -4,12 +4,10 @@ using UnityEngine;
 using UnityEngine.TestTools;
 
 /// <summary>
-/// Issue #14 红热锻造在实验台上的规格（ADR-0006）。
-/// 边态阶梯：常态 → 热一 → 热二 → 灵体；热二再吃一记红热级撞击塌到本体。
+/// Issue #14 红热锻造 + 形态变换在实验台上的规格（ADR-0006）。
+/// 边态阶梯：常态 → 热一 → 热二 → 灵体；热二再吃一记红热级撞击 = 死亡。
 /// 场景撞击和双人撞击共用同一套门槛：锻造门槛只砸不加热，红热门槛才加热。
-///
-/// 旧实现里断言「形态」和「死亡」的部分，这里降级成断言碎边组合和塌框事件：
-/// 实验台还没有形态系统和生命系统，接上之后这两类断言原样补回来。
+/// 形态由碎边组合唯一决定：1 条 = u 大炮、相邻 2 = L、相对 2 = =/‖、只剩 1 = 矛、全碎 = 灵体。
 /// </summary>
 public sealed class LabForgeTests
 {
@@ -87,6 +85,20 @@ public sealed class LabForgeTests
     }
 
     [UnityTest]
+    public IEnumerator RedHotStrikeOnHot2EdgeKillsA()
+    {
+        var a = MakeA();
+
+        Heat(a, LabPlayer.Edge.Bottom);
+        a.StrikeEdge(LabPlayer.Edge.Bottom, true);      // 热二再吃一记红热 = 死亡判定
+
+        Assert.IsNotNull(a.gameObject, "销毁要到帧末，本帧对象还在");
+        yield return null;
+        yield return null;
+        Assert.IsNull(a, "热二遇红热，A 死亡（GameObject 被销毁）");
+    }
+
+    [UnityTest]
     public IEnumerator Hot2EdgeShatteredByColdStrikeBecomesSpirit()
     {
         var a = MakeA();
@@ -147,6 +159,115 @@ public sealed class LabForgeTests
         Shatter(adjacent, LabPlayer.Edge.Left);
         Assert.IsTrue(adjacent.IsSpirit(LabPlayer.Edge.Top) && adjacent.IsSpirit(LabPlayer.Edge.Left),
                       "相邻的 2 条碎 = L 转向器的输入");
+
+        yield return null;
+    }
+
+    // 形态变换（碎边组合 → 形态，Issue #14 的最终清单，不再改动）----
+
+    [UnityTest]
+    public IEnumerator OneBrokenEdgeIsCannonWithMouthOnThatEdge()
+    {
+        var a = MakeA();
+        Assert.AreEqual(LabForm.Normal, a.Form, "没碎边就是普通框");
+
+        Shatter(a, LabPlayer.Edge.Bottom);
+        Assert.AreEqual(LabForm.Cannon, a.Form, "碎 1 条 = u 大炮");
+        Assert.AreEqual(Vector2.down, a.MouthNormal, "口朝碎掉的那条边");
+
+        foreach (var e in new[] { LabPlayer.Edge.Top, LabPlayer.Edge.Left, LabPlayer.Edge.Right })
+        {
+            var p = MakeA("A_" + e);
+            Shatter(p, e);
+            Assert.AreEqual(LabForm.Cannon, p.Form, $"{e} 碎掉也要是 u 大炮");
+        }
+
+        yield return null;
+    }
+
+    [UnityTest]
+    public IEnumerator AdjacentPairIsConverterInFourCorners()
+    {
+        var corners = new[]
+        {
+            new[] { LabPlayer.Edge.Top, LabPlayer.Edge.Left },
+            new[] { LabPlayer.Edge.Top, LabPlayer.Edge.Right },
+            new[] { LabPlayer.Edge.Bottom, LabPlayer.Edge.Left },
+            new[] { LabPlayer.Edge.Bottom, LabPlayer.Edge.Right },
+        };
+
+        foreach (var pair in corners)
+        {
+            var p = MakeA("L_" + pair[0] + "_" + pair[1]);
+            Shatter(p, pair[0]);
+            Shatter(p, pair[1]);
+            Assert.AreEqual(LabForm.Converter, p.Form, $"相邻 2 条（{pair[0]}+{pair[1]}）= L 转向器");
+        }
+
+        yield return null;
+    }
+
+    [UnityTest]
+    public IEnumerator OppositePairIsElevatorWithTwoOrientations()
+    {
+        var vertical = MakeA("ElevatorV");
+        Shatter(vertical, LabPlayer.Edge.Top);
+        Shatter(vertical, LabPlayer.Edge.Bottom);
+        Assert.AreEqual(LabForm.Elevator, vertical.Form, "相对 2 条 = 电梯");
+        Assert.AreEqual("‖ 电梯（竖）", vertical.FormLabel, "上下都碎 → 只剩左右两根竖杠");
+
+        var horizontal = MakeA("ElevatorH");
+        Shatter(horizontal, LabPlayer.Edge.Left);
+        Shatter(horizontal, LabPlayer.Edge.Right);
+        Assert.AreEqual(LabForm.Elevator, horizontal.Form);
+        Assert.AreEqual("= 电梯（横）", horizontal.FormLabel);
+
+        yield return null;
+    }
+
+    [UnityTest]
+    public IEnumerator ThreeBrokenEdgesCollapseToSingleSpear()
+    {
+        for (int keep = 0; keep < 4; keep++)
+        {
+            var p = MakeA("Spear" + keep);
+            for (int i = 0; i < 4; i++)
+                if (i != keep) Shatter(p, (LabPlayer.Edge)i);
+            Assert.AreEqual(LabForm.Spear, p.Form, "只剩一根：4 种朝向全部退化成 1 种矛");
+        }
+
+        yield return null;
+    }
+
+    [UnityTest]
+    public IEnumerator AllBrokenEdgesIsSpiritForm()
+    {
+        var a = MakeA();
+        foreach (LabPlayer.Edge e in System.Enum.GetValues(typeof(LabPlayer.Edge)))
+            Shatter(a, e);
+
+        Assert.AreEqual(LabForm.Spirit, a.Form, "全碎 = 灵体形态");
+        Assert.AreEqual("灵体", a.FormLabel);
+
+        yield return null;
+    }
+
+    [UnityTest]
+    public IEnumerator FormFollowsTheEdgesAndFiresTheEvent()
+    {
+        var a = MakeA();
+        LabForm last = LabForm.Normal;
+        int changes = 0;
+        a.FormChanged += (p, f) => { last = f; changes++; };
+
+        Shatter(a, LabPlayer.Edge.Right);
+        Assert.AreEqual(1, changes, "碎边要外抛形态变化");
+        Assert.AreEqual(LabForm.Cannon, last);
+
+        a.Teleport(a.transform.position);       // 重置边框 → 形态跟着回普通
+        Assert.AreEqual(2, changes);
+        Assert.AreEqual(LabForm.Normal, last);
+        Assert.AreEqual(LabForm.Normal, a.Form);
 
         yield return null;
     }
