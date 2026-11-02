@@ -61,6 +61,8 @@ git diff Project/nameless/ProjectSettings/EditorBuildSettings.asset
 
 改关卡内容走 **Tuning Lab Level Editor**，不要手改 `TuningLab.unity`（基准场景）或 `World.unity`；旧测试房仍然改对应 builder 再重新生成。
 
+连续关卡相机：`TuningLab` Inspector 的「相机默认」+「关卡相机分区」按 **B 的位置**选当前关卡，切换 `bounds` / `minSize` / `maxSize`；没有分区时才用 `LabLevelData` 的单关相机设置。
+
 ### 测试
 
 在 Unity 的 **Window → General → Test Runner** 里跑。命令行模板（编辑器路径按本机实际情况替换）：

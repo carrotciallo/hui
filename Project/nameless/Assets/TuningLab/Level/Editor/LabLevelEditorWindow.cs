@@ -399,7 +399,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     void DrawBounds()
     {
-        EditorGUILayout.LabelField("相机范围（clamp）", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("单关相机范围（clamp）", EditorStyles.boldLabel);
         var data = level.Data;
 
         EditorGUI.BeginChangeCheck();
@@ -419,7 +419,13 @@ public sealed class LabLevelEditorWindow : EditorWindow
             if (GUILayout.Button("回 Tuning Lab 基准范围"))
             {
                 Record("回基准相机范围");
-                data.bounds = ToRectInt(TuningLab.BaselineBounds);
+                Rect defaults = TuningLab.BaselineBounds;
+                if (lab != null)
+                {
+                    Rect custom = lab.defaultCameraBounds;
+                    if (custom.width > 0f && custom.height > 0f) defaults = custom;
+                }
+                data.bounds = ToRectInt(defaults);
                 MarkDirty();
             }
             if (GUILayout.Button("按地形计算"))
@@ -431,14 +437,40 @@ public sealed class LabLevelEditorWindow : EditorWindow
         }
 
         EditorGUILayout.HelpBox(
-            "Tuning Lab 基准的两面墙在相机范围外 1 格，这是基准行为；范围管相机 clamp，不限制画地形。",
+            "Tuning Lab 基准的两面墙在相机范围外 1 格，这是基准行为；范围管相机 clamp，不限制画地形。\n" +
+            "如果 TuningLab 定义了相机分区，这个范围只作为编辑范围，相机 clamp 由分区/默认值接管。",
             MessageType.None);
     }
 
     void DrawCamera()
     {
-        EditorGUILayout.LabelField("相机跟随尺寸", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("单关相机跟随尺寸", EditorStyles.boldLabel);
         var data = level.Data;
+
+        bool hasZones = lab != null && lab.cameraLevels != null && lab.cameraLevels.Count > 0;
+        if (!hasZones)
+        {
+            EditorGUILayout.HelpBox(
+                "单关模式：相机用这里的范围/尺寸。\n" +
+                "连续关卡请用 TuningLab Inspector 的「相机默认」和「关卡相机分区」。",
+                MessageType.None);
+        }
+        else
+        {
+            EditorGUILayout.HelpBox(
+                string.Format(
+                    "TuningLab 已定义 {0} 个相机分区：相机按 B 的位置选分区，B 不在分区时用 TuningLab 默认。\n" +
+                    "分区模式下，下面的单关相机设置不生效。",
+                    lab.cameraLevels.Count),
+                MessageType.Warning);
+            if (GUILayout.Button("选中 TuningLab 编辑相机默认/分区"))
+                Selection.activeGameObject = lab.gameObject;
+        }
+
+        float defaultMin = lab != null ? lab.defaultCameraMinSize : TuningLab.DefaultCameraMinSize;
+        float defaultMax = lab != null ? lab.defaultCameraMaxSize : TuningLab.DefaultCameraMaxSize;
+        if (defaultMin <= 0f) defaultMin = TuningLab.DefaultCameraMinSize;
+        if (defaultMax < defaultMin) defaultMax = defaultMin;
 
         float min = data.cameraMinSize;
         float max = data.cameraMaxSize;
@@ -472,8 +504,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
             if (GUILayout.Button("Tuning Lab 默认"))
             {
                 Record("相机尺寸回基准");
-                data.cameraMinSize = TuningLab.DefaultCameraMinSize;
-                data.cameraMaxSize = TuningLab.DefaultCameraMaxSize;
+                data.cameraMinSize = defaultMin;
+                data.cameraMaxSize = defaultMax;
                 MarkDirty();
             }
             if (GUILayout.Button("固定为最小"))
@@ -512,6 +544,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
             Record("从 Tuning Lab 重置关卡");
             level.ApplyBaseline();
+            if (lab != null) LabLevelScene.CopyCameraDefaults(lab, level.Data);
             AfterStructuralEdit();
         }
 
@@ -979,9 +1012,20 @@ public sealed class LabLevelEditorWindow : EditorWindow
         mid.y += 1f;
         var center = new Vector3(mid.x, mid.y, 0f);
 
-        DrawCameraFrame(center, data.cameraMinSize, new Color(0.3f, 0.9f, 1f, 0.55f), "最小视野");
-        if (data.cameraMaxSize > data.cameraMinSize + 0.01f)
-            DrawCameraFrame(center, data.cameraMaxSize, new Color(1f, 0.6f, 0.2f, 0.3f), "最大视野");
+        float min = data.cameraMinSize;
+        float max = data.cameraMaxSize;
+
+        // 分区模式下，B 的位置决定开局用哪一关；视野框要按那个分区画，不能按 LabLevelData。
+        if (lab != null && lab.cameraLevels != null && lab.cameraLevels.Count > 0)
+        {
+            Vector2 probe = data.spawnB;
+            probe.y += TuningLab.B_Pixels / (2f * TuningLab.CellPixels);
+            lab.GetCameraFrame(probe, out _, out min, out max);
+        }
+
+        DrawCameraFrame(center, min, new Color(0.3f, 0.9f, 1f, 0.55f), "最小视野");
+        if (max > min + 0.01f)
+            DrawCameraFrame(center, max, new Color(1f, 0.6f, 0.2f, 0.3f), "最大视野");
     }
 
     static void DrawCameraFrame(Vector3 center, float size, Color color, string label)

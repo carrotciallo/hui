@@ -38,6 +38,8 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 
 如果已经有一份 Tuning Lab 副本（例如 `Bake Tuning Lab To Editable Scene` 生成的场景），用 **GameJam → Convert Current Scene To Level** 就地转成关卡；`TuningLab.unity` 基准场景本身禁止转换。
 
+**连续关卡相机**：`TuningLab` Inspector 里有「相机默认」（默认 min/max/bounds）和「关卡相机分区」列表。每个分区写清 B 的判定区域 `area`、相机夹具 `bounds`、`minSize/maxSize`；相机按 **B 的位置**选当前关卡，列表顺序就是优先级，B 不在任何分区时用默认值。选中 TuningLab 时 Scene 视图会画出这些区域。有分区时，关卡编辑器里的单关相机设置不生效（面板会提示）。
+
 Play 时 `TuningLab` 按 `LabLevel` 数据生成合并后的 `BoxCollider2D` 和 `LabVerticalRope`，和调试台走同一条 `BuildRoom` 路径。编辑器里看到的预览也是这条路径生成的，不写进场景文件。
 
 > 旧的 **GameJam → Level Editor** 改的是 `World.unity`，规则/尺度还没和 TuningLab 对齐，先别用。

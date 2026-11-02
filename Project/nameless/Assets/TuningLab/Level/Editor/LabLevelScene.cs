@@ -285,6 +285,7 @@ public static class LabLevelScene
         var level = lab.GetComponent<LabLevel>();
         if (level == null) level = lab.gameObject.AddComponent<LabLevel>();
         level.ApplyBaseline();
+        CopyCameraDefaults(lab, level.Data);
         level.ClearGenerated();          // 预览物体不写进场景，打开场景时 OnEnable 会重建
 
         lab.level = level;
@@ -292,6 +293,47 @@ public static class LabLevelScene
         EditorUtility.SetDirty(level);
         EditorSceneManager.MarkSceneDirty(scene);
         return true;
+    }
+
+    /// <summary>新关卡从 TuningLab 的默认相机字段起步；之后可以在关卡编辑器里单独改。</summary>
+    public static void CopyCameraDefaults(TuningLab lab, LabLevelData data)
+    {
+        if (lab == null || data == null) return;
+
+        data.cameraMinSize = lab.defaultCameraMinSize > 0f
+            ? lab.defaultCameraMinSize
+            : TuningLab.DefaultCameraMinSize;
+        data.cameraMaxSize = lab.defaultCameraMaxSize > 0f
+            ? lab.defaultCameraMaxSize
+            : TuningLab.DefaultCameraMaxSize;
+
+        Rect bounds = lab.defaultCameraBounds;
+        bounds = NormalizeRect(bounds);
+        if (bounds.width > 0f && bounds.height > 0f)
+        {
+            data.bounds = new RectInt(
+                Mathf.RoundToInt(bounds.xMin),
+                Mathf.RoundToInt(bounds.yMin),
+                Mathf.RoundToInt(bounds.width),
+                Mathf.RoundToInt(bounds.height));
+        }
+
+        data.Normalize();
+    }
+
+    static Rect NormalizeRect(Rect rect)
+    {
+        if (rect.width < 0f)
+        {
+            rect.x += rect.width;
+            rect.width = -rect.width;
+        }
+        if (rect.height < 0f)
+        {
+            rect.y += rect.height;
+            rect.height = -rect.height;
+        }
+        return rect;
     }
 
     static T FindInScene<T>(Scene scene) where T : Component

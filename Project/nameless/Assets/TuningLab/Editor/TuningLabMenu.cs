@@ -81,6 +81,7 @@ public static class TuningLabMenu
         var lab = go.AddComponent<TuningLab>();
         lab.roomScale = roomScale;
         lab.freeCamera = freeCamera;
+        lab.defaultCameraBounds = TuningLab.RoomBoundsForScale(roomScale);
 
         Directory.CreateDirectory(Path.GetDirectoryName(path));
         EditorSceneManager.SaveScene(scene, path);

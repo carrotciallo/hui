@@ -87,6 +87,32 @@ public static class LabLevelPlayCheck
                 EditorSceneManager.MarkSceneDirty(scene);
                 EditorSceneManager.SaveScene(scene);
             }
+
+            // 再放一个覆盖 B 出生点的相机分区：9 / 36 应该覆盖关卡值 8 / 34 和默认值 7 / 30。
+            var lab = Object.FindAnyObjectByType<TuningLab>();
+            if (lab != null)
+            {
+                lab.defaultCameraMinSize = 7f;
+                lab.defaultCameraMaxSize = 30f;
+                if (lab.cameraLevels == null)
+                    lab.cameraLevels = new System.Collections.Generic.List<TuningLab.LabCameraLevel>();
+                lab.cameraLevels.Clear();
+                lab.cameraLevels.Add(new TuningLab.LabCameraLevel
+                {
+                    name = "PlayCheckZone",
+                    area = new Rect(-100f, -100f, 200f, 200f),
+                    bounds = new Rect(level.Data.bounds.x, level.Data.bounds.y,
+                                      level.Data.bounds.width, level.Data.bounds.height),
+                    minSize = 9f,
+                    maxSize = 36f
+                });
+                EditorUtility.SetDirty(lab);
+                if (scene.IsValid())
+                {
+                    EditorSceneManager.MarkSceneDirty(scene);
+                    EditorSceneManager.SaveScene(scene);
+                }
+            }
         }
 
         ResetSession();
@@ -281,12 +307,27 @@ public static class LabLevelPlayCheck
                     Mathf.Abs(follow.bounds.xMin - level.Data.bounds.x) < 0.001f &&
                     Mathf.Abs(follow.bounds.yMin - level.Data.bounds.y) < 0.001f,
                     "相机 clamp 用了关卡范围");
+
+                float expectedMin = level.Data.cameraMinSize;
+                float expectedMax = level.Data.cameraMaxSize;
+                string source = "关卡值";
+                if (lab.cameraLevels != null && lab.cameraLevels.Count > 0 && lab.cameraLevels[0] != null)
+                {
+                    var zone = lab.cameraLevels[0];
+                    if (lab.PlayerB != null && zone.area.Contains(lab.PlayerB.transform.position))
+                    {
+                        expectedMin = zone.minSize;
+                        expectedMax = zone.maxSize;
+                        source = "当前关卡分区";
+                    }
+                }
+
                 Check(sb, ref fails,
-                    Mathf.Abs(follow.minSize - level.Data.cameraMinSize) < 0.001f,
-                    "相机 minSize 用了关卡值");
+                    Mathf.Abs(follow.minSize - expectedMin) < 0.001f,
+                    "相机 minSize 用了" + source);
                 Check(sb, ref fails,
-                    Mathf.Abs(follow.maxSize - level.Data.cameraMaxSize) < 0.001f,
-                    "相机 maxSize 用了关卡值");
+                    Mathf.Abs(follow.maxSize - expectedMax) < 0.001f,
+                    "相机 maxSize 用了" + source);
             }
         }
 

@@ -112,6 +112,20 @@ HUD 右上角会显示当前实际缩放倍数，**不是整数就会标红**—
 已经有 Tuning Lab 副本（例如 `Bake Tuning Lab To Editable Scene` 烘焙出来的场景）时，用
 **GameJam → Convert Current Scene To Level** 就地转成关卡；`TuningLab.unity` 基准场景本身禁止转换。
 
+## 连续关卡：相机分区
+
+一个连续场景里可以摆多个关卡段，相机范围随关卡切换。判定点固定是 **B 的位置**：
+
+- `TuningLab` Inspector → **相机默认**：`defaultCameraMinSize` / `defaultCameraMaxSize` / `defaultCameraBounds`。
+  B 不在任何分区里时用这组值；新建关卡也会把它写进 `LabLevelData` 作为起始值。
+- `TuningLab` Inspector → **关卡相机分区**：每项有 `name`、`area`（B 的判定矩形）、`bounds`（相机夹具）、
+  `minSize` / `maxSize`。列表顺序即优先级，第一个包含 B 的分区生效。
+- 相机跟随的仍是 A/B 中点，但“当前在哪个关卡”只看 B；切换分区时 `bounds` / size 按
+  `cameraFrameBlend` 混合，避免直接跳。
+- 选中 TuningLab 时 Scene 视图会画出默认范围（青）、每个分区的 `area`（黄）和 `bounds`（橙）。
+- 没有分区时，单关场景仍用 `LabLevelData` 的相机范围/尺寸；一旦有分区，以分区为准，B 出界用默认值。
+  关卡编辑器面板会对这种情况给出提示。
+
 基准的粒度是**格**：地板 26 格、5 级台阶各 3 格、两面墙各 1×16 格、绳在 (9, 2) 长 4 格。
 `GameJam → Run Level Baseline Self Check` 会把这份数据抓出来，验证 73 个实心格能精确合并回 8 块，
 再展开回 73 格不丢不重；`GameJam → Run Level Play Check` 会进 Play 用真实物理再验一遍。
@@ -196,6 +210,7 @@ Assets/TuningLab/
 ├── TuningLab.cs       参数 + 场地生成 + 相机（CaptureBaseline 也从这里抓基准房间）
 ├── LabPlayer.cs       方块玩家：移动、跳、冲刺、撞击
 ├── LabHud.cs          IMGUI 面板和读数
+├── LabCamera.cs       自由相机：跟随 A/B 中点；B 的位置决定当前关卡分区
 ├── Level/
 │   ├── LabLevelData.cs     关卡数据：实心格 / 绳 / 出生点 / 相机范围与跟随尺寸；格 → 合并矩形
 │   ├── LabLevel.cs         把数据建成真实 BoxCollider2D / LabVerticalRope；编辑器预览 + Play 共用
