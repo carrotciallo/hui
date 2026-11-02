@@ -1,0 +1,1030 @@
+#if UNITY_EDITOR
+using System.Collections.Generic;
+using System.IO;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+/// <summary>
+/// Tuning Lab 关卡编辑器。照着 World 的 LevelEditorWindow 做，但编辑对象换成了
+/// 从 Tuning Lab 派生的关卡场景（TuningLab + LabLevel），规则、相机、玩家全部跑调试台同一套脚本。
+///
+/// 地形直接写 <see cref="LabLevelData"/> 的格集合，渲染/碰撞由 LabLevel 按矩形合并生成。
+/// 不碰 Tilemap，也不依赖 World.unity 那一套还没对齐的规范。
+/// </summary>
+public sealed class LabLevelEditorWindow : EditorWindow
+{
+    enum Tool
+    {
+        Paint = 0,
+        Erase = 1,
+        Rect = 2,
+        Rope = 3,
+        SpawnA = 4,
+        SpawnB = 5
+    }
+
+    const int EditMargin = 8;                 // 相机范围外还能画多少格
+    const int MaxRopeLength = 32;
+    const float RopeStripWidth = 6f / 16f;    // 和 LabVerticalRope 一致
+
+    static readonly string[] ToolLabels =
+    {
+        "铺地形", "擦地形", "矩形", "竖绳", "出生点 A", "出生点 B"
+    };
+
+    LabLevel level;
+    TuningLab lab;
+    Scene cachedScene;
+
+    Tool tool = Tool.Paint;
+    int ropeLength = 4;
+    int ropeChainId;
+    bool showGrid = true;
+    bool showSpawns = true;
+    Vector2 windowScroll;
+    Vector2 ropeScroll;
+
+    bool gesture;
+    Vector2Int rectStart;
+    Vector2Int rectEnd;
+    Vector2Int lastCell;
+
+    bool validated;
+    readonly List<string> issues = new List<string>();
+
+    [MenuItem("GameJam/Tuning Lab Level Editor")]
+    public static void Open()
+    {
+        var window = GetWindow<LabLevelEditorWindow>("Tuning Lab Level Editor");
+        window.minSize = new Vector2(340f, 500f);
+        window.Show();
+        window.Refresh();
+    }
+
+    void OnEnable()
+    {
+        SceneView.duringSceneGui += OnSceneGUI;
+        EditorApplication.hierarchyChanged += OnHierarchyChanged;
+        Undo.undoRedoPerformed += OnUndoRedo;
+        Refresh();
+    }
+
+    void OnDisable()
+    {
+        SceneView.duringSceneGui -= OnSceneGUI;
+        EditorApplication.hierarchyChanged -= OnHierarchyChanged;
+        Undo.undoRedoPerformed -= OnUndoRedo;
+    }
+
+    void OnHierarchyChanged()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+        RefreshIfNeeded();
+    }
+
+    void OnUndoRedo()
+    {
+        if (level != null && !Application.isPlaying)
+        {
+            level.RebuildPreview();
+            validated = false;
+        }
+        Repaint();
+    }
+
+    // ------------------------------------------------------------------
+    // 场景绑定
+    // ------------------------------------------------------------------
+
+    void Refresh()
+    {
+        LabLevel previous = level;
+        cachedScene = SceneManager.GetActiveScene();
+        level = FindInScene<LabLevel>(cachedScene);
+        lab = FindInScene<TuningLab>(cachedScene);
+
+        if (level == null && lab != null)
+            level = lab.GetComponent<LabLevel>();
+
+        if (level != null && lab == null)
+            lab = level.GetComponent<TuningLab>();
+
+        // 手工搭的关卡场景可能忘了把引用连上；这里补一次，Play 时 TuningLab 也会自己找。
+        if (level != null && lab != null && lab.level == null)
+        {
+            lab.level = level;
+            EditorUtility.SetDirty(lab);
+        }
+
+        // 打开/切到关卡场景时把预览补回来（场景创建后预览是故意清掉的，不写进文件）。
+        if (level != null && level != previous && !Application.isPlaying)
+            level.RebuildPreview();
+
+        Repaint();
+    }
+
+    void RefreshIfNeeded()
+    {
+        Scene active = SceneManager.GetActiveScene();
+        if (active != cachedScene || level == null) Refresh();
+    }
+
+    static T FindInScene<T>(Scene scene) where T : Component
+    {
+        if (!scene.IsValid()) return null;
+        foreach (var root in scene.GetRootGameObjects())
+        {
+            var found = root.GetComponentInChildren<T>(true);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------
+    // 窗口 UI
+    // ------------------------------------------------------------------
+
+    void OnGUI()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+        {
+            EditorGUILayout.HelpBox("Play 模式下不能编辑关卡。退出 Play 再改。", MessageType.Info);
+            return;
+        }
+
+        RefreshIfNeeded();
+
+        if (level == null)
+        {
+            DrawOnboarding();
+            return;
+        }
+
+        windowScroll = EditorGUILayout.BeginScrollView(windowScroll);
+
+        DrawHeader();
+        EditorGUILayout.Space();
+        DrawTools();
+        EditorGUILayout.Space();
+        DrawTerrain();
+        EditorGUILayout.Space();
+        DrawRopes();
+        EditorGUILayout.Space();
+        DrawSpawns();
+        EditorGUILayout.Space();
+        DrawBounds();
+        EditorGUILayout.Space();
+        DrawActions();
+        DrawValidation();
+
+        EditorGUILayout.EndScrollView();
+    }
+
+    void DrawOnboarding()
+    {
+        EditorGUILayout.LabelField("Tuning Lab 关卡编辑器", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "当前场景没有 LabLevel 数据。\n" +
+            "关卡场景必须从 Tuning Lab 派生，不能直接改 TuningLab.unity（那是基准场景）。",
+            MessageType.Warning);
+
+        if (GUILayout.Button("从 Tuning Lab 新建关卡场景", GUILayout.Height(32f)))
+        {
+            LabLevelScene.CreateInteractive();
+            Refresh();
+        }
+
+        if (GUILayout.Button("把当前场景转成关卡（仅限 Tuning Lab 副本）"))
+        {
+            LabLevelScene.ConvertCurrentInteractive();
+            Refresh();
+        }
+
+        if (GUILayout.Button("打开 Tuning Lab 基准场景"))
+            LabLevelScene.OpenLab();
+
+        EditorGUILayout.Space();
+        DrawExistingLevels();
+    }
+
+    void DrawExistingLevels()
+    {
+        if (!AssetDatabase.IsValidFolder(LabLevelScene.LevelFolder)) return;
+
+        var guids = AssetDatabase.FindAssets("t:SceneAsset", new[] { LabLevelScene.LevelFolder });
+        if (guids.Length == 0) return;
+
+        var paths = new List<string>();
+        foreach (var guid in guids) paths.Add(AssetDatabase.GUIDToAssetPath(guid));
+        paths.Sort(System.StringComparer.Ordinal);
+
+        EditorGUILayout.LabelField("已有派生关卡", EditorStyles.boldLabel);
+        foreach (var path in paths)
+        {
+            if (GUILayout.Button(Path.GetFileNameWithoutExtension(path)))
+                LabLevelScene.OpenScene(path);
+        }
+    }
+
+    void DrawHeader()
+    {
+        EditorGUILayout.LabelField(SceneManager.GetActiveScene().name, EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("关卡数据来自 Tuning Lab 基准（CaptureBaseline）", EditorStyles.miniLabel);
+
+        if (lab == null)
+        {
+            EditorGUILayout.HelpBox("场景里没有 TuningLab，Play 时不会生成场地。", MessageType.Error);
+            return;
+        }
+
+        if (lab.level != level)
+        {
+            EditorGUILayout.HelpBox("TuningLab 没有指向这个 LabLevel。", MessageType.Warning);
+            if (GUILayout.Button("绑定到当前 LabLevel"))
+            {
+                Undo.RecordObject(lab, "绑定关卡数据");
+                lab.level = level;
+                EditorUtility.SetDirty(lab);
+                MarkSceneDirty();
+            }
+        }
+
+        if (!lab.autoBuild)
+        {
+            EditorGUILayout.HelpBox("TuningLab.autoBuild 关着，Play 不会生成场地（这是烘焙场景的遗留状态）。",
+                                    MessageType.Warning);
+            if (GUILayout.Button("打开 autoBuild"))
+            {
+                Undo.RecordObject(lab, "打开 autoBuild");
+                lab.autoBuild = true;
+                EditorUtility.SetDirty(lab);
+                MarkSceneDirty();
+            }
+        }
+
+        if (!Mathf.Approximately(lab.roomScale, 1f))
+        {
+            EditorGUILayout.HelpBox("TuningLab.roomScale ≠ 1。有 LabLevel 时场地完全按关卡数据生成，roomScale 不生效。",
+                                    MessageType.Info);
+        }
+    }
+
+    void DrawTools()
+    {
+        EditorGUILayout.LabelField("工具", EditorStyles.boldLabel);
+        tool = (Tool)GUILayout.SelectionGrid((int)tool, ToolLabels, 3);
+
+        switch (tool)
+        {
+            case Tool.Paint:
+                EditorGUILayout.HelpBox("左键拖动铺 1 格实心地形。", MessageType.None);
+                break;
+            case Tool.Erase:
+                EditorGUILayout.HelpBox("左键拖动擦掉实心格。", MessageType.None);
+                break;
+            case Tool.Rect:
+                EditorGUILayout.HelpBox("左键拖出一个矩形，松手后填充实心格。", MessageType.None);
+                break;
+            case Tool.Rope:
+                EditorGUILayout.HelpBox("左键在格子底部放一根竖绳，向上长。", MessageType.None);
+                break;
+            case Tool.SpawnA:
+                EditorGUILayout.HelpBox("左键设置 A 的落点（脚底）。必须在相机范围内。", MessageType.None);
+                break;
+            case Tool.SpawnB:
+                EditorGUILayout.HelpBox("左键设置 B 的落点（脚底）。必须在相机范围内。", MessageType.None);
+                break;
+        }
+
+        if (GUILayout.Button("跳到关卡")) FrameLevel();
+    }
+
+    void DrawTerrain()
+    {
+        EditorGUILayout.LabelField("地形", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("实心格", level.SolidCellCount.ToString());
+        EditorGUILayout.LabelField("合并后碰撞矩形", level.MergedRectCount.ToString());
+        EditorGUILayout.LabelField("可选范围", "相机范围外扩 " + EditMargin + " 格");
+
+        if (GUILayout.Button("清空地形"))
+        {
+            if (!EditorUtility.DisplayDialog("清空地形", "删掉所有实心格？绳和出生点保留。", "清空", "取消")) return;
+            Record("清空地形");
+            level.Data.ClearCells();
+            AfterStructuralEdit();
+        }
+    }
+
+    void DrawRopes()
+    {
+        EditorGUILayout.LabelField("竖绳", EditorStyles.boldLabel);
+        ropeLength = Mathf.Clamp(EditorGUILayout.IntField("新绳长度（格）", ropeLength), 1, MaxRopeLength);
+        ropeChainId = EditorGUILayout.IntField("chainId", ropeChainId);
+
+        var ropes = level.Data.ropes;
+        if (ropes == null || ropes.Count == 0)
+        {
+            EditorGUILayout.LabelField("（没有绳）");
+        }
+        else
+        {
+            ropeScroll = EditorGUILayout.BeginScrollView(ropeScroll, GUILayout.MaxHeight(110f));
+            for (int i = 0; i < ropes.Count; i++)
+            {
+                var rope = ropes[i];
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField(
+                        string.Format("({0:0.##}, {1:0.##})  长 {2}  链 {3}",
+                            rope.center.x, rope.center.y, rope.cells, rope.chainId),
+                        EditorStyles.miniLabel);
+                    if (GUILayout.Button("×", GUILayout.Width(24f)))
+                    {
+                        Record("删绳");
+                        ropes.RemoveAt(i);
+                        AfterStructuralEdit();
+                        break;
+                    }
+                }
+            }
+            EditorGUILayout.EndScrollView();
+        }
+
+        if (GUILayout.Button("清空竖绳"))
+        {
+            if (!EditorUtility.DisplayDialog("清空竖绳", "删掉所有绳？", "清空", "取消")) return;
+            Record("清空竖绳");
+            level.Data.ClearRopes();
+            AfterStructuralEdit();
+        }
+    }
+
+    void DrawSpawns()
+    {
+        EditorGUILayout.LabelField("出生点（脚底）", EditorStyles.boldLabel);
+        var data = level.Data;
+
+        EditorGUI.BeginChangeCheck();
+        Vector2 a = EditorGUILayout.Vector2Field("A", data.spawnA);
+        Vector2 b = EditorGUILayout.Vector2Field("B", data.spawnB);
+        if (EditorGUI.EndChangeCheck())
+        {
+            Record("改出生点");
+            data.spawnA = a;
+            data.spawnB = b;
+            MarkDirty();
+        }
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (GUILayout.Button("A 回基准（8, 0）"))
+            {
+                Record("A 回基准出生点");
+                data.spawnA = TuningLab.SpawnAFeet;
+                MarkDirty();
+            }
+            if (GUILayout.Button("B 回基准（10, 0）"))
+            {
+                Record("B 回基准出生点");
+                data.spawnB = TuningLab.SpawnBFeet;
+                MarkDirty();
+            }
+        }
+    }
+
+    void DrawBounds()
+    {
+        EditorGUILayout.LabelField("相机范围（clamp）", EditorStyles.boldLabel);
+        var data = level.Data;
+
+        EditorGUI.BeginChangeCheck();
+        int x = EditorGUILayout.IntField("X", data.bounds.x);
+        int y = EditorGUILayout.IntField("Y", data.bounds.y);
+        int width = EditorGUILayout.IntField("宽", data.bounds.width);
+        int height = EditorGUILayout.IntField("高", data.bounds.height);
+        if (EditorGUI.EndChangeCheck())
+        {
+            Record("改相机范围");
+            data.bounds = new RectInt(x, y, Mathf.Max(1, width), Mathf.Max(1, height));
+            MarkDirty();
+        }
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (GUILayout.Button("回 Tuning Lab 基准范围"))
+            {
+                Record("回基准相机范围");
+                data.bounds = ToRectInt(TuningLab.BaselineBounds);
+                MarkDirty();
+            }
+            if (GUILayout.Button("按地形计算"))
+            {
+                Record("按地形算相机范围");
+                data.bounds = data.ContentBounds();
+                MarkDirty();
+            }
+        }
+
+        EditorGUILayout.HelpBox(
+            "Tuning Lab 基准的两面墙在相机范围外 1 格，这是基准行为；范围管相机 clamp，不限制画地形。",
+            MessageType.None);
+    }
+
+    void DrawActions()
+    {
+        EditorGUILayout.LabelField("关卡", EditorStyles.boldLabel);
+
+        if (GUILayout.Button("从 Tuning Lab 重置（地形 + 绳 + 出生点 + 范围）", GUILayout.Height(28f)))
+        {
+            if (!EditorUtility.DisplayDialog(
+                    "重置关卡",
+                    "用 Tuning Lab 基准房间覆盖当前地形、绳、出生点和相机范围？",
+                    "重置", "取消")) return;
+
+            Record("从 Tuning Lab 重置关卡");
+            level.ApplyBaseline();
+            AfterStructuralEdit();
+        }
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (GUILayout.Button("校验摆放")) Validate();
+            if (GUILayout.Button("保存场景")) SaveScene();
+            if (GUILayout.Button("进入 Play")) EditorApplication.isPlaying = true;
+        }
+    }
+
+    void DrawValidation()
+    {
+        EditorGUILayout.Space();
+        if (!validated)
+        {
+            EditorGUILayout.LabelField("校验：还没有跑。", EditorStyles.miniLabel);
+            return;
+        }
+
+        if (issues.Count == 0)
+        {
+            EditorGUILayout.HelpBox("校验通过。", MessageType.Info);
+            return;
+        }
+
+        foreach (var issue in issues)
+            EditorGUILayout.HelpBox(issue, MessageType.Warning);
+    }
+
+    // ------------------------------------------------------------------
+    // 操作
+    // ------------------------------------------------------------------
+
+    void Record(string name)
+    {
+        Undo.IncrementCurrentGroup();
+        Undo.SetCurrentGroupName(name);
+        Undo.RecordObject(level, name);
+    }
+
+    void MarkDirty(bool rebuildPreview = false)
+    {
+        if (rebuildPreview && !Application.isPlaying) level.RebuildPreview();
+        EditorUtility.SetDirty(level);
+        MarkSceneDirty();
+        validated = false;
+        Repaint();
+    }
+
+    void MarkSceneDirty()
+    {
+        if (level == null) return;
+        Scene scene = level.gameObject.scene;
+        if (scene.IsValid()) EditorSceneManager.MarkSceneDirty(scene);
+    }
+
+    void AfterStructuralEdit()
+    {
+        level.Data.Normalize();
+        level.RebuildPreview();
+        EditorUtility.SetDirty(level);
+        MarkSceneDirty();
+        validated = false;
+        Repaint();
+    }
+
+    void SaveScene()
+    {
+        Scene scene = level.gameObject.scene;
+        if (!scene.IsValid()) return;
+        EditorSceneManager.MarkSceneDirty(scene);
+        EditorSceneManager.SaveScene(scene);
+        AssetDatabase.SaveAssets();
+        Debug.Log("[LabLevelEditor] 已保存 " + scene.path);
+    }
+
+    void Validate()
+    {
+        issues.Clear();
+        var data = level.Data;
+
+        if (data.bounds.width <= 0 || data.bounds.height <= 0)
+            issues.Add("相机范围的宽/高必须大于 0。");
+
+        if (data.solids == null || data.solids.Count == 0)
+            issues.Add("关卡没有任何地形。");
+        else
+        {
+            var seen = new HashSet<Vector2Int>();
+            foreach (var cell in data.solids)
+                if (!seen.Add(cell)) issues.Add("地形有重复格：" + cell);
+        }
+
+        CheckSpawn("A", data.spawnA, data);
+        CheckSpawn("B", data.spawnB, data);
+
+        if (Vector2.Distance(data.spawnA, data.spawnB) < 1f)
+            issues.Add("A / B 出生点距离小于 1 格。");
+
+        if (data.ropes != null)
+        {
+            for (int i = 0; i < data.ropes.Count; i++)
+            {
+                var rope = data.ropes[i];
+                if (rope.cells < 1)
+                {
+                    issues.Add("第 " + i + " 根绳长度小于 1 格。");
+                    continue;
+                }
+
+                if (rope.center.x < data.bounds.xMin || rope.center.x > data.bounds.xMax)
+                    issues.Add("第 " + i + " 根绳的 x 不在相机范围内。");
+                if (rope.Bottom < data.bounds.yMin || rope.Top > data.bounds.yMax)
+                    issues.Add("第 " + i + " 根绳的上下端不在相机范围内。");
+            }
+        }
+
+        validated = true;
+
+        if (issues.Count == 0)
+        {
+            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳。",
+                level.SolidCellCount, level.MergedRectCount, level.RopeCount), level);
+        }
+        else
+        {
+            foreach (var issue in issues) Debug.LogWarning("[LabLevelEditor] " + issue, level);
+        }
+
+        Repaint();
+    }
+
+    void CheckSpawn(string name, Vector2 feet, LabLevelData data)
+    {
+        if (!data.ContainsPoint(feet))
+            issues.Add(name + " 出生点不在相机范围内：" + feet);
+
+        var cell = new Vector2Int(Mathf.FloorToInt(feet.x), Mathf.FloorToInt(feet.y));
+        if (data.HasCell(cell))
+            issues.Add(name + " 出生点在地形里：" + cell);
+        if (data.HasCell(cell + Vector2Int.up))
+            issues.Add(name + " 出生点头顶被地形堵住：" + (cell + Vector2Int.up));
+    }
+
+    void FrameLevel()
+    {
+        var data = level.Data;
+        RectInt content = data.ContentBounds();
+        RectInt bounds = data.bounds;
+
+        int x0 = Mathf.Min(content.x, bounds.x);
+        int y0 = Mathf.Min(content.y, bounds.y);
+        int x1 = Mathf.Max(content.x + content.width, bounds.x + bounds.width);
+        int y1 = Mathf.Max(content.y + content.height, bounds.y + bounds.height);
+
+        var center = new Vector3((x0 + x1) * 0.5f, (y0 + y1) * 0.5f, 0f);
+        var size = new Vector3(Mathf.Max(8f, x1 - x0 + 4f), Mathf.Max(8f, y1 - y0 + 4f), 1f);
+
+        var view = SceneView.lastActiveSceneView;
+        if (view == null) return;
+        view.Frame(new Bounds(center, size), false);
+        view.Repaint();
+    }
+
+    static RectInt ToRectInt(Rect rect)
+    {
+        return new RectInt(
+            Mathf.RoundToInt(rect.xMin),
+            Mathf.RoundToInt(rect.yMin),
+            Mathf.RoundToInt(rect.width),
+            Mathf.RoundToInt(rect.height));
+    }
+
+    // ------------------------------------------------------------------
+    // Scene 视图
+    // ------------------------------------------------------------------
+
+    void OnSceneGUI(SceneView view)
+    {
+        if (level == null || EditorApplication.isPlayingOrWillChangePlaymode) return;
+        if (Event.current == null) return;
+
+        var data = level.Data;
+        if (showGrid) DrawGrid(data);
+        DrawBoundsHandle(data);
+        DrawRopeHandles(data);
+        if (showSpawns) DrawSpawnHandles(data);
+
+        Event e = Event.current;
+        Vector3 point = ScenePoint(e.mousePosition);
+        Vector2Int cell = CellOf(point);
+        bool inArea = InEditArea(cell, data);
+        bool inBounds = data.ContainsCell(cell);
+
+        if (e.type == EventType.KeyDown && !e.control && !e.alt)
+        {
+            if (HandleKey(e)) return;
+        }
+
+        DrawHover(cell, inArea, inBounds, data);
+
+        switch (e.type)
+        {
+            case EventType.MouseDown when e.button == 0 && !e.alt:
+                if (!inArea) return;
+                BeginGesture(cell, inBounds, view);
+                e.Use();
+                break;
+
+            case EventType.MouseDrag when e.button == 0 && gesture:
+                ContinueGesture(cell);
+                e.Use();
+                break;
+
+            case EventType.MouseUp when e.button == 0 && gesture:
+                EndGesture();
+                e.Use();
+                break;
+        }
+    }
+
+    void BeginGesture(Vector2Int cell, bool inBounds, SceneView view)
+    {
+        switch (tool)
+        {
+            case Tool.Paint:
+            case Tool.Erase:
+                Record(tool == Tool.Paint ? "铺地形" : "擦地形");
+                gesture = true;
+                lastCell = cell;
+                ApplyCell(cell, tool == Tool.Erase);
+                MarkDirty(true);
+                break;
+
+            case Tool.Rect:
+                Record("矩形地形");
+                gesture = true;
+                rectStart = cell;
+                rectEnd = cell;
+                Repaint();
+                break;
+
+            case Tool.Rope:
+                if (!inBounds)
+                {
+                    Notify(view, "绳必须放在相机范围里。");
+                    return;
+                }
+                if (cell.y + ropeLength > level.Data.bounds.yMax)
+                {
+                    Notify(view, "绳太长，超出相机范围上沿。");
+                    return;
+                }
+                Record("放竖绳");
+                level.Data.ropes.Add(new LabRopeSpec(
+                    new Vector2(cell.x + 0.5f, cell.y + ropeLength * 0.5f),
+                    ropeLength, ropeChainId));
+                AfterStructuralEdit();
+                break;
+
+            case Tool.SpawnA:
+            case Tool.SpawnB:
+                if (!inBounds)
+                {
+                    Notify(view, "出生点必须在相机范围里。");
+                    return;
+                }
+                Record(tool == Tool.SpawnA ? "放出生点 A" : "放出生点 B");
+                {
+                    var feet = new Vector2(cell.x + 0.5f, cell.y);
+                    if (tool == Tool.SpawnA) level.Data.spawnA = feet;
+                    else level.Data.spawnB = feet;
+                }
+                MarkDirty();
+                break;
+        }
+    }
+
+    void ContinueGesture(Vector2Int cell)
+    {
+        switch (tool)
+        {
+            case Tool.Paint:
+            case Tool.Erase:
+                if (cell == lastCell) return;
+                PaintLine(lastCell, cell, tool == Tool.Erase);
+                lastCell = cell;
+                MarkDirty(true);
+                break;
+
+            case Tool.Rect:
+                rectEnd = cell;
+                Repaint();
+                break;
+        }
+    }
+
+    void EndGesture()
+    {
+        if (tool == Tool.Rect)
+        {
+            var data = level.Data;
+            int x0 = Mathf.Min(rectStart.x, rectEnd.x);
+            int y0 = Mathf.Min(rectStart.y, rectEnd.y);
+            int x1 = Mathf.Max(rectStart.x, rectEnd.x);
+            int y1 = Mathf.Max(rectStart.y, rectEnd.y);
+
+            for (int y = y0; y <= y1; y++)
+                for (int x = x0; x <= x1; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    if (InEditArea(cell, data)) data.AddCell(cell);
+                }
+        }
+
+        gesture = false;
+        level.Data.Normalize();
+        level.RebuildPreview();
+        EditorUtility.SetDirty(level);
+        MarkSceneDirty();
+        validated = false;
+        Repaint();
+    }
+
+    void ApplyCell(Vector2Int cell, bool erase)
+    {
+        var data = level.Data;
+        if (!InEditArea(cell, data)) return;
+        if (erase) data.RemoveCell(cell);
+        else data.AddCell(cell);
+    }
+
+    void PaintLine(Vector2Int from, Vector2Int to, bool erase)
+    {
+        int x = from.x;
+        int y = from.y;
+        int dx = Mathf.Abs(to.x - from.x);
+        int dy = -Mathf.Abs(to.y - from.y);
+        int sx = from.x < to.x ? 1 : -1;
+        int sy = from.y < to.y ? 1 : -1;
+        int err = dx + dy;
+
+        while (true)
+        {
+            ApplyCell(new Vector2Int(x, y), erase);
+            if (x == to.x && y == to.y) break;
+            int e2 = 2 * err;
+            if (e2 >= dy)
+            {
+                err += dy;
+                x += sx;
+            }
+            if (e2 <= dx)
+            {
+                err += dx;
+                y += sy;
+            }
+        }
+    }
+
+    bool HandleKey(Event e)
+    {
+        // 拖动过程中不让工具键改工具，否则一个手势会跨到别的工具上。
+        if (gesture && e.keyCode != KeyCode.Escape) return false;
+
+        switch (e.keyCode)
+        {
+            case KeyCode.Alpha1: tool = Tool.Paint; break;
+            case KeyCode.Alpha2: tool = Tool.Erase; break;
+            case KeyCode.Alpha3: tool = Tool.Rect; break;
+            case KeyCode.Alpha4: tool = Tool.Rope; break;
+            case KeyCode.Alpha5: tool = Tool.SpawnA; break;
+            case KeyCode.Alpha6: tool = Tool.SpawnB; break;
+            case KeyCode.G: showGrid = !showGrid; break;
+            case KeyCode.Home: FrameLevel(); break;
+            case KeyCode.LeftBracket: ropeLength = Mathf.Max(1, ropeLength - 1); break;
+            case KeyCode.RightBracket: ropeLength = Mathf.Min(MaxRopeLength, ropeLength + 1); break;
+            case KeyCode.Escape:
+                if (!gesture) return false;
+                gesture = false;
+                break;
+            default:
+                return false;
+        }
+
+        Repaint();
+        e.Use();
+        return true;
+    }
+
+    // ------------------------------------------------------------------
+    // 绘制
+    // ------------------------------------------------------------------
+
+    void DrawGrid(LabLevelData data)
+    {
+        RectInt area = EditArea(data);
+        // 范围特别大时抽稀网格，避免一次画几千条线把 Scene 视图拖死。
+        int stride = Mathf.Max(1, Mathf.CeilToInt(Mathf.Max(area.width, area.height) / 400f));
+
+        Handles.color = new Color(1f, 1f, 1f, 0.055f);
+        for (int x = area.x; x <= area.x + area.width; x += stride)
+            Handles.DrawLine(new Vector3(x, area.y, 0f), new Vector3(x, area.y + area.height, 0f));
+        for (int y = area.y; y <= area.y + area.height; y += stride)
+            Handles.DrawLine(new Vector3(area.x, y, 0f), new Vector3(area.x + area.width, y, 0f));
+
+        // 每 4 格一条亮线，方便读关卡尺寸
+        int major = 4 * stride;
+        Handles.color = new Color(1f, 1f, 1f, 0.12f);
+        for (int x = Mathf.CeilToInt(area.x / (float)major) * major; x <= area.x + area.width; x += major)
+            Handles.DrawLine(new Vector3(x, area.y, 0f), new Vector3(x, area.y + area.height, 0f));
+        for (int y = Mathf.CeilToInt(area.y / (float)major) * major; y <= area.y + area.height; y += major)
+            Handles.DrawLine(new Vector3(area.x, y, 0f), new Vector3(area.x + area.width, y, 0f));
+    }
+
+    void DrawBoundsHandle(LabLevelData data)
+    {
+        RectInt b = data.bounds;
+        var p0 = new Vector3(b.x, b.y, 0f);
+        var p1 = new Vector3(b.x + b.width, b.y, 0f);
+        var p2 = new Vector3(b.x + b.width, b.y + b.height, 0f);
+        var p3 = new Vector3(b.x, b.y + b.height, 0f);
+
+        Handles.color = new Color(0.3f, 0.9f, 1f, 0.9f);
+        Handles.DrawLine(p0, p1);
+        Handles.DrawLine(p1, p2);
+        Handles.DrawLine(p2, p3);
+        Handles.DrawLine(p3, p0);
+        Handles.Label(new Vector3(b.x + 0.5f, b.y + b.height - 0.5f, 0f), "相机范围");
+    }
+
+    void DrawRopeHandles(LabLevelData data)
+    {
+        if (data.ropes == null) return;
+        Handles.color = new Color(0.85f, 0.65f, 0.35f, 0.9f);
+        for (int i = 0; i < data.ropes.Count; i++)
+        {
+            var rope = data.ropes[i];
+            Handles.DrawWireCube(
+                new Vector3(rope.center.x, rope.center.y, 0f),
+                new Vector3(RopeStripWidth, rope.cells, 0.01f));
+        }
+    }
+
+    void DrawSpawnHandles(LabLevelData data)
+    {
+        DrawPlayerMarker(data.spawnA, TuningLab.A_Pixels / (float)TuningLab.CellPixels, "A", TuningLab.ColorA);
+        DrawPlayerMarker(data.spawnB, TuningLab.B_Pixels / (float)TuningLab.CellPixels, "B", TuningLab.ColorB);
+    }
+
+    void DrawPlayerMarker(Vector2 feet, float size, string label, Color color)
+    {
+        float half = size * 0.5f;
+        var center = new Vector3(feet.x, feet.y + half, 0f);
+        Handles.color = color;
+        Handles.DrawWireCube(center, new Vector3(size, size, 0.01f));
+        Handles.Label(center + Vector3.up * (half + 0.2f), label + " 落点");
+        Handles.DrawLine(center, new Vector3(feet.x, feet.y, 0f));
+    }
+
+    void DrawHover(Vector2Int cell, bool inArea, bool inBounds, LabLevelData data)
+    {
+        if (!inArea) return;
+
+        Color color = ToolColor();
+        Handles.color = color;
+
+        if (tool == Tool.Rect && gesture)
+        {
+            int x0 = Mathf.Min(rectStart.x, rectEnd.x);
+            int y0 = Mathf.Min(rectStart.y, rectEnd.y);
+            int x1 = Mathf.Max(rectStart.x, rectEnd.x);
+            int y1 = Mathf.Max(rectStart.y, rectEnd.y);
+            DrawFilledRect(x0, y0, x1, y1, new Color(color.r, color.g, color.b, 0.18f), color);
+            return;
+        }
+
+        if (tool == Tool.Rope)
+        {
+            if (!inBounds)
+            {
+                Handles.color = new Color(1f, 0.3f, 0.25f, 0.9f);
+                Handles.DrawWireCube(CellCenter(cell), Vector3.one);
+                return;
+            }
+
+            float top = cell.y + ropeLength;
+            var center = new Vector3(cell.x + 0.5f, cell.y + ropeLength * 0.5f, 0f);
+            Handles.DrawWireCube(center, new Vector3(RopeStripWidth, ropeLength, 0.01f));
+            Handles.Label(new Vector3(cell.x + 0.5f, top + 0.3f, 0f), "绳 " + ropeLength + " 格");
+            return;
+        }
+
+        if (tool == Tool.SpawnA || tool == Tool.SpawnB)
+        {
+            if (!inBounds)
+            {
+                Handles.color = new Color(1f, 0.3f, 0.25f, 0.9f);
+                Handles.DrawWireCube(CellCenter(cell), Vector3.one);
+                return;
+            }
+
+            float size = tool == Tool.SpawnA
+                ? TuningLab.A_Pixels / (float)TuningLab.CellPixels
+                : TuningLab.B_Pixels / (float)TuningLab.CellPixels;
+            var center = new Vector3(cell.x + 0.5f, cell.y + size * 0.5f, 0f);
+            Handles.color = new Color(color.r, color.g, color.b, 0.5f);
+            Handles.DrawWireCube(center, new Vector3(size, size, 0.01f));
+            return;
+        }
+
+        Handles.color = new Color(color.r, color.g, color.b, 0.18f);
+        Handles.DrawSolidRectangleWithOutline(
+            RectVerts(cell.x, cell.y, cell.x + 1, cell.y + 1),
+            new Color(color.r, color.g, color.b, 0.16f),
+            color);
+    }
+
+    void DrawFilledRect(int x0, int y0, int x1, int y1, Color fill, Color outline)
+    {
+        Handles.DrawSolidRectangleWithOutline(RectVerts(x0, y0, x1 + 1, y1 + 1), fill, outline);
+    }
+
+    static Vector3[] RectVerts(int x0, int y0, int x1, int y1)
+    {
+        return new[]
+        {
+            new Vector3(x0, y0, 0f),
+            new Vector3(x1, y0, 0f),
+            new Vector3(x1, y1, 0f),
+            new Vector3(x0, y1, 0f)
+        };
+    }
+
+    Color ToolColor()
+    {
+        switch (tool)
+        {
+            case Tool.Erase: return new Color(1f, 0.35f, 0.3f, 0.95f);
+            case Tool.Rect: return new Color(1f, 0.85f, 0.3f, 0.95f);
+            case Tool.Rope: return new Color(0.85f, 0.65f, 0.35f, 0.95f);
+            case Tool.SpawnA: return TuningLab.ColorA;
+            case Tool.SpawnB: return TuningLab.ColorB;
+            default: return new Color(1f, 0.85f, 0.3f, 0.95f);
+        }
+    }
+
+    static Vector3 CellCenter(Vector2Int cell) => new Vector3(cell.x + 0.5f, cell.y + 0.5f, 0f);
+
+    static Vector3 ScenePoint(Vector2 guiPosition)
+    {
+        Ray ray = HandleUtility.GUIPointToWorldRay(guiPosition);
+        var plane = new Plane(Vector3.forward, Vector3.zero);
+        return plane.Raycast(ray, out float distance) ? ray.GetPoint(distance) : ray.origin;
+    }
+
+    static Vector2Int CellOf(Vector3 point)
+        => new Vector2Int(Mathf.FloorToInt(point.x), Mathf.FloorToInt(point.y));
+
+    static bool InEditArea(Vector2Int cell, LabLevelData data)
+    {
+        RectInt area = EditArea(data);
+        return cell.x >= area.x && cell.x < area.x + area.width
+            && cell.y >= area.y && cell.y < area.y + area.height;
+    }
+
+    static RectInt EditArea(LabLevelData data)
+    {
+        return new RectInt(
+            data.bounds.x - EditMargin,
+            data.bounds.y - EditMargin,
+            data.bounds.width + EditMargin * 2,
+            data.bounds.height + EditMargin * 2);
+    }
+
+    static void Notify(SceneView view, string message)
+    {
+        if (view == null) return;
+        view.ShowNotification(new GUIContent(message));
+    }
+}
+#endif

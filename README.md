@@ -29,13 +29,18 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 
 ## 关卡编辑器
 
-打开 `Assets/Scenes/World.unity` 后，菜单 **GameJam → Level Editor**：
+规则基准在 `Assets/TuningLab`，所以关卡场景也必须从 Tuning Lab 派生，不碰 `World.unity` 那一套还没对齐的规范。
 
-- 按 1 格网格铺 / 擦地形，或从 prefab 调色板摆放物件（绳、冰、钥匙、门、刺、重生点等）
-- 支持撤销、区域跳转（L0–L10）和摆放校验
-- 在 Scene 视图里操作；默认限制在当前区域，避免误改相邻关卡
+1. 菜单 **GameJam → New Level From Tuning Lab**：复制 `Assets/Scenes/TuningLab.unity`（继承调参值/相机/玩家），清掉生成物，挂上 `LabLevel` 并写入基准房间数据，存到 `Assets/Scenes/Levels/`。
+2. 菜单 **GameJam → Tuning Lab Level Editor**：在 Scene 视图里编辑这份 `LabLevel`。
+3. 工具：按 1–6 切铺地形 / 擦地形 / 矩形 / 竖绳 / 出生点 A / 出生点 B；`G` 网格、`Home` 取景、`[` `]` 调绳长；左键拖动绘制，支持撤销。
+4. 左侧面板可改相机范围、出生点、绳长；**校验摆放** 会查出生点是否在地形里、绳是否越界；**从 Tuning Lab 重置** 用基准房间覆盖当前关卡。
 
-注意：**GameJam → Build World Scene** 会重建整个场景，覆盖这里的手工修改。
+如果已经有一份 Tuning Lab 副本（例如 `Bake Tuning Lab To Editable Scene` 生成的场景），用 **GameJam → Convert Current Scene To Level** 就地转成关卡；`TuningLab.unity` 基准场景本身禁止转换。
+
+Play 时 `TuningLab` 按 `LabLevel` 数据生成合并后的 `BoxCollider2D` 和 `LabVerticalRope`，和调试台走同一条 `BuildRoom` 路径。编辑器里看到的预览也是这条路径生成的，不写进场景文件。
+
+> 旧的 **GameJam → Level Editor** 改的是 `World.unity`，规则/尺度还没和 TuningLab 对齐，先别用。
 
 ## 操作
 

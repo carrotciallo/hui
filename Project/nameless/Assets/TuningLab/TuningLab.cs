@@ -185,16 +185,31 @@ public class TuningLab : MonoBehaviour
     PhysicsMaterial2D slick;
     GameObject pixelGridGo;
 
-    static readonly Color SolidColor = new Color(0.24f, 0.26f, 0.32f);
+    public const float BaselineWallHalfWidth = 13f;
+    public const float BaselineFloorY = -1f;
+    public const float BaselineCeilingY = 16f;
+    public const float RopeCenterX = 9f;
+    public const float RopeCenterY = 2f;
+    public const int RopeCells = 4;
+
+    public static readonly Vector2 SpawnAFeet = new Vector2(8f, 0f);
+    public static readonly Vector2 SpawnBFeet = new Vector2(10f, 0f);
+
+    public static readonly Color SolidColor = new Color(0.24f, 0.26f, 0.32f);
+    public static readonly Color ColorA = new Color(0.36f, 0.62f, 1f);
+    public static readonly Color ColorB = new Color(1f, 0.45f, 0.4f);
     static readonly Color GridColor = new Color(1f, 1f, 1f, 0.06f);
-    static readonly Color ColorA = new Color(0.36f, 0.62f, 1f);
-    static readonly Color ColorB = new Color(1f, 0.45f, 0.4f);
 
     [Tooltip("勾上 = 运行时自动搭整个场地；烘焙成场景后应当关掉，否则会重复生成。")]
     public bool autoBuild = true;
 
+    [Header("关卡")]
+    [Tooltip("有 LabLevel 就按关卡数据搭场地；没有就用调试台内置房间。")]
+    public LabLevel level;
+
     void Awake()
     {
+        if (level == null) level = GetComponent<LabLevel>();
         if (autoBuild) BuildAll();
     }
 
@@ -204,6 +219,7 @@ public class TuningLab : MonoBehaviour
     /// </summary>
     public void BuildAll()
     {
+        if (level == null) level = GetComponent<LabLevel>();
         Physics2D.gravity = new Vector2(0f, -9.81f);
         Time.timeScale = timeScale;
 
@@ -245,8 +261,16 @@ public class TuningLab : MonoBehaviour
 
     public void ResetPlayers()
     {
-        if (PlayerA != null) PlayerA.Teleport(new Vector2(8f, PlayerA.HalfHeight));
-        if (PlayerB != null) PlayerB.Teleport(new Vector2(10f, PlayerB.HalfHeight));
+        if (PlayerA != null)
+        {
+            Vector2 feet = level != null ? level.Data.spawnA : SpawnAFeet;
+            PlayerA.Teleport(new Vector2(feet.x, feet.y + PlayerA.HalfHeight));
+        }
+        if (PlayerB != null)
+        {
+            Vector2 feet = level != null ? level.Data.spawnB : SpawnBFeet;
+            PlayerB.Teleport(new Vector2(feet.x, feet.y + PlayerB.HalfHeight));
+        }
     }
 
     // ------------------------------------------------------------------
@@ -257,30 +281,115 @@ public class TuningLab : MonoBehaviour
     {
         slick = new PhysicsMaterial2D("LabSlick") { friction = 0f, bounciness = 0f };
 
-        // 地板：上表面 y = 0
-        AddSolid("Floor", new Vector2(0f, -0.5f), new Vector2(26f * roomScale, 1f));
+        if (level != null)
+        {
+            // 关卡场景：几何完全来自 LabLevel，和编辑器预览走同一条生成路径。
+            level.BuildRuntime(transform, slick);
+            return;
+        }
 
-        // 楼梯：每级高 2 格、宽 3 格，从 y=2 爬到 y=10。往右走每掉一级就是 2 格落差。
-        AddSolid("Step_y02", new Vector2(4.5f, 1.5f), new Vector2(3f, 1f));
-        AddSolid("Step_y04", new Vector2(1.5f, 3.5f), new Vector2(3f, 1f));
-        AddSolid("Step_y06", new Vector2(-1.5f, 5.5f), new Vector2(3f, 1f));
-        AddSolid("Step_y08", new Vector2(-4.5f, 7.5f), new Vector2(3f, 1f));
-        AddSolid("Step_y10", new Vector2(-7.5f, 9.5f), new Vector2(3f, 1f));
-
-        // 侧墙
-        AddSolid("WallL", new Vector2(-13.5f * roomScale, 8f * roomScale), new Vector2(1f, 16f * roomScale));
-        AddSolid("WallR", new Vector2(13.5f * roomScale, 8f * roomScale), new Vector2(1f, 16f * roomScale));
-
-        // 竖绳测试：4 格长，底端贴地
-        AddRope(new Vector2(9f, 2f), 4);
-
-        BuildGrid();
+        // 调试台基准场景：内置房间。CaptureBaseline 也读同一段描述，保证两边不会漂。
+        DescribeRoom(roomScale, new ObjectRoomSink(this));
     }
 
-    void BuildGrid()
+    /// <summary>
+    /// 调试台内置房间的唯一描述。BuildRoom 用它建 GameObject，CaptureBaseline 用它抓关卡数据。
+    /// 4 倍场地走同一个描述，所以缩放行为不变。
+    /// </summary>
+    internal static void DescribeRoom(float roomScale, IRoomSink sink)
     {
-        // 网格改成每帧按相机视野重建，这里只清空占位。
-        // 线的对象由 UpdateGrid 按需创建并复用。
+        float scale = Mathf.Max(0.01f, roomScale);
+
+        // 地板：上表面 y = 0
+        sink.Solid("Floor", new Vector2(0f, -0.5f), new Vector2(26f * scale, 1f));
+
+        // 楼梯：每级高 2 格、宽 3 格，从 y=2 爬到 y=10。往右走每掉一级就是 2 格落差。
+        sink.Solid("Step_y02", new Vector2(4.5f, 1.5f), new Vector2(3f, 1f));
+        sink.Solid("Step_y04", new Vector2(1.5f, 3.5f), new Vector2(3f, 1f));
+        sink.Solid("Step_y06", new Vector2(-1.5f, 5.5f), new Vector2(3f, 1f));
+        sink.Solid("Step_y08", new Vector2(-4.5f, 7.5f), new Vector2(3f, 1f));
+        sink.Solid("Step_y10", new Vector2(-7.5f, 9.5f), new Vector2(3f, 1f));
+
+        // 侧墙
+        sink.Solid("WallL", new Vector2(-13.5f * scale, 8f * scale), new Vector2(1f, 16f * scale));
+        sink.Solid("WallR", new Vector2(13.5f * scale, 8f * scale), new Vector2(1f, 16f * scale));
+
+        // 竖绳测试：4 格长，底端贴地
+        sink.Rope(new Vector2(RopeCenterX, RopeCenterY), RopeCells);
+    }
+
+    internal interface IRoomSink
+    {
+        void Solid(string name, Vector2 center, Vector2 size);
+        void Rope(Vector2 center, int cells);
+    }
+
+    sealed class ObjectRoomSink : IRoomSink
+    {
+        readonly TuningLab lab;
+
+        public ObjectRoomSink(TuningLab lab) { this.lab = lab; }
+
+        public void Solid(string name, Vector2 center, Vector2 size) => lab.AddSolid(name, center, size);
+        public void Rope(Vector2 center, int cells) => lab.AddRope(center, cells);
+    }
+
+    sealed class DataRoomSink : IRoomSink
+    {
+        readonly LabLevelData data;
+        public int Failures { get; private set; }
+
+        public DataRoomSink(LabLevelData data) { this.data = data; }
+
+        public void Solid(string name, Vector2 center, Vector2 size)
+        {
+            if (data.AddAlignedRect(center, size)) return;
+            Failures++;
+            Debug.LogWarning($"[TuningLab] 基准房间的 {name} 没对齐 1 格，无法写进关卡数据。");
+        }
+
+        public void Rope(Vector2 center, int cells)
+            => data.ropes.Add(new LabRopeSpec(center, cells));
+    }
+
+    /// <summary>
+    /// 把调试台脚本生成的房间抓成关卡数据。这是"从 Tuning Lab 派生关卡"的唯一来源：
+    /// 不复制场景里的物体，而是读同一段 DescribeRoom，所以格子、尺寸、绳位置和基准场景完全一致。
+    /// </summary>
+    public static LabLevelData CaptureBaseline()
+    {
+        var data = new LabLevelData();
+        var sink = new DataRoomSink(data);
+        DescribeRoom(1f, sink);
+
+        data.bounds = ToRectInt(BaselineBounds);
+        data.spawnA = SpawnAFeet;
+        data.spawnB = SpawnBFeet;
+        data.Normalize();
+
+        if (sink.Failures > 0)
+            Debug.LogWarning($"[TuningLab] 基准房间有 {sink.Failures} 块没抓进关卡数据。");
+
+        return data;
+    }
+
+    /// <summary>调试台基准房间的相机 clamp 范围（1 倍场地）。</summary>
+    public static Rect BaselineBounds => StaticRoomBounds(1f);
+
+    static Rect StaticRoomBounds(float roomScale)
+    {
+        float scale = Mathf.Max(0.01f, roomScale);
+        return Rect.MinMaxRect(-BaselineWallHalfWidth * scale, BaselineFloorY,
+                               BaselineWallHalfWidth * scale, BaselineCeilingY * scale);
+    }
+
+    static RectInt ToRectInt(Rect rect)
+    {
+        return new RectInt(
+            Mathf.RoundToInt(rect.xMin),
+            Mathf.RoundToInt(rect.yMin),
+            Mathf.RoundToInt(rect.width),
+            Mathf.RoundToInt(rect.height));
     }
 
     readonly System.Collections.Generic.List<SpriteRenderer> gridV = new System.Collections.Generic.List<SpriteRenderer>();
@@ -338,7 +447,7 @@ public class TuningLab : MonoBehaviour
             var go = new GameObject(name + "_" + pool.Count);
             go.transform.SetParent(transform, false);
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = White;
+            sr.sprite = WhiteSprite;
             sr.color = GridColor;
             sr.sortingOrder = -10;
             pool.Add(sr);
@@ -394,7 +503,7 @@ public class TuningLab : MonoBehaviour
         go.transform.position = center;
         go.transform.localScale = new Vector3(size.x, size.y, 1f);
         var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = White;
+        sr.sprite = WhiteSprite;
         sr.color = GridColor;
         sr.sortingOrder = -10;
     }
@@ -422,7 +531,7 @@ public class TuningLab : MonoBehaviour
         go.transform.localScale = new Vector3(size.x, size.y, 1f);
 
         var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = White;
+        sr.sprite = WhiteSprite;
         sr.color = SolidColor;
         sr.sortingOrder = 0;
 
@@ -434,9 +543,12 @@ public class TuningLab : MonoBehaviour
 
     void BuildPlayers()
     {
-        PlayerA = MakePlayer("A_Box", new Vector2(8f, A_Pixels / (2f * CellPixels)),
+        Vector2 feetA = level != null ? level.Data.spawnA : SpawnAFeet;
+        Vector2 feetB = level != null ? level.Data.spawnB : SpawnBFeet;
+
+        PlayerA = MakePlayer("A_Box", new Vector2(feetA.x, feetA.y + A_Pixels / (2f * CellPixels)),
                              ColorA, LabPlayer.Scheme.P1, A_Pixels, 2);
-        PlayerB = MakePlayer("B_Chunk", new Vector2(10f, B_Pixels / (2f * CellPixels)),
+        PlayerB = MakePlayer("B_Chunk", new Vector2(feetB.x, feetB.y + B_Pixels / (2f * CellPixels)),
                              ColorB, LabPlayer.Scheme.P2, B_Pixels, 0);
         PlayerA.canBeRedHot = true;   // 红热只在 A 判定
         PlayerA.other = PlayerB;
@@ -521,22 +633,19 @@ public class TuningLab : MonoBehaviour
             var follow = go.AddComponent<LabCamera>();
             follow.minSize = RefHeight / (2f * CellPixels);
             follow.maxSize = follow.minSize * 4f;
-            follow.Configure(PlayerA.transform, PlayerB.transform, RoomBounds());
+            follow.Configure(PlayerA.transform, PlayerB.transform,
+                             level != null ? level.CameraBounds : RoomBounds());
         }
         // 固定视角：正交尺寸已在上方设为 13.5 格，不用再加组件
 
         Cam = cam;
     }
 
-    /// <summary>房间的世界范围，给自由相机做边界限制。</summary>
-    Rect RoomBounds()
-    {
-        float halfW = 13f * roomScale;
-        float height = 16f * roomScale;
-        return Rect.MinMaxRect(-halfW, -1f, halfW, height);
-    }
+    /// <summary>内置房间的世界范围，给自由相机做边界限制。</summary>
+    Rect RoomBounds() => StaticRoomBounds(roomScale);
 
-    static Sprite White
+    /// <summary>TuningLab 生成整个场地用的白块精灵；LabLevel 的预览也用它，保证两边同形。</summary>
+    public static Sprite WhiteSprite
     {
         get
         {

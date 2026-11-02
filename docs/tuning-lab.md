@@ -95,6 +95,28 @@ HUD 右上角会显示当前实际缩放倍数，**不是整数就会标红**—
   - **往右走**：每下一级正好掉 **2 格**（测小落差、测跳跃充能）
   - **往左走**：从任意一级直接掉到地面，落差 = 该级高度（2 / 4 / 6 / 8 / 10 格）
 
+## 关卡编辑器（从 Tuning Lab 派生）
+
+正式关卡不再用 World.unity 那套场景，必须从调试台派生：
+
+1. **GameJam → New Level From Tuning Lab**：复制 `TuningLab.unity`，挂 `LabLevel`，用
+   `TuningLab.CaptureBaseline()` 把上面这块场地抓成关卡数据。
+2. **GameJam → Tuning Lab Level Editor**：在 Scene 视图里改 `LabLevel`。
+   - 1–6 切工具：铺地形 / 擦地形 / 矩形 / 竖绳 / 出生点 A / 出生点 B
+   - `G` 网格，`Home` 取景，`[` `]` 调绳长；左键拖动绘制，支持撤销
+   - 面板里可改相机范围、出生点、绳；**校验摆放** 查出生点/绳越界；**从 Tuning Lab 重置** 恢复基准房间
+3. Play：`TuningLab` 按 `LabLevel` 生成地形和绳，走的是和调试台相同的 `BuildRoom` 路径。
+
+已经有 Tuning Lab 副本（例如 `Bake Tuning Lab To Editable Scene` 烘焙出来的场景）时，用
+**GameJam → Convert Current Scene To Level** 就地转成关卡；`TuningLab.unity` 基准场景本身禁止转换。
+
+基准的粒度是**格**：地板 26 格、5 级台阶各 3 格、两面墙各 1×16 格、绳在 (9, 2) 长 4 格。
+`GameJam → Run Level Baseline Self Check` 会把这份数据抓出来，验证 73 个实心格能精确合并回 8 块，
+再展开回 73 格不丢不重；`GameJam → Run Level Play Check` 会进 Play 用真实物理再验一遍。
+
+派生关卡和调试台的差别只允许是"场地内容"；玩家、相机、手感、等级判定全部共用同一套脚本，
+不允许在关卡里另写一套。
+
 ## 面板
 
 左边全是滑块，改了立刻生效，不用重开。
@@ -169,16 +191,25 @@ HUD 右上角会显示当前实际缩放倍数，**不是整数就会标红**—
 ```
 Assets/TuningLab/
 ├── TierMath.cs        纯数学：格 ↔ 速度 ↔ 等级，没有状态
-├── TuningLab.cs       参数 + 场地生成 + 相机
+├── TuningLab.cs       参数 + 场地生成 + 相机（CaptureBaseline 也从这里抓基准房间）
 ├── LabPlayer.cs       方块玩家：移动、跳、冲刺、撞击
 ├── LabHud.cs          IMGUI 面板和读数
+├── Level/
+│   ├── LabLevelData.cs     关卡数据：实心格 / 绳 / 出生点 / 相机范围；格 → 合并矩形
+│   ├── LabLevel.cs         把数据建成真实 BoxCollider2D / LabVerticalRope；编辑器预览 + Play 共用
+│   └── Editor/
+│       ├── LabLevelScene.cs        从 TuningLab.unity 派生关卡场景
+│       ├── LabLevelEditorWindow.cs 关卡编辑器窗口 + Scene 视图绘制
+│       ├── LabLevelInspector.cs    LabLevel 只显示摘要，数据由窗口维护
+│       ├── LabLevelSelfCheck.cs    基准自检（73 格 ↔ 8 块，含批处理入口）
+│       └── LabLevelPlayCheck.cs    进 Play 验真实物理（含批处理入口）
 └── Editor/
-    ├── TuningLabMenu.cs               GameJam → Build Tuning Lab
-    ├── TuningLabSelfCheck.cs          GameJam → Run Speed Tier Self Check（纯数学）
-    └── TuningLabPlayVerification.cs   GameJam → Run Play Verification（无头进 Play 验规则）
+    ├── TuningLabMenu.cs              GameJam → Build Tuning Lab
+    ├── TuningLabSelfCheck.cs         GameJam → Run Speed Tier Self Check（纯数学）
+    └── TuningLabPlayVerification.cs  GameJam → Run Play Verification
 ```
 
-`GameJam → Run Play Verification` 会自动进 Play、注入冲刺输入，检查悬停、竖直冲刺重力、
-贴墙不充能 / 站地充能，跑完自己退出。
+`GameJam → Run Level Play Check` 会临时派生一个关卡、进 Play，用真实物理检查地形 / 绳 / 出生点 / 相机，
+跑完自动退出并删掉临时场景。旧的 `Run Play Verification` 已作废，只保留数值转储。
 
 所有可调数字都在 `TuningLab.cs` 的 Inspector 字段里，同时也是 HUD 滑块绑定的那些字段。

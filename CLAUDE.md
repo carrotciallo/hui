@@ -10,6 +10,7 @@
 
 - 运行时代码：`Project/nameless/Assets/Scripts/`，程序集 `GameJam.Runtime`
 - 编辑器工具：`Project/nameless/Assets/Editor/`，程序集 `GameJam.Editor`
+- 调试台 + 关卡编辑器：`Project/nameless/Assets/TuningLab/`，走预定义程序集 `Assembly-CSharp` / `Assembly-CSharp-Editor`（没有 asmdef，不能被 `GameJam.Runtime` 引用）
 - 测试：`Assets/Tests/EditMode` 与 `Assets/Tests/PlayMode`
 - 策划案：`docs/策划案/`；架构决策：`docs/adr/`；域约定：`docs/agents/`
 
@@ -44,16 +45,21 @@ git diff Project/nameless/ProjectSettings/EditorBuildSettings.asset
 
 ## 常用操作
 
-场景全部由 Editor 脚本生成，仓库里的 `.unity` 是生成产物：
+场景的基准部分由 Editor 脚本生成；关卡场景必须从 Tuning Lab 派生，再用 Level Editor 改 `LabLevel` 数据。
 
 | 菜单项 | 产物 |
 | --- | --- |
-| GameJam → Build World Scene | `Assets/Scenes/World.unity`（进构建） |
+| GameJam → Build World Scene | `Assets/Scenes/World.unity`（旧世界，规则未对齐，先别用） |
 | GameJam → Build Prototype Scene | `Assets/Scenes/Prototype.unity`（不进构建） |
 | GameJam → Build Materials Test Scene | `Assets/Scenes/Materials.unity` |
 | GameJam → Build Forms Test Scene | `Assets/Scenes/Forms.unity` |
+| GameJam → New Level From Tuning Lab | `Assets/Scenes/Levels/*.unity`（复制 TuningLab 场景 + 写入基准 `LabLevel`） |
+| GameJam → Convert Current Scene To Level | 把当前 Tuning Lab 副本就地转成关卡（基准场景禁止） |
+| GameJam → Tuning Lab Level Editor | 编辑当前派生场景的 `LabLevel`（地形 / 绳 / 出生点 / 相机范围） |
+| GameJam → Run Level Baseline Self Check | 纯数据自检：73 格 ↔ 8 块矩形往返 |
+| GameJam → Run Level Play Check | 临时派生场景 → 进 Play 用真实物理验一遍 |
 
-改关卡内容优先改对应的 builder（`WorldBuilder.cs` 等）再重新生成，不要直接手改生成出来的场景——下次生成会被覆盖。
+改关卡内容走 **Tuning Lab Level Editor**，不要手改 `TuningLab.unity`（基准场景）或 `World.unity`；旧测试房仍然改对应 builder 再重新生成。
 
 ### 测试
 
@@ -67,7 +73,7 @@ git diff Project/nameless/ProjectSettings/EditorBuildSettings.asset
   -runTests -testPlatform PlayMode -testResults /tmp/playmode.xml
 ```
 
-注意：本仓库开发机上只装了 Unity Hub，没有可直接调用的编辑器二进制。**跑不了就直说跑不了，不要编造测试结果。**
+注意：本机（2026-11 核对）已装 6000.6.4f1，编辑器二进制在 `C:\Program Files\Unity\Hub\Editor\6000.6.4f1\Editor\Unity.exe`；换机器按实际路径替换。**跑不了就直说跑不了，不要编造测试结果。**
 
 ## 代码约定
 

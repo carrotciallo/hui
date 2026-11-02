@@ -115,6 +115,11 @@ public sealed class LevelEditorWindow : EditorWindow
 
     void OnGUI()
     {
+        EditorGUILayout.HelpBox(
+            "World 场景的规则还没和 Tuning Lab 对齐，这里的场地不能直接当正式关卡用。\n" +
+            "正式关卡请用 GameJam → Tuning Lab Level Editor（从 Tuning Lab 派生）。",
+            MessageType.Warning);
+
         if (world == null)
         {
             EditorGUILayout.HelpBox($"没有打开 World 场景，或场景里没有 World 组件。\n{WorldScenePath}",
