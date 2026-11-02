@@ -2,6 +2,8 @@
 
 一个可以按 Play 就调数值的独立 demo，用来验证"速度等级 ÷ 格子"这套规则到底站不站得住。
 
+> 实现经验、加组件流程、调试/验证和踩坑见 [tuning-lab-level-editor.md](tuning-lab-level-editor.md)。
+
 **只动了 `My project` 这个工程，没碰 `repo/`。**
 
 ---
@@ -95,6 +97,47 @@ HUD 右上角会显示当前实际缩放倍数，**不是整数就会标红**—
   - **往右走**：每下一级正好掉 **2 格**（测小落差、测跳跃充能）
   - **往左走**：从任意一级直接掉到地面，落差 = 该级高度（2 / 4 / 6 / 8 / 10 格）
 
+## 关卡编辑器（从 Tuning Lab 派生）
+
+正式关卡不再用 World.unity 那套场景，必须从调试台派生：
+
+1. **GameJam → New Level From Tuning Lab**：复制 `TuningLab.unity`，挂 `LabLevel`，用
+   `TuningLab.CaptureBaseline()` 把上面这块场地抓成关卡数据。
+2. **GameJam → Tuning Lab Level Editor**：在 Scene 视图里改 `LabLevel`。
+   - 1–7 切工具：铺地形 / 擦地形 / 矩形 / 竖绳 / 出生点 A / 出生点 B / 关卡分区
+   - `G` 网格，`Home` 取景，`[` `]` 调绳长；左键拖动绘制，支持撤销
+   - 面板里可改相机范围、出生点、绳；**校验摆放** 查出生点/绳越界；**从 Tuning Lab 重置** 恢复基准房间
+   - **相机跟随尺寸**：每个关卡可单独调相机的最小/最大正交 size（格），面板会显示 16:9 视野格数和 1080p 像素缩放；
+     Scene 视图可画出以出生点为中心的最小/最大视野框。size 是半高，视野高度 = 2 × size；这是跟随范围，不是相机夹具
+3. Play：`TuningLab` 按 `LabLevel` 生成地形和绳，走的是和调试台相同的 `BuildRoom` 路径。
+
+已经有 Tuning Lab 副本（例如 `Bake Tuning Lab To Editable Scene` 烘焙出来的场景）时，用
+**GameJam → Convert Current Scene To Level** 就地转成关卡；`TuningLab.unity` 基准场景本身禁止转换。
+
+## 连续关卡：关卡分区
+
+全部关卡放在一个 scene 里，用「关卡分区」切分。判定点固定是 **B 的位置**。
+
+在 **GameJam → Tuning Lab Level Editor** 的「关卡分区」面板：
+
+- **新建**：点「新建分区」，或在 Scene 视图用分区工具（快捷键 `7`）在空白处拖出矩形。
+- **命名 / 调大小**：面板里的名称和 X/Y/宽/高；修改 X/Y 会移动分区，修改宽/高只改大小。
+- **移动**：在 Scene 视图拖动分区内部；勾选「移动时带上里面的物件」时，分区 bounds 里的地形、绳、出生点会一起平移。
+- **删除**：面板里删除；可以选择只删分区，或连分区里的地形/绳一起删（出生点保留）。
+- **不能重叠**：新建、移动、改大小都会被拒绝；贴边相邻可以。
+- **相机**：分区的 bounds **就是相机 clamp 范围**。B 进入哪个分区，相机就用哪个分区的 bounds；
+  缩放仍用 `LabLevelData` 的相机跟随尺寸；B 不在任何分区时**没有相机范围约束**，只按两人相对位置和关卡的相机跟随尺寸缩放。
+- 新关卡默认有一个覆盖编辑范围的 `Level 1` 分区；旧关卡没有分区时仍按单关相机设置走。
+
+选中 TuningLab 时，Scene 视图会画出默认范围（青）和所有关卡分区（黄）；关卡编辑器里当前选中的分区会加亮。
+
+基准的粒度是**格**：地板 26 格、5 级台阶各 3 格、两面墙各 1×16 格、绳在 (9, 2) 长 4 格。
+`GameJam → Run Level Baseline Self Check` 会把这份数据抓出来，验证 73 个实心格能精确合并回 8 块，
+再展开回 73 格不丢不重；`GameJam → Run Level Play Check` 会进 Play 用真实物理再验一遍。
+
+派生关卡和调试台的差别只允许是"场地内容"；玩家、相机、手感、等级判定全部共用同一套脚本，
+不允许在关卡里另写一套。
+
 ## 面板
 
 左边全是滑块，改了立刻生效，不用重开。
@@ -169,16 +212,26 @@ HUD 右上角会显示当前实际缩放倍数，**不是整数就会标红**—
 ```
 Assets/TuningLab/
 ├── TierMath.cs        纯数学：格 ↔ 速度 ↔ 等级，没有状态
-├── TuningLab.cs       参数 + 场地生成 + 相机
+├── TuningLab.cs       参数 + 场地生成 + 相机（CaptureBaseline 也从这里抓基准房间）
 ├── LabPlayer.cs       方块玩家：移动、跳、冲刺、撞击
 ├── LabHud.cs          IMGUI 面板和读数
+├── LabCamera.cs       自由相机：跟随 A/B 中点；B 的位置决定当前关卡分区
+├── Level/
+│   ├── LabLevelData.cs     关卡数据：实心格 / 绳 / 关卡分区 / 出生点 / 相机范围与跟随尺寸；格 → 合并矩形
+│   ├── LabLevel.cs         把数据建成真实 BoxCollider2D / LabVerticalRope；编辑器预览 + Play 共用
+│   └── Editor/
+│       ├── LabLevelScene.cs        从 TuningLab.unity 派生关卡场景
+│       ├── LabLevelEditorWindow.cs 关卡编辑器窗口 + Scene 视图绘制
+│       ├── LabLevelInspector.cs    LabLevel 只显示摘要，数据由窗口维护
+│       ├── LabLevelSelfCheck.cs    基准自检（73 格 ↔ 8 块，含批处理入口）
+│       └── LabLevelPlayCheck.cs    进 Play 验真实物理（含批处理入口）
 └── Editor/
-    ├── TuningLabMenu.cs               GameJam → Build Tuning Lab
-    ├── TuningLabSelfCheck.cs          GameJam → Run Speed Tier Self Check（纯数学）
-    └── TuningLabPlayVerification.cs   GameJam → Run Play Verification（无头进 Play 验规则）
+    ├── TuningLabMenu.cs              GameJam → Build Tuning Lab
+    ├── TuningLabSelfCheck.cs         GameJam → Run Speed Tier Self Check（纯数学）
+    └── TuningLabPlayVerification.cs  GameJam → Run Play Verification
 ```
 
-`GameJam → Run Play Verification` 会自动进 Play、注入冲刺输入，检查悬停、竖直冲刺重力、
-贴墙不充能 / 站地充能，跑完自己退出。
+`GameJam → Run Level Play Check` 会临时派生一个关卡、进 Play，用真实物理检查地形 / 绳 / 出生点 / 相机，
+跑完自动退出并删掉临时场景。旧的 `Run Play Verification` 已作废，只保留数值转储。
 
 所有可调数字都在 `TuningLab.cs` 的 Inspector 字段里，同时也是 HUD 滑块绑定的那些字段。

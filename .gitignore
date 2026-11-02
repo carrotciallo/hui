@@ -76,6 +76,10 @@ ExportedObj/
 [Cc]ode[Cc]overage/
 InitTestScene*.unity*
 
+# 关卡编辑器临时验证场景（正常跑完会自动删除）
+Project/nameless/Assets/Scenes/Levels/__PlayCheck.unity*
+Project/nameless/Assets/Scenes/Levels/__VerifyLevel.unity*
+
 # OS
 .DS_Store
 .DS_Store?

@@ -54,17 +54,32 @@ public class LabVerticalRope : MonoBehaviour
         body = GetComponent<BoxCollider2D>();
     }
 
-    void OnEnable() => All.Add(this);
+    void OnEnable()
+    {
+        // 静态表只服务 Play 时的长绳逻辑；编辑器预览不登记，避免残留。
+        if (Application.isPlaying) All.Add(this);
+    }
 
     void OnDisable() => All.Remove(this);
 
     void Start()
     {
-        lab = FindFirstObjectByType<TuningLab>();
+        lab = FindAnyObjectByType<TuningLab>();
+        ApplyShape();
+    }
 
-        // 放在 Start：生成器是先 AddComponent 再改 cells，Awake 时字段还是默认值
-        body.size = new Vector2(StripPixels / (float)CellPixels, cells);
-        body.offset = Vector2.zero;
+    /// <summary>
+    /// 把 cells 应用到碰撞箱和视觉。编辑器的关卡预览也会直接调它，
+    /// 所以不依赖 Start；重复调用只复用/增删 Strip，不会叠出两层。
+    /// </summary>
+    public void ApplyShape()
+    {
+        if (body == null) body = GetComponent<BoxCollider2D>();
+        if (body != null)
+        {
+            body.size = new Vector2(StripPixels / (float)CellPixels, cells);
+            body.offset = Vector2.zero;
+        }
         BuildVisual();
     }
 
@@ -165,18 +180,48 @@ public class LabVerticalRope : MonoBehaviour
     void BuildVisual()
     {
         float cellSize = CellPixels / (float)TuningLab.CellPixels;   // 1 单位
+        int needed = Mathf.Max(0, cells);
 
-        for (int i = 0; i < cells; i++)
+        var existing = new List<Transform>();
+        for (int i = transform.childCount - 1; i >= 0; i--)
         {
-            var go = new GameObject("Strip_" + i);
-            go.transform.SetParent(transform, false);
-            go.transform.localPosition = new Vector3(0f, (i - (cells - 1) * 0.5f) * cellSize, 0f);
+            var child = transform.GetChild(i);
+            if (child.name.StartsWith("Strip_")) existing.Add(child);
+        }
 
-            var sr = go.AddComponent<SpriteRenderer>();
+        for (int i = 0; i < needed; i++)
+        {
+            Transform strip;
+            if (i < existing.Count)
+            {
+                strip = existing[i];
+                strip.gameObject.SetActive(true);
+            }
+            else
+            {
+                var go = new GameObject("Strip_" + i);
+                go.transform.SetParent(transform, false);
+                strip = go.transform;
+                strip.gameObject.AddComponent<SpriteRenderer>();
+            }
+
+            strip.localPosition = new Vector3(0f, (i - (needed - 1) * 0.5f) * cellSize, 0f);
+
+            var sr = strip.GetComponent<SpriteRenderer>();
+            if (sr == null) sr = strip.gameObject.AddComponent<SpriteRenderer>();
             sr.sprite = StripSprite();
             sr.color = color;
             sr.sortingOrder = 5;
         }
+
+        for (int i = needed; i < existing.Count; i++) DestroyNow(existing[i].gameObject);
+    }
+
+    static void DestroyNow(GameObject go)
+    {
+        if (go == null) return;
+        if (Application.isPlaying) Object.Destroy(go);
+        else Object.DestroyImmediate(go);
     }
 
     static Sprite stripSprite;

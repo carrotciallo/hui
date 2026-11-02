@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
@@ -77,6 +78,14 @@ public class TuningLab : MonoBehaviour
     public const int CellPixels = 16;
     public const int RefWidth = 384;
     public const int RefHeight = 216;
+
+    /// <summary>自由相机默认的最小正交尺寸（格，半高）：216 / (2×16) = 6.75，即 13.5 格高。</summary>
+    public const float DefaultCameraMinSize = RefHeight / (2f * CellPixels);
+    /// <summary>自由相机默认的最大正交尺寸（格，半高）：4 倍最小 = 27，即 54 格高。</summary>
+    public const float DefaultCameraMaxSize = DefaultCameraMinSize * 4f;
+
+    /// <summary>B 不在任何关卡分区时使用的“无夹具”范围；足够大，等价于不 clamp。</summary>
+    public static readonly Rect NoCameraBounds = Rect.MinMaxRect(-100000f, -100000f, 100000f, 100000f);
 
     /// <summary>A（大框）：14×14，墙厚 2，内腔 10。留 1 像素余量才能进 1 格宽的通道。</summary>
     public const int A_Pixels = 14;
@@ -185,17 +194,77 @@ public class TuningLab : MonoBehaviour
     PhysicsMaterial2D slick;
     GameObject pixelGridGo;
 
-    static readonly Color SolidColor = new Color(0.24f, 0.26f, 0.32f);
+    public const float BaselineWallHalfWidth = 13f;
+    public const float BaselineFloorY = -1f;
+    public const float BaselineCeilingY = 16f;
+    public const float RopeCenterX = 9f;
+    public const float RopeCenterY = 2f;
+    public const int RopeCells = 4;
+
+    public static readonly Vector2 SpawnAFeet = new Vector2(8f, 0f);
+    public static readonly Vector2 SpawnBFeet = new Vector2(10f, 0f);
+
+    public static readonly Color SolidColor = new Color(0.24f, 0.26f, 0.32f);
+    public static readonly Color ColorA = new Color(0.36f, 0.62f, 1f);
+    public static readonly Color ColorB = new Color(1f, 0.45f, 0.4f);
     static readonly Color GridColor = new Color(1f, 1f, 1f, 0.06f);
-    static readonly Color ColorA = new Color(0.36f, 0.62f, 1f);
-    static readonly Color ColorB = new Color(1f, 0.45f, 0.4f);
 
     [Tooltip("勾上 = 运行时自动搭整个场地；烘焙成场景后应当关掉，否则会重复生成。")]
     public bool autoBuild = true;
 
+    [Header("关卡")]
+    [Tooltip("有 LabLevel 就按关卡数据搭场地；没有就用调试台内置房间。")]
+    public LabLevel level;
+
+    [Header("相机默认")]
+    [Tooltip("默认相机最小正交尺寸（格，半高）。没有 LabLevel 时使用；有 LabLevel 时用关卡编辑器的相机跟随尺寸。")]
+    public float defaultCameraMinSize = DefaultCameraMinSize;
+    [Tooltip("默认相机最大正交尺寸（格，半高）。没有 LabLevel 时使用；有 LabLevel 时用关卡编辑器的相机跟随尺寸。")]
+    public float defaultCameraMaxSize = DefaultCameraMaxSize;
+    [Tooltip("默认相机 clamp 范围（世界坐标，1 格 = 1 单位）。没有 LabLevel 时使用；有关卡分区但 B 出界时不夹相机。")]
+    public Rect defaultCameraBounds = Rect.MinMaxRect(-13f, -1f, 13f, 16f);
+    [Tooltip("分区切换时 bounds / size 的混合速度；0 = 立即切换。")]
+    public float cameraFrameBlend = 8f;
+
     void Awake()
     {
+        if (level == null) level = GetComponent<LabLevel>();
         if (autoBuild) BuildAll();
+    }
+
+    void OnValidate()
+    {
+        NormalizeSizes(ref defaultCameraMinSize, ref defaultCameraMaxSize);
+
+        defaultCameraBounds = NormalizeRect(defaultCameraBounds);
+        if (defaultCameraBounds.width <= 0f || defaultCameraBounds.height <= 0f)
+            defaultCameraBounds = BaselineBounds;
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = new Color(0.3f, 0.9f, 1f, 0.8f);
+        DrawGizmoRect(defaultCameraBounds);
+
+        if (level == null) return;
+        var partitions = level.Data.partitions;
+        if (partitions == null) return;
+
+        for (int i = 0; i < partitions.Count; i++)
+        {
+            var partition = partitions[i];
+            if (partition == null) continue;
+            Gizmos.color = new Color(1f, 0.8f, 0.2f, 0.9f);
+            DrawGizmoRect(LabLevelData.ToRect(partition.bounds));
+        }
+    }
+
+    static void DrawGizmoRect(Rect rect)
+    {
+        if (rect.width <= 0f || rect.height <= 0f) return;
+        Gizmos.DrawWireCube(
+            new Vector3(rect.center.x, rect.center.y, 0f),
+            new Vector3(rect.width, rect.height, 0.01f));
     }
 
     /// <summary>
@@ -204,6 +273,7 @@ public class TuningLab : MonoBehaviour
     /// </summary>
     public void BuildAll()
     {
+        if (level == null) level = GetComponent<LabLevel>();
         Physics2D.gravity = new Vector2(0f, -9.81f);
         Time.timeScale = timeScale;
 
@@ -245,8 +315,16 @@ public class TuningLab : MonoBehaviour
 
     public void ResetPlayers()
     {
-        if (PlayerA != null) PlayerA.Teleport(new Vector2(8f, PlayerA.HalfHeight));
-        if (PlayerB != null) PlayerB.Teleport(new Vector2(10f, PlayerB.HalfHeight));
+        if (PlayerA != null)
+        {
+            Vector2 feet = level != null ? level.Data.spawnA : SpawnAFeet;
+            PlayerA.Teleport(new Vector2(feet.x, feet.y + PlayerA.HalfHeight));
+        }
+        if (PlayerB != null)
+        {
+            Vector2 feet = level != null ? level.Data.spawnB : SpawnBFeet;
+            PlayerB.Teleport(new Vector2(feet.x, feet.y + PlayerB.HalfHeight));
+        }
     }
 
     // ------------------------------------------------------------------
@@ -257,30 +335,198 @@ public class TuningLab : MonoBehaviour
     {
         slick = new PhysicsMaterial2D("LabSlick") { friction = 0f, bounciness = 0f };
 
-        // 地板：上表面 y = 0
-        AddSolid("Floor", new Vector2(0f, -0.5f), new Vector2(26f * roomScale, 1f));
+        if (level != null)
+        {
+            // 关卡场景：几何完全来自 LabLevel，和编辑器预览走同一条生成路径。
+            level.BuildRuntime(transform, slick);
+            return;
+        }
 
-        // 楼梯：每级高 2 格、宽 3 格，从 y=2 爬到 y=10。往右走每掉一级就是 2 格落差。
-        AddSolid("Step_y02", new Vector2(4.5f, 1.5f), new Vector2(3f, 1f));
-        AddSolid("Step_y04", new Vector2(1.5f, 3.5f), new Vector2(3f, 1f));
-        AddSolid("Step_y06", new Vector2(-1.5f, 5.5f), new Vector2(3f, 1f));
-        AddSolid("Step_y08", new Vector2(-4.5f, 7.5f), new Vector2(3f, 1f));
-        AddSolid("Step_y10", new Vector2(-7.5f, 9.5f), new Vector2(3f, 1f));
-
-        // 侧墙
-        AddSolid("WallL", new Vector2(-13.5f * roomScale, 8f * roomScale), new Vector2(1f, 16f * roomScale));
-        AddSolid("WallR", new Vector2(13.5f * roomScale, 8f * roomScale), new Vector2(1f, 16f * roomScale));
-
-        // 竖绳测试：4 格长，底端贴地
-        AddRope(new Vector2(9f, 2f), 4);
-
-        BuildGrid();
+        // 调试台基准场景：内置房间。CaptureBaseline 也读同一段描述，保证两边不会漂。
+        DescribeRoom(roomScale, new ObjectRoomSink(this));
     }
 
-    void BuildGrid()
+    /// <summary>
+    /// 调试台内置房间的唯一描述。BuildRoom 用它建 GameObject，CaptureBaseline 用它抓关卡数据。
+    /// 4 倍场地走同一个描述，所以缩放行为不变。
+    /// </summary>
+    internal static void DescribeRoom(float roomScale, IRoomSink sink)
     {
-        // 网格改成每帧按相机视野重建，这里只清空占位。
-        // 线的对象由 UpdateGrid 按需创建并复用。
+        float scale = Mathf.Max(0.01f, roomScale);
+
+        // 地板：上表面 y = 0
+        sink.Solid("Floor", new Vector2(0f, -0.5f), new Vector2(26f * scale, 1f));
+
+        // 楼梯：每级高 2 格、宽 3 格，从 y=2 爬到 y=10。往右走每掉一级就是 2 格落差。
+        sink.Solid("Step_y02", new Vector2(4.5f, 1.5f), new Vector2(3f, 1f));
+        sink.Solid("Step_y04", new Vector2(1.5f, 3.5f), new Vector2(3f, 1f));
+        sink.Solid("Step_y06", new Vector2(-1.5f, 5.5f), new Vector2(3f, 1f));
+        sink.Solid("Step_y08", new Vector2(-4.5f, 7.5f), new Vector2(3f, 1f));
+        sink.Solid("Step_y10", new Vector2(-7.5f, 9.5f), new Vector2(3f, 1f));
+
+        // 侧墙
+        sink.Solid("WallL", new Vector2(-13.5f * scale, 8f * scale), new Vector2(1f, 16f * scale));
+        sink.Solid("WallR", new Vector2(13.5f * scale, 8f * scale), new Vector2(1f, 16f * scale));
+
+        // 竖绳测试：4 格长，底端贴地
+        sink.Rope(new Vector2(RopeCenterX, RopeCenterY), RopeCells);
+    }
+
+    internal interface IRoomSink
+    {
+        void Solid(string name, Vector2 center, Vector2 size);
+        void Rope(Vector2 center, int cells);
+    }
+
+    sealed class ObjectRoomSink : IRoomSink
+    {
+        readonly TuningLab lab;
+
+        public ObjectRoomSink(TuningLab lab) { this.lab = lab; }
+
+        public void Solid(string name, Vector2 center, Vector2 size) => lab.AddSolid(name, center, size);
+        public void Rope(Vector2 center, int cells) => lab.AddRope(center, cells);
+    }
+
+    sealed class DataRoomSink : IRoomSink
+    {
+        readonly LabLevelData data;
+        public int Failures { get; private set; }
+
+        public DataRoomSink(LabLevelData data) { this.data = data; }
+
+        public void Solid(string name, Vector2 center, Vector2 size)
+        {
+            if (data.AddAlignedRect(center, size)) return;
+            Failures++;
+            Debug.LogWarning($"[TuningLab] 基准房间的 {name} 没对齐 1 格，无法写进关卡数据。");
+        }
+
+        public void Rope(Vector2 center, int cells)
+            => data.ropes.Add(new LabRopeSpec(center, cells));
+    }
+
+    /// <summary>
+    /// 把调试台脚本生成的房间抓成关卡数据。这是"从 Tuning Lab 派生关卡"的唯一来源：
+    /// 不复制场景里的物体，而是读同一段 DescribeRoom，所以格子、尺寸、绳位置和基准场景完全一致。
+    /// </summary>
+    public static LabLevelData CaptureBaseline()
+    {
+        var data = new LabLevelData();
+        var sink = new DataRoomSink(data);
+        DescribeRoom(1f, sink);
+
+        data.bounds = ToRectInt(BaselineBounds);
+        data.spawnA = SpawnAFeet;
+        data.spawnB = SpawnBFeet;
+        data.cameraMinSize = DefaultCameraMinSize;
+        data.cameraMaxSize = DefaultCameraMaxSize;
+        data.Normalize();
+
+        if (sink.Failures > 0)
+            Debug.LogWarning($"[TuningLab] 基准房间有 {sink.Failures} 块没抓进关卡数据。");
+
+        return data;
+    }
+
+    /// <summary>调试台基准房间的相机 clamp 范围（1 倍场地）。</summary>
+    public static Rect BaselineBounds => StaticRoomBounds(1f);
+
+    /// <summary>按场地倍数取默认相机 clamp 范围；4 倍调试台用。</summary>
+    public static Rect RoomBoundsForScale(float roomScale) => StaticRoomBounds(roomScale);
+
+    static Rect StaticRoomBounds(float roomScale)
+    {
+        float scale = Mathf.Max(0.01f, roomScale);
+        return Rect.MinMaxRect(-BaselineWallHalfWidth * scale, BaselineFloorY,
+                               BaselineWallHalfWidth * scale, BaselineCeilingY * scale);
+    }
+
+    static RectInt ToRectInt(Rect rect)
+    {
+        return new RectInt(
+            Mathf.RoundToInt(rect.xMin),
+            Mathf.RoundToInt(rect.yMin),
+            Mathf.RoundToInt(rect.width),
+            Mathf.RoundToInt(rect.height));
+    }
+
+    /// <summary>
+    /// 当前相机应该使用的 bounds / size。B 的 position 是关卡判定点：
+    ///   有 LabLevel + 关卡分区时：B 在哪个分区的 bounds 里，就用哪个分区的大小当相机范围；
+    ///   B 不在任何分区里就不夹相机（NoCameraBounds），只用默认 min/max 跟两人相对位置缩放。
+    ///   没有分区时：有 LabLevel 就用单关数据，否则用默认值。
+    /// </summary>
+    public void GetCameraFrame(Vector2 probePosition, out Rect bounds, out float minSize, out float maxSize)
+    {
+        if (level != null)
+        {
+            var data = level.Data;
+            if (data.partitions != null && data.partitions.Count > 0)
+            {
+                for (int i = 0; i < data.partitions.Count; i++)
+                {
+                    var partition = data.partitions[i];
+                    if (partition == null) continue;
+
+                    Rect partitionBounds = LabLevelData.ToRect(partition.bounds);
+                    if (!partitionBounds.Contains(probePosition)) continue;
+
+                    bounds = partitionBounds;
+                    minSize = data.cameraMinSize;
+                    maxSize = data.cameraMaxSize;
+                    NormalizeFrame(ref bounds, ref minSize, ref maxSize);
+                    return;
+                }
+
+                bounds = NoCameraBounds;
+                minSize = data.cameraMinSize;
+                maxSize = data.cameraMaxSize;
+                NormalizeFrame(ref bounds, ref minSize, ref maxSize);
+                return;
+            }
+
+            bounds = LabLevelData.ToRect(data.bounds);
+            minSize = data.cameraMinSize;
+            maxSize = data.cameraMaxSize;
+            NormalizeFrame(ref bounds, ref minSize, ref maxSize);
+            return;
+        }
+
+        bounds = defaultCameraBounds;
+        minSize = defaultCameraMinSize;
+        maxSize = defaultCameraMaxSize;
+        NormalizeFrame(ref bounds, ref minSize, ref maxSize);
+    }
+
+    static void NormalizeFrame(ref Rect bounds, ref float minSize, ref float maxSize)
+    {
+        bounds = NormalizeRect(bounds);
+        if (bounds.width <= 0f || bounds.height <= 0f) bounds = BaselineBounds;
+        NormalizeSizes(ref minSize, ref maxSize);
+    }
+
+    static void NormalizeSizes(ref float minSize, ref float maxSize)
+    {
+        if (minSize <= 0f) minSize = DefaultCameraMinSize;
+        if (maxSize <= 0f) maxSize = DefaultCameraMaxSize;
+        minSize = Mathf.Clamp(minSize, 0.1f, 128f);
+        maxSize = Mathf.Clamp(maxSize, minSize, 128f);
+    }
+
+    static Rect NormalizeRect(Rect rect)
+    {
+        if (rect.width < 0f)
+        {
+            rect.x += rect.width;
+            rect.width = -rect.width;
+        }
+        if (rect.height < 0f)
+        {
+            rect.y += rect.height;
+            rect.height = -rect.height;
+        }
+        return rect;
     }
 
     readonly System.Collections.Generic.List<SpriteRenderer> gridV = new System.Collections.Generic.List<SpriteRenderer>();
@@ -338,7 +584,7 @@ public class TuningLab : MonoBehaviour
             var go = new GameObject(name + "_" + pool.Count);
             go.transform.SetParent(transform, false);
             var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = White;
+            sr.sprite = WhiteSprite;
             sr.color = GridColor;
             sr.sortingOrder = -10;
             pool.Add(sr);
@@ -394,7 +640,7 @@ public class TuningLab : MonoBehaviour
         go.transform.position = center;
         go.transform.localScale = new Vector3(size.x, size.y, 1f);
         var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = White;
+        sr.sprite = WhiteSprite;
         sr.color = GridColor;
         sr.sortingOrder = -10;
     }
@@ -422,7 +668,7 @@ public class TuningLab : MonoBehaviour
         go.transform.localScale = new Vector3(size.x, size.y, 1f);
 
         var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = White;
+        sr.sprite = WhiteSprite;
         sr.color = SolidColor;
         sr.sortingOrder = 0;
 
@@ -434,9 +680,12 @@ public class TuningLab : MonoBehaviour
 
     void BuildPlayers()
     {
-        PlayerA = MakePlayer("A_Box", new Vector2(8f, A_Pixels / (2f * CellPixels)),
+        Vector2 feetA = level != null ? level.Data.spawnA : SpawnAFeet;
+        Vector2 feetB = level != null ? level.Data.spawnB : SpawnBFeet;
+
+        PlayerA = MakePlayer("A_Box", new Vector2(feetA.x, feetA.y + A_Pixels / (2f * CellPixels)),
                              ColorA, LabPlayer.Scheme.P1, A_Pixels, 2);
-        PlayerB = MakePlayer("B_Chunk", new Vector2(10f, B_Pixels / (2f * CellPixels)),
+        PlayerB = MakePlayer("B_Chunk", new Vector2(feetB.x, feetB.y + B_Pixels / (2f * CellPixels)),
                              ColorB, LabPlayer.Scheme.P2, B_Pixels, 0);
         PlayerA.canBeRedHot = true;   // 红热只在 A 判定
         PlayerA.other = PlayerB;
@@ -517,26 +766,19 @@ public class TuningLab : MonoBehaviour
 
         if (freeCamera)
         {
-            // 自由相机：跟随两人中点、按距离缩放
+            // 自由相机：跟随两人中点；B 的位置决定用哪个关卡分区的 bounds / size。
             var follow = go.AddComponent<LabCamera>();
-            follow.minSize = RefHeight / (2f * CellPixels);
-            follow.maxSize = follow.minSize * 4f;
-            follow.Configure(PlayerA.transform, PlayerB.transform, RoomBounds());
+            GetCameraFrame(PlayerB.transform.position, out Rect initialBounds, out float initialMin, out float initialMax);
+            follow.Configure(this, PlayerA.transform, PlayerB.transform,
+                             initialBounds, initialMin, initialMax, cameraFrameBlend);
         }
         // 固定视角：正交尺寸已在上方设为 13.5 格，不用再加组件
 
         Cam = cam;
     }
 
-    /// <summary>房间的世界范围，给自由相机做边界限制。</summary>
-    Rect RoomBounds()
-    {
-        float halfW = 13f * roomScale;
-        float height = 16f * roomScale;
-        return Rect.MinMaxRect(-halfW, -1f, halfW, height);
-    }
-
-    static Sprite White
+    /// <summary>TuningLab 生成整个场地用的白块精灵；LabLevel 的预览也用它，保证两边同形。</summary>
+    public static Sprite WhiteSprite
     {
         get
         {

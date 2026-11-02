@@ -2,6 +2,8 @@
 
 Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验证。
 
+> **2026-11 状态**：Unity 工程已清理为 Tuning Lab 专用，旧 World / 测试房 / 旧脚本已删除；下面旧章节是历史记录。当前架构、扩展和验证见 [tuning-lab-level-editor.md](docs/tuning-lab-level-editor.md)。
+
 > 项目名暂未定，定下来后改这里和仓库名。
 
 ## 方向
@@ -31,13 +33,26 @@ Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验�
 
 ## 关卡编辑器
 
-打开 `Assets/Scenes/World.unity` 后，菜单 **GameJam → Level Editor**：
+规则基准在 `Assets/TuningLab`，所以关卡场景也必须从 Tuning Lab 派生，不碰 `World.unity` 那一套还没对齐的规范。
 
-- 按 1 格网格铺 / 擦地形，或从 prefab 调色板摆放物件（绳、冰、钥匙、门、刺、重生点等）
-- 支持撤销、区域跳转（L0–L10）和摆放校验
-- 在 Scene 视图里操作；默认限制在当前区域，避免误改相邻关卡
+1. 菜单 **GameJam → New Level From Tuning Lab**：复制 `Assets/Scenes/TuningLab.unity`（继承调参值/相机/玩家），清掉生成物，挂上 `LabLevel` 并写入基准房间数据，存到 `Assets/Scenes/Levels/`。
+2. 菜单 **GameJam → Tuning Lab Level Editor**：在 Scene 视图里编辑这份 `LabLevel`。
+3. 工具：按 1–7 切铺地形 / 擦地形 / 矩形 / 竖绳 / 出生点 A / 出生点 B / 关卡分区；`G` 网格、`Home` 取景、`[` `]` 调绳长；左键拖动绘制，支持撤销。
+4. 左侧面板可改相机范围、相机跟随尺寸（最小/最大 size）、出生点、绳长和关卡分区；**校验摆放** 会查出生点是否在地形里、绳是否越界、分区是否重叠；**从 Tuning Lab 重置** 用基准房间覆盖当前关卡。
 
-注意：**GameJam → Build World Scene** 会重建整个场景，覆盖这里的手工修改。
+如果已经有一份 Tuning Lab 副本（例如 `Bake Tuning Lab To Editable Scene` 生成的场景），用 **GameJam → Convert Current Scene To Level** 就地转成关卡；`TuningLab.unity` 基准场景本身禁止转换。
+
+**连续关卡分区**：关卡编辑器（GameJam → Tuning Lab Level Editor）里有「关卡分区」面板：
+
+- 新建 / 命名 / 调大小 / 删除 / 在 Scene 视图拖动移动；移动时可带上分区里的地形、绳和出生点。
+- 分区之间**不能重叠**：新建、移动、改大小都会被拒绝，贴边相邻可以。
+- 分区的 bounds **就是相机范围**：B 进入哪个分区，相机 clamp 就用哪个分区的大小；缩放仍用关卡的相机跟随尺寸。
+- B 不在任何分区时**没有相机范围约束**，只按两人的相对位置和关卡的相机跟随尺寸缩放。
+- 新关卡默认带一个覆盖编辑范围的 `Level 1` 分区；旧关卡没有分区时仍按单关相机设置走。
+
+Play 时 `TuningLab` 按 `LabLevel` 数据生成合并后的 `BoxCollider2D` 和 `LabVerticalRope`，和调试台走同一条 `BuildRoom` 路径。编辑器里看到的预览也是这条路径生成的，不写进场景文件。
+
+> 旧的 **GameJam → Level Editor** 改的是 `World.unity`，规则/尺度还没和 TuningLab 对齐，先别用。
 
 ## 操作
 
