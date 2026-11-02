@@ -16,6 +16,10 @@
 - `TuningLab` 的场地描述抽成 `DescribeRoom`，基准场景与 `CaptureBaseline` 读同一段代码，避免两套规格
 - 旧的 `GameJam → Level Editor`（编辑 `World.unity`）规则未对齐，暂不使用
 
+### 经验总结
+
+- 新增 [tuning-lab-level-editor.md](tuning-lab-level-editor.md)：Tuning Lab 关卡编辑器的架构、代码地图、加组件流程、调试/验证、踩坑与当前限制
+
 ## 2026-11-01
 
 ### 关卡编辑器

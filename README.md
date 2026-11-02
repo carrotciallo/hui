@@ -2,6 +2,8 @@
 
 Game Jam 原型仓库（主题：碰撞 / 质感）。当前阶段：玩法验证。
 
+> **2026-11 状态**：Unity 工程已清理为 Tuning Lab 专用，旧 World / 测试房 / 旧脚本已删除；下面旧章节是历史记录。当前架构、扩展和验证见 [tuning-lab-level-editor.md](docs/tuning-lab-level-editor.md)。
+
 > 项目名暂未定，定下来后改这里和仓库名。
 
 ## 方向

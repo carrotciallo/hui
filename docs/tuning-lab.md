@@ -2,6 +2,8 @@
 
 一个可以按 Play 就调数值的独立 demo，用来验证"速度等级 ÷ 格子"这套规则到底站不站得住。
 
+> 实现经验、加组件流程、调试/验证和踩坑见 [tuning-lab-level-editor.md](tuning-lab-level-editor.md)。
+
 **只动了 `My project` 这个工程，没碰 `repo/`。**
 
 ---

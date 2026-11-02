@@ -8,13 +8,15 @@
 
 仓库根是文档 + 单一 Unity 工程。Unity 工程在 [Project/nameless/](Project/nameless/)，所有 `Unity` CLI 命令都要带 `-projectPath Project/nameless`。
 
-- 运行时代码：`Project/nameless/Assets/Scripts/`，程序集 `GameJam.Runtime`
-- 编辑器工具：`Project/nameless/Assets/Editor/`，程序集 `GameJam.Editor`
-- 调试台 + 关卡编辑器：`Project/nameless/Assets/TuningLab/`，走预定义程序集 `Assembly-CSharp` / `Assembly-CSharp-Editor`（没有 asmdef，不能被 `GameJam.Runtime` 引用）
-- 测试：`Assets/Tests/EditMode` 与 `Assets/Tests/PlayMode`
-- 策划案：`docs/策划案/`；架构决策：`docs/adr/`；域约定：`docs/agents/`
+- **唯一规则基准**：`Project/nameless/Assets/TuningLab/`，预定义程序集 `Assembly-CSharp`
+- 编辑器工具：`Assets/TuningLab/**/Editor/`，程序集 `Assembly-CSharp-Editor`
+- 关卡数据/生成：`Assets/TuningLab/Level/`（`LabLevelData` + `LabLevel`）
+- 场景：`Assets/Scenes/TuningLab.unity`（基准）、`Assets/Scenes/Levels/`（派生关卡）
+- 文档：`docs/tuning-lab.md`、`docs/tuning-lab-level-editor.md`、`docs/adr/`、`docs/agents/`
 
-当前进度：L0 灰盒、L1、L2 已完成，L3–L10 是占位。已实现范围见 README。
+> 2026-11 清理后，`Project/nameless/Assets` 只保留 Tuning Lab、Tuning Lab 场景与 `Scenes/Levels/`、URP `Settings/`；旧 World、测试房、旧脚本和 `Assets/Tests` 已删除。扩展、调试和验证见 [docs/tuning-lab-level-editor.md](docs/tuning-lab-level-editor.md)。
+
+当前进度：Tuning Lab 关卡编辑器、连续关卡分区、相机默认/跟随尺寸已实现；旧 World/测试房/旧脚本已删除。
 
 ## 署名规则（重要）
 
@@ -49,41 +51,43 @@ git diff Project/nameless/ProjectSettings/EditorBuildSettings.asset
 
 | 菜单项 | 产物 |
 | --- | --- |
-| GameJam → Build World Scene | `Assets/Scenes/World.unity`（旧世界，规则未对齐，先别用） |
-| GameJam → Build Prototype Scene | `Assets/Scenes/Prototype.unity`（不进构建） |
-| GameJam → Build Materials Test Scene | `Assets/Scenes/Materials.unity` |
-| GameJam → Build Forms Test Scene | `Assets/Scenes/Forms.unity` |
+| GameJam → Build Tuning Lab | `Assets/Scenes/TuningLab.unity`（基准，进构建） |
+| GameJam → Build Tuning Lab (4x Room) | `Assets/Scenes/TuningLab4x.unity`（调试用） |
+| GameJam → Bake Tuning Lab To Editable Scene | `Assets/Scenes/TuningLabEditable.unity`（烘焙版，调试用） |
 | GameJam → New Level From Tuning Lab | `Assets/Scenes/Levels/*.unity`（复制 TuningLab 场景 + 写入基准 `LabLevel`） |
 | GameJam → Convert Current Scene To Level | 把当前 Tuning Lab 副本就地转成关卡（基准场景禁止） |
-| GameJam → Tuning Lab Level Editor | 编辑当前派生场景的 `LabLevel`（地形 / 绳 / 关卡分区 / 出生点 / 相机范围与跟随尺寸） |
-| GameJam → Run Level Baseline Self Check | 纯数据自检：73 格 ↔ 8 块矩形往返 |
+| GameJam → Tuning Lab Level Editor | 编辑当前派生场景的 `LabLevel`（地形 / 绳 / 关卡分区 / 出生点 / 相机） |
+| GameJam → Run Level Baseline Self Check | 纯数据自检：73 格 ↔ 8 块矩形、分区移动/删除、相机分区内外 |
 | GameJam → Run Level Play Check | 临时派生场景 → 进 Play 用真实物理验一遍 |
+| GameJam → Open Tuning Lab Scene | 打开基准场景 |
 
-改关卡内容走 **Tuning Lab Level Editor**，不要手改 `TuningLab.unity`（基准场景）或 `World.unity`；旧测试房仍然改对应 builder 再重新生成。
+改关卡内容走 **Tuning Lab Level Editor**，不要手改 `TuningLab.unity`（基准场景）或生成出来的几何；旧 World/测试房 builder 已删除。
 
 连续关卡：在关卡编辑器的「关卡分区」里新建 / 移动 / 调大小 / 删除分区，分区的 `bounds` 就是相机范围；按 **B 的位置**选当前分区，分区不能重叠。B 不在任何分区时不夹相机，只用关卡的相机跟随尺寸跟两人相对位置缩放。TuningLab Inspector 的「相机默认」用于没有 `LabLevel` 的基准场景和新建关卡的初始值。
 
 ### 测试
 
-在 Unity 的 **Window → General → Test Runner** 里跑。命令行模板（编辑器路径按本机实际情况替换）：
+没有旧的 `Assets/Tests`；验证用 Tuning Lab 的两条自检线：
 
 ```bash
-<Unity可执行文件> -batchmode -quit -projectPath Project/nameless \
-  -runTests -testPlatform EditMode -testResults /tmp/editmode.xml
+"C:\Program Files\Unity\Hub\Editor\6000.6.4f1\Editor\Unity.exe" -batchmode -nographics \
+  -projectPath Project/nameless -executeMethod LabLevelSelfCheck.RunBatch -logFile Logs/selfcheck.log
 
-<Unity可执行文件> -batchmode -quit -projectPath Project/nameless \
-  -runTests -testPlatform PlayMode -testResults /tmp/playmode.xml
+"C:\Program Files\Unity\Hub\Editor\6000.6.4f1\Editor\Unity.exe" -batchmode -nographics \
+  -projectPath Project/nameless -executeMethod LabLevelPlayCheck.RunFromCommandLine -logFile Logs/playcheck.log
 ```
 
-注意：本机（2026-11 核对）已装 6000.6.4f1，编辑器二进制在 `C:\Program Files\Unity\Hub\Editor\6000.6.4f1\Editor\Unity.exe`；换机器按实际路径替换。**跑不了就直说跑不了，不要编造测试结果。**
+- `LabLevelSelfCheck` 测纯数据；`LabLevelPlayCheck` 建临时场景、进 Play、用真实物理断言、跑完删除。
+- 本机（2026-11 核对）编辑器路径如上；换机器按实际替换。
+- **跑不了就直说跑不了，不要编造测试结果。**
 
 ## 代码约定
 
-- 尺寸、跳距、冲刺距离等规格数值集中在 `GameConstants.cs`，不要散落魔数。
-- 世界尺度、速度挡位、关卡拓扑、撞击传递这四件事有 ADR 定案（`docs/adr/0001`–`0004`）。改动与之冲突时先指出冲突，不要默默改掉。
-- `MotionState` 用状态机 + `StateChanged` 事件外抛，动画和音效挂在事件上，不要往 `PlayerMotor` 里塞表现逻辑。
-- 表面响应走 `IImpactReceiver`（`Pass / Bounce / Break / Accelerate / Stick / Die`），新增材质对象实现接口，不要加到撞击方。
-- PlayMode 测试用真实物理和输入驱动；EditMode 测试只测纯 C#（如 `RunState`）。不要为了测试直接调 `ReceiveImpact` 这类绕过物理的私有路径。
+- **1 格 = 1 世界单位 = 16px**；Tuning Lab 是唯一规则基准，不要再建第二套玩家/相机/速度规则。
+- 关卡内容走 `LabLevelData` → `LabLevel.Build`；编辑器预览和 Play 共用同一条生成路径。
+- 分区 `bounds` = 相机范围；B 位置判定；分区不重叠（贴边相邻允许）；B 出界不夹相机。
+- 玩家/相机/绳复用 `LabPlayer` / `LabCamera` / `LabVerticalRope`，表现挂在事件上，不要塞进玩家逻辑。
+- 新增关卡组件先看 [docs/tuning-lab-level-editor.md](docs/tuning-lab-level-editor.md) §5；需要编辑器摆放、撤销、跟分区移动就进 `LabLevelData` + `LabLevel.Build` + 编辑器面板。
 - 每个资源文件都必须提交对应的 `.meta`；`.cs`、`.unity`、`.prefab` 等文本资源用 LF（见 `.gitattributes`）。
 - 生成的 `Library/`、`Temp/`、`Logs/`、`UserSettings/`、`*.csproj`、`*.slnx` 不要提交，已由 `.gitignore` 忽略。
 
