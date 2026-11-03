@@ -1,61 +1,32 @@
 # 最近更改
 
-记录近期合并进 `main` 的工程改动，便于回看当前仓库状态。详尽的关卡与机制设计见 [策划案](策划案/)，数值规格见 [speed-tier-spec.md](speed-tier-spec.md)。
+记录近期合并进 `main` 的工程改动。当前开发入口和规则基准见 [current-baseline.md](current-baseline.md)；设计草稿见 [策划案](策划案/)。
 
 ## 2026-11-02
 
 ### Tuning Lab 关卡编辑器
 
 - 新增 `Assets/TuningLab/Level/`：`LabLevelData`（格 / 绳 / 出生点 / 相机范围）、`LabLevel`（数据 → 合并 `BoxCollider2D` / `LabVerticalRope`，编辑器预览与 Play 共用）
-- 新增 **GameJam → New Level From Tuning Lab**：复制 `TuningLab.unity`（继承调参值/相机/玩家），挂 `LabLevel` 并用 `TuningLab.CaptureBaseline()` 写入基准房间；关卡场景必须从调试台派生
-- 新增 **GameJam → Tuning Lab Level Editor**：1 格网格铺/擦地形、矩形填充、放竖绳、设出生点、改相机范围，支持撤销、校验和"从 Tuning Lab 重置"
-- 关卡编辑器增加**相机跟随尺寸**调节：每个 `LabLevel` 独立保存最小/最大正交 size，面板显示 16:9 视野格数与 1080p 像素缩放，Scene 视图可画出最小/最大视野框
-- `TuningLab` Inspector 增加**相机默认**（min/max/bounds）；关卡编辑器增加**关卡分区**（新建/命名/调大小/删除/移动含物件），按 B 的位置选分区，分区 bounds 就是相机范围
-- 关卡分区**不允许重叠**（新建/移动/改大小都拒绝，贴边相邻可以）；B 不在任何分区时相机不夹范围，只用关卡 min/max 跟两人相对位置缩放
+- 新增 **GameJam → New Level From Tuning Lab**：复制 `TuningLab.unity`，挂 `LabLevel` 并用 `TuningLab.CaptureBaseline()` 写入基准房间；关卡场景必须从调试台派生
+- 新增 **GameJam → Tuning Lab Level Editor**：1 格网格铺/擦地形、矩形填充、放竖绳、设出生点、改相机范围，支持撤销、校验和从 Tuning Lab 重置
+- 关卡编辑器增加相机跟随尺寸调节、关卡分区、分区移动带物件和不重叠校验
 - 新增 **GameJam → Run Level Baseline Self Check** 与 **GameJam → Run Level Play Check**（纯数据 / 真实物理两条验证）
 - `TuningLab` 的场地描述抽成 `DescribeRoom`，基准场景与 `CaptureBaseline` 读同一段代码，避免两套规格
-- 旧的 `GameJam → Level Editor`（编辑 `World.unity`）规则未对齐，暂不使用
+- 旧的 **GameJam → Level Editor**（编辑 `World.unity`）规则未对齐，不再使用
 
 ### 经验总结
 
-- 新增 [tuning-lab-level-editor.md](tuning-lab-level-editor.md)：Tuning Lab 关卡编辑器的架构、代码地图、加组件流程、调试/验证、踩坑与当前限制
+- 新增 [tuning-lab-level-editor.md](tuning-lab-level-editor.md)：Tuning Lab 的架构、代码地图、加组件流程、调试/验证、踩坑与当前限制
 
 ## 2026-11-01
 
-### 关卡编辑器
+### 维护记录
 
-- 新增 `Assets/Editor/LevelEditorWindow.cs`，菜单 **GameJam → Level Editor**
-- 直接编辑 `Assets/Scenes/World.unity`：按 1 格网格铺 / 擦地形，从 `Assets/Prefabs/Materials` 与 `Assets/Prefabs/Markers` 调色板摆放物件
-- 支持撤销、L0–L10 区域跳转与取景、默认限制在当前区域
-- 摆放校验：缺 Spawn、Spawn 越界、物件超出世界边界
-- 注意：**GameJam → Build World Scene** 会重建场景，覆盖手工修改
-
-### Unity MCP 接入
-
-- `Packages/manifest.json` 加入 `com.coplaydev.unity-mcp`，锁文件同步其传递依赖
-- 本机 MCP for Unity 服务运行在 `127.0.0.1:8088`（HTTP transport），供编辑器内自动化调用
-
-### 手感调试台 TuningLab
-
-- 代码在 `Assets/TuningLab/`，菜单 **GameJam → Build Tuning Lab** 生成 `Assets/Scenes/TuningLab.unity`
-- 规则与数值见 [speed-tier-spec.md](speed-tier-spec.md)，操作与调参说明见 [tuning-lab.md](tuning-lab.md)
-- 附带 **GameJam → Run Speed Tier Self Check** 与 **GameJam → Dump Tuning Values**
-
-### 操作调整
-
-- B 改为方向键移动、`/` 跳跃、`.` 冲刺（提交 `2b8c696`），TuningLab 的操作说明同步更新
-
-### 工程维护
-
-- 补全 `.gitignore`：Unity 生成目录大小写不敏感，补充崩溃转储、Addressables、Burst 导出、Rider 本地文件等规则
+- 接入 Unity MCP 包；本机服务地址为 `127.0.0.1:8088`（仅开发环境）
+- 补全 Unity 生成物 `.gitignore`
 - 新增 `CLAUDE.md`，约定 Claude Code 的工作方式
-- 明确 `ProjectSettings/` 的处理规则：只丢弃重新序列化噪音，真实改动照常提交，见 [AGENTS.md](../AGENTS.md) 的「工程与版本控制」
+- 明确 `ProjectSettings/` 的处理规则：只丢弃重新序列化噪音，真实改动照常提交，见 [AGENTS.md](../AGENTS.md)
 
-## 相关 PR
+### 说明
 
-| PR | 内容 |
-| --- | --- |
-| #7 | 补全 Unity 生成物的 gitignore、添加 CLAUDE.md |
-| #8 | 速度等级调试台 TuningLab、B 键位调整 |
-| #9 | 接入 Unity MCP 包 |
-| #10 | World 场景关卡编辑器 |
+本节保留历史记录；其中旧 World 编辑器、旧测试房和旧规则实现已经移除，不再作为当前工作流。
