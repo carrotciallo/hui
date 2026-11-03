@@ -269,6 +269,56 @@ public static class LabLevelSelfCheck
         Object.DestroyImmediate(probeGo);
 
         sb.AppendLine();
+        sb.AppendLine("=== 8. 钥匙 / 门：随分区移动、随分区删除 ===");
+        var keyDoor = new LabLevelData();
+        keyDoor.partitions.Add(new LabLevelPartition { name = "A", bounds = new RectInt(0, 0, 10, 10) });
+        keyDoor.partitions.Add(new LabLevelPartition { name = "B", bounds = new RectInt(20, 0, 10, 10) });
+        keyDoor.keys.Add(new LabKeySpec(new Vector2(4.5f, 1.5f)));
+        keyDoor.keys.Add(new LabKeySpec(new Vector2(24.5f, 1.5f)));
+        keyDoor.doors.Add(new LabDoorSpec(new Vector2(6.5f, 1.5f), Color.red));
+        keyDoor.doors.Add(new LabDoorSpec(new Vector2(26.5f, 1.5f), Color.blue));
+        keyDoor.Normalize();
+
+        Expect(sb, ref failures, keyDoor.MovePartition(0, new Vector2Int(2, 3), true), "移动分区 A");
+        Expect(sb, ref failures, SamePoint(keyDoor.keys[0].position, new Vector2(6.5f, 4.5f)),
+            "A 里的钥匙跟着移动");
+        Expect(sb, ref failures, SamePoint(keyDoor.keys[1].position, new Vector2(24.5f, 1.5f)),
+            "分区 B 的钥匙不动");
+        Expect(sb, ref failures, SamePoint(keyDoor.doors[0].position, new Vector2(8.5f, 4.5f)),
+            "A 里的门跟着移动");
+        Expect(sb, ref failures, SamePoint(keyDoor.doors[1].position, new Vector2(26.5f, 1.5f)),
+            "分区 B 的门不动");
+
+        RectInt doorCells = keyDoor.doors[1].Cells();
+        Expect(sb, ref failures,
+            doorCells.x == 26 && doorCells.y == 0 && doorCells.width == 1 && doorCells.height == 3,
+            "门盖住 1×3 格：" + doorCells);
+
+        var keyCell = keyDoor.keys[0].Cells();
+        Expect(sb, ref failures, keyCell.x == 6 && keyCell.y == 4 && keyCell.width == 1 && keyCell.height == 1,
+            "钥匙盖住 1×1 格：" + keyCell);
+
+        var invisibleDoor = new LabLevelData();
+        invisibleDoor.doors.Add(new LabDoorSpec(new Vector2(0.5f, 1.5f), new Color(1f, 1f, 1f, 0f)));
+        invisibleDoor.Normalize();
+        Expect(sb, ref failures, invisibleDoor.doors[0].color.a > 0.5f, "透明门色回落到默认色");
+
+        var cloned = keyDoor.Clone();
+        Expect(sb, ref failures,
+            cloned.keys.Count == keyDoor.keys.Count && cloned.doors.Count == keyDoor.doors.Count,
+            "Clone 带上钥匙和门");
+        cloned.keys[0] = new LabKeySpec(new Vector2(0f, 0f));
+        Expect(sb, ref failures, !SamePoint(keyDoor.keys[0].position, new Vector2(0f, 0f)), "Clone 是深拷贝");
+
+        Expect(sb, ref failures, keyDoor.DeletePartition(0, true), "删除分区 A（带内容）");
+        Expect(sb, ref failures,
+            keyDoor.keys.Count == 1 && SamePoint(keyDoor.keys[0].position, new Vector2(24.5f, 1.5f)),
+            "A 里的钥匙被删，B 的留下");
+        Expect(sb, ref failures,
+            keyDoor.doors.Count == 1 && SamePoint(keyDoor.doors[0].position, new Vector2(26.5f, 1.5f)),
+            "A 里的门被删，B 的留下");
+
+        sb.AppendLine();
         fails = failures;
         sb.AppendLine(failures == 0 ? "全部通过。" : ("失败 " + failures + " 项。"));
         return sb;

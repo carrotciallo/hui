@@ -37,8 +37,10 @@
 | `Assets/TuningLab/LabPlayer.cs` | 方块玩家：移动、跳、四向冲刺、撞击、驮带 |
 | `Assets/TuningLab/LabCamera.cs` | 跟随 A/B 中点；按 B 查当前分区的 bounds/min-max，并做混合 |
 | `Assets/TuningLab/LabVerticalRope.cs` | 竖绳；`ApplyShape` 同时服务预览和 Play |
-| `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据：实心格、绳、出生点、相机尺寸、**关卡分区** |
-| `Assets/TuningLab/Level/LabLevel.cs` | 数据 → 合并 `BoxCollider2D` / `LabVerticalRope`；编辑器预览和 Play 共用 |
+| `Assets/TuningLab/LabKey.cs` | 钥匙；1×1 触发体，`ApplyShape` 同时服务预览和 Play |
+| `Assets/TuningLab/LabDoor.cs` | 门；1×3，任意一把钥匙开门，`ApplyShape` 同时服务预览和 Play |
+| `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据：实心格、绳、**钥匙、门**、出生点、相机尺寸、**关卡分区** |
+| `Assets/TuningLab/Level/LabLevel.cs` | 数据 → 合并 `BoxCollider2D` / `LabVerticalRope` / `LabKey` / `LabDoor`；编辑器预览和 Play 共用 |
 | `Assets/TuningLab/Level/Editor/LabLevelScene.cs` | 从 `TuningLab.unity` 派生关卡场景；默认 `Level 1` 分区 |
 | `Assets/TuningLab/Level/Editor/LabLevelEditorWindow.cs` | 关卡编辑器：地形/绳/出生点/分区/相机面板 |
 | `Assets/TuningLab/Level/Editor/LabLevelSelfCheck.cs` | 纯数据自检（基准 73 格 ↔ 8 块、分区移动/删除、相机分区内外） |
@@ -48,7 +50,9 @@
 
 ### 3.1 `LabLevelData`
 
-- `solids`：实心格；`ropes`：竖绳；`spawnA/B`：脚底落点。
+- `solids`：实心格；`ropes`：竖绳；`keys`：钥匙（1×1）；`doors`：门（1×3）；`spawnA/B`：脚底落点。
+- 钥匙和门都是**共享**的：任意一把钥匙能开任意一扇门，门色只用于区分，不参与配对。
+- 门的位置是中心，`LabDoorSpec.Cells()` 给出它盖住的 1×3 格；钥匙同理给 1×1。
 - `cameraMinSize / cameraMaxSize`：**关卡级**相机跟随尺寸（正交 size，半高）。
 - `bounds`：编辑范围；没有分区时也作为单关相机 clamp 范围。
 - `partitions`：关卡分区列表。
@@ -58,6 +62,8 @@
 ### 3.2 `LabLevel.Build`
 
 - 把 `solids` 合并成尽量少的矩形，每个矩形一个 `BoxCollider2D`；绳生成 `LabVerticalRope`。
+- 钥匙生成 `LabKey`、门生成 `LabDoor`，尺寸/颜色/贴图由各自的 `ApplyShape()` 应用——预览里也走同一个方法，所以编辑器看得到的就是 Play 撞得到的。
+- 地图重置（复活/传送触发的 `TuningLab.MapReset`）会把门关回去、把捡走的钥匙按数据重新生成；`LabLevel` 在 `BuildRuntime` 时订阅、`ClearGenerated` 时退订。
 - **预览和 Play 走同一条 `Build`**：编辑器里看到的几何就是 Play 撞到的几何。
 - 预览物体带 `HideFlags.DontSaveInEditor`，不写进场景；`OnEnable` 重建，`ClearGenerated` 清理。
 - 运行时用 `TuningLab.WhiteSprite` / 运行时材质；不依赖外部 Sprite 资产，避免烘焙场景丢引用。
@@ -69,13 +75,15 @@
 - `LabLevelPartition { name, RectInt bounds }`；`bounds` **同时是相机范围**。
 - 判定点固定是 **B 的中心位置**；B 进入哪个分区，相机 clamp 就用哪个分区。
 - **分区不能重叠**：`AddPartition / MovePartition / ResizePartition` 在数据层直接拒绝；贴边相邻允许。
-- 移动分区时可以带内容：地形按格中心、绳按中心、出生点按点；`TranslatePartition` 负责平移。
-- 删除分区可以选择只删分区，或连里面的地形/绳一起删；出生点保留。
+- 移动分区时可以带内容：地形按格中心、绳按中心、钥匙/门按中心、出生点按点；`TranslatePartition` 负责平移。
+- 删除分区可以选择只删分区，或连里面的地形/绳/钥匙/门一起删；出生点保留。
 - 新关卡默认生成一个覆盖 `bounds` 的 `Level 1` 分区。
 
 ### 4.2 编辑器操作
 
-- `1–7`：铺地形 / 擦地形 / 矩形 / 竖绳 / 出生点 A / 出生点 B / 关卡分区。
+- `1–9`：铺地形 / 擦地形 / 矩形 / 竖绳 / 出生点 A / 出生点 B / 关卡分区 / 钥匙（`8`）/ 门（`9`）。
+- 「钥匙 / 门」面板：列出所有钥匙和门、改门色、逐条删除、清空。
+- 门按"点最下面那一格、向上占 3 格"摆放；放不进相机范围时会在 Scene 视图提示。
 - 分区面板：新建、命名、X/Y/宽/高、删除、移动时带物件。
 - 分区工具（`7`）：空白处拖出新分区；分区内部拖动移动；重叠时预览变红、不能创建。
 - 所有修改走 `Undo.RecordObject`，改完 `AfterStructuralEdit()` / `RebuildPreview()`。
@@ -159,6 +167,7 @@
 - 编辑器预览 vs Play 一致
 - 摆放/撤销/重做/保存/重新打开
 - 分区新建/移动/改大小/删除，移动时内容跟着走
+- 钥匙/门：摆放、改门色、删除、跟着分区走；门 3 格高放得下、钥匙不在实心格里
 - 分区不重叠；贴边可以
 - B 在分区内 / 出界，相机 bounds 和 min/max 正确
 - 旧关卡（没有新字段/没有分区）能打开

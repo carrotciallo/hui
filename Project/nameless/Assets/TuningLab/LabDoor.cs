@@ -4,26 +4,47 @@ using UnityEngine;
 [RequireComponent(typeof(BoxCollider2D), typeof(SpriteRenderer))]
 public sealed class LabDoor : MonoBehaviour
 {
-    public Color closedColor = new Color(0.25f, 0.75f, 1f);
+    public static readonly Color DefaultClosedColor = new Color(0.25f, 0.75f, 1f);
+
+    public Color closedColor = DefaultClosedColor;
     public Color openColor = new Color(0.25f, 1f, 0.45f);
     public bool IsOpen { get; private set; }
 
     BoxCollider2D body;
+    BoxCollider2D detector;
     SpriteRenderer renderer;
+    static Sprite cachedSprite;
 
-    void Awake()
+    void Awake() => ApplyShape();
+
+    /// <summary>
+    /// 把尺寸/颜色/贴图应用到本体碰撞、检测触发器和渲染器。关卡的编辑器预览也会直接调它，
+    /// 所以不依赖 Awake；重复调用不会叠出第二个触发器，也不会每次新建贴图。
+    /// </summary>
+    public void ApplyShape()
     {
-        body = GetComponent<BoxCollider2D>();
-        body.size = new Vector2(1f, 3f);
+        if (body == null) body = GetComponent<BoxCollider2D>();
+        if (body != null)
+        {
+            body.size = new Vector2(1f, 3f);
+            body.enabled = !IsOpen;
+        }
 
-        renderer = GetComponent<SpriteRenderer>();
-        renderer.sprite = MakeSprite();
-        renderer.color = closedColor;
-        renderer.sortingOrder = 1;
+        if (renderer == null) renderer = GetComponent<SpriteRenderer>();
+        if (renderer != null)
+        {
+            if (cachedSprite == null) cachedSprite = MakeSprite();
+            renderer.sprite = cachedSprite;
+            renderer.color = IsOpen ? openColor : closedColor;
+            renderer.sortingOrder = 1;
+        }
 
-        var detector = gameObject.AddComponent<BoxCollider2D>();
-        detector.isTrigger = true;
-        detector.size = new Vector2(1.2f, 3f);
+        if (detector == null)
+        {
+            detector = gameObject.AddComponent<BoxCollider2D>();
+            detector.isTrigger = true;
+            detector.size = new Vector2(1.2f, 3f);
+        }
     }
 
     void OnTriggerEnter2D(Collider2D other)
@@ -42,22 +63,26 @@ public sealed class LabDoor : MonoBehaviour
     {
         if (IsOpen || player == null || !player.ConsumeKey()) return false;
         IsOpen = true;
-        body.enabled = false;
-        renderer.color = openColor;
+        if (body != null) body.enabled = false;
+        if (renderer != null) renderer.color = openColor;
         return true;
     }
 
     public void SetClosedColor(Color color)
     {
         closedColor = color;
-        if (!IsOpen && renderer != null) renderer.color = color;
+        if (IsOpen) return;
+        if (renderer == null) renderer = GetComponent<SpriteRenderer>();
+        if (renderer != null) renderer.color = closedColor;
     }
 
     public void ResetDoor()
     {
         IsOpen = false;
-        body.enabled = true;
-        renderer.color = closedColor;
+        if (body == null) body = GetComponent<BoxCollider2D>();
+        if (body != null) body.enabled = true;
+        if (renderer == null) renderer = GetComponent<SpriteRenderer>();
+        if (renderer != null) renderer.color = closedColor;
     }
 
     static Sprite MakeSprite()

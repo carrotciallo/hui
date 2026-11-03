@@ -16,12 +16,13 @@ public sealed class LabLevelInspector : Editor
 
         EditorGUILayout.HelpBox(
             "关卡数据由 GameJam → Tuning Lab Level Editor 维护。\n" +
-            "这里的场地、绳、出生点都会在 Play 时按 Tuning Lab 的同一套脚本生成。",
+            "这里的场地、绳、钥匙、门、出生点都会在 Play 时按 Tuning Lab 的同一套脚本生成。",
             MessageType.Info);
 
         EditorGUILayout.LabelField("实心格", level.SolidCellCount.ToString());
         EditorGUILayout.LabelField("合并后碰撞矩形", level.MergedRectCount.ToString());
         EditorGUILayout.LabelField("竖绳", level.RopeCount.ToString());
+        EditorGUILayout.LabelField("钥匙 / 门", level.KeyCount + " / " + level.DoorCount);
         EditorGUILayout.LabelField("相机范围", data.bounds.ToString());
         EditorGUILayout.LabelField("相机跟随 size",
             data.cameraMinSize.ToString("0.##") + " – " + data.cameraMaxSize.ToString("0.##") + " 格");

@@ -31,8 +31,14 @@ public sealed class LabLevel : MonoBehaviour
     public int SolidCellCount => Data.solids != null ? Data.solids.Count : 0;
     public int MergedRectCount => Data.MergedRects().Count;
     public int RopeCount => Data.ropes != null ? Data.ropes.Count : 0;
+    public int KeyCount => Data.keys != null ? Data.keys.Count : 0;
+    public int DoorCount => Data.doors != null ? Data.doors.Count : 0;
 
     Transform generatedRoot;
+    // 运行时生成的钥匙/门；地图重置时要关回去、把捡走的钥匙长回来。
+    readonly System.Collections.Generic.List<LabKey> runtimeKeys = new System.Collections.Generic.List<LabKey>();
+    readonly System.Collections.Generic.List<LabDoor> runtimeDoors = new System.Collections.Generic.List<LabDoor>();
+    TuningLab resetLab;
 
     void OnEnable()
     {
@@ -75,6 +81,26 @@ public sealed class LabLevel : MonoBehaviour
     {
         ClearGenerated();
         Build(parent, material, false);
+
+        var lab = parent != null ? parent.GetComponentInParent<TuningLab>() : null;
+        if (lab == null) return;
+        resetLab = lab;
+        lab.MapReset += ResetKeyDoors;
+    }
+
+    /// <summary>地图重置（复活 / 传送）时门关回去，被捡走的钥匙重新长出来。</summary>
+    void ResetKeyDoors()
+    {
+        for (int i = 0; i < runtimeDoors.Count; i++)
+            if (runtimeDoors[i] != null) runtimeDoors[i].ResetDoor();
+
+        Transform root = generatedRoot;
+        if (root == null) return;
+        for (int i = 0; i < runtimeKeys.Count && i < Data.keys.Count; i++)
+        {
+            if (runtimeKeys[i] != null) continue;
+            runtimeKeys[i] = CreateKey(root, Data.keys[i]);
+        }
     }
 
     void Build(Transform parent, PhysicsMaterial2D material, bool preview)
@@ -92,6 +118,8 @@ public sealed class LabLevel : MonoBehaviour
         for (int i = 0; i < rects.Count; i++) AddSolid(root.transform, rects[i], material);
 
         for (int i = 0; i < data.ropes.Count; i++) AddRope(root.transform, data.ropes[i], material);
+        for (int i = 0; i < data.keys.Count; i++) AddKey(root.transform, data.keys[i], preview);
+        for (int i = 0; i < data.doors.Count; i++) AddDoor(root.transform, data.doors[i], preview);
     }
 
     void AddSolid(Transform parent, RectInt rect, PhysicsMaterial2D material)
@@ -129,8 +157,39 @@ public sealed class LabLevel : MonoBehaviour
         rope.ApplyShape();
     }
 
+    void AddKey(Transform parent, LabKeySpec spec, bool preview)
+    {
+        var key = CreateKey(parent, spec);
+        if (!preview) runtimeKeys.Add(key);
+    }
+
+    static LabKey CreateKey(Transform parent, LabKeySpec spec)
+    {
+        var go = new GameObject("Key");
+        go.transform.SetParent(parent, false);
+        go.transform.position = spec.position;
+        var key = go.AddComponent<LabKey>();
+        key.ApplyShape();
+        return key;
+    }
+
+    void AddDoor(Transform parent, LabDoorSpec spec, bool preview)
+    {
+        var go = new GameObject("Door");
+        go.transform.SetParent(parent, false);
+        go.transform.position = spec.position;
+        var door = go.AddComponent<LabDoor>();
+        door.SetClosedColor(spec.color);
+        door.ApplyShape();
+        if (!preview) runtimeDoors.Add(door);
+    }
+
     public void ClearGenerated()
     {
+        UnbindMapReset();
+        runtimeKeys.Clear();
+        runtimeDoors.Clear();
+
         Transform existing = generatedRoot;
         if (existing == null && transform != null) existing = transform.Find(GeneratedRootName);
         generatedRoot = null;
@@ -139,6 +198,13 @@ public sealed class LabLevel : MonoBehaviour
         bool preview = (existing.gameObject.hideFlags & HideFlags.DontSaveInEditor) != 0;
         if (Application.isPlaying && !preview) Destroy(existing.gameObject);
         else DestroyImmediate(existing.gameObject);
+    }
+
+    void UnbindMapReset()
+    {
+        if (resetLab == null) return;
+        resetLab.MapReset -= ResetKeyDoors;
+        resetLab = null;
     }
 
     [ContextMenu("重建关卡预览")]

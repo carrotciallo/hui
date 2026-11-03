@@ -7,16 +7,31 @@ public sealed class LabKey : MonoBehaviour
     public Color color = new Color(1f, 0.85f, 0.1f);
     public bool Collected { get; private set; }
 
-    void Awake()
-    {
-        var collider = GetComponent<BoxCollider2D>();
-        collider.isTrigger = true;
-        collider.size = Vector2.one;
+    static Sprite cachedSprite;
 
-        var renderer = GetComponent<SpriteRenderer>();
-        renderer.sprite = MakeSprite();
-        renderer.color = color;
-        renderer.sortingOrder = 2;
+    void Awake() => ApplyShape();
+
+    /// <summary>
+    /// 把尺寸/颜色/贴图应用到碰撞箱和渲染器。关卡的编辑器预览也会直接调它，
+    /// 所以不依赖 Awake；重复调用复用同一张贴图，不会每次新建一张。
+    /// </summary>
+    public void ApplyShape()
+    {
+        var body = GetComponent<BoxCollider2D>();
+        if (body != null)
+        {
+            body.isTrigger = true;
+            body.size = Vector2.one;
+        }
+
+        var sprite = GetComponent<SpriteRenderer>();
+        if (sprite != null)
+        {
+            if (cachedSprite == null) cachedSprite = MakeSprite();
+            sprite.sprite = cachedSprite;
+            sprite.color = color;
+            sprite.sortingOrder = 2;
+        }
     }
 
     void OnTriggerEnter2D(Collider2D other)

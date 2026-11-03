@@ -23,7 +23,9 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Rope = 3,
         SpawnA = 4,
         SpawnB = 5,
-        Partition = 6
+        Partition = 6,
+        Key = 7,
+        Door = 8
     }
 
     const int EditMargin = 8;                 // 相机范围外还能画多少格
@@ -32,7 +34,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     static readonly string[] ToolLabels =
     {
-        "铺地形", "擦地形", "矩形", "竖绳", "出生点 A", "出生点 B", "关卡分区"
+        "铺地形", "擦地形", "矩形", "竖绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门"
     };
 
     LabLevel level;
@@ -42,11 +44,13 @@ public sealed class LabLevelEditorWindow : EditorWindow
     Tool tool = Tool.Paint;
     int ropeLength = 4;
     int ropeChainId;
+    Color newDoorColor = LabDoor.DefaultClosedColor;
     bool showGrid = true;
     bool showSpawns = true;
     bool showCameraFrames = true;
     Vector2 windowScroll;
     Vector2 ropeScroll;
+    Vector2 keyDoorScroll;
 
     bool gesture;
     Vector2Int rectStart;
@@ -189,6 +193,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         EditorGUILayout.Space();
         DrawRopes();
         EditorGUILayout.Space();
+        DrawKeyDoors();
+        EditorGUILayout.Space();
         DrawSpawns();
         EditorGUILayout.Space();
         DrawBounds();
@@ -319,6 +325,15 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 EditorGUILayout.HelpBox(
                     "左键空白处拖出新分区；在分区内部拖动可移动分区（默认带上里面的地形/绳/出生点）。\n" +
                     "改名 / 调大小 / 删除在下面的「关卡分区」面板里。",
+                    MessageType.None);
+                break;
+            case Tool.Key:
+                EditorGUILayout.HelpBox("左键在一个格子上放一把钥匙（1×1，拾取后消失）。", MessageType.None);
+                break;
+            case Tool.Door:
+                EditorGUILayout.HelpBox(
+                    "左键点门最下面那一格，门向上占 3 格（1×3）。任意一把钥匙能开任意一扇门，\n" +
+                    "颜色只用于区分，在下面的「钥匙 / 门」面板里调。",
                     MessageType.None);
                 break;
         }
@@ -517,6 +532,94 @@ public sealed class LabLevelEditorWindow : EditorWindow
             Record("清空竖绳");
             level.Data.ClearRopes();
             AfterStructuralEdit();
+        }
+    }
+
+    void DrawKeyDoors()
+    {
+        EditorGUILayout.LabelField("钥匙 / 门", EditorStyles.boldLabel);
+        var data = level.Data;
+
+        EditorGUILayout.LabelField("钥匙", level.KeyCount + "（1×1，拾取后消失）");
+        EditorGUILayout.LabelField("门", level.DoorCount + "（1×3，任意一把钥匙开门）");
+        newDoorColor = EditorGUILayout.ColorField("新门颜色", newDoorColor);
+
+        keyDoorScroll = EditorGUILayout.BeginScrollView(keyDoorScroll, GUILayout.MaxHeight(120f));
+        if (data.keys != null)
+        {
+            for (int i = 0; i < data.keys.Count; i++)
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField(
+                        string.Format("钥匙 ({0:0.##}, {1:0.##})",
+                            data.keys[i].position.x, data.keys[i].position.y),
+                        EditorStyles.miniLabel);
+                    if (GUILayout.Button("×", GUILayout.Width(24f)))
+                    {
+                        Record("删钥匙");
+                        data.keys.RemoveAt(i);
+                        AfterStructuralEdit();
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (data.doors != null)
+        {
+            for (int i = 0; i < data.doors.Count; i++)
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    var door = data.doors[i];
+                    EditorGUILayout.LabelField(
+                        string.Format("门 ({0:0.##}, {1:0.##})", door.position.x, door.position.y),
+                        EditorStyles.miniLabel);
+                    EditorGUI.BeginChangeCheck();
+                    Color color = EditorGUILayout.ColorField(GUIContent.none, door.color, false, false, false,
+                        GUILayout.Width(40f));
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        Record("改门颜色");
+                        door.color = color;
+                        data.doors[i] = door;
+                        MarkDirty(true);
+                    }
+                    if (GUILayout.Button("×", GUILayout.Width(24f)))
+                    {
+                        Record("删门");
+                        data.doors.RemoveAt(i);
+                        AfterStructuralEdit();
+                        break;
+                    }
+                }
+            }
+        }
+        EditorGUILayout.EndScrollView();
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            using (new EditorGUI.DisabledScope(level.KeyCount == 0))
+            {
+                if (GUILayout.Button("清空钥匙"))
+                {
+                    if (!EditorUtility.DisplayDialog("清空钥匙", "删掉所有钥匙？", "清空", "取消")) return;
+                    Record("清空钥匙");
+                    level.Data.ClearKeys();
+                    AfterStructuralEdit();
+                }
+            }
+            using (new EditorGUI.DisabledScope(level.DoorCount == 0))
+            {
+                if (GUILayout.Button("清空门"))
+                {
+                    if (!EditorUtility.DisplayDialog("清空门", "删掉所有门？", "清空", "取消")) return;
+                    Record("清空门");
+                    level.Data.ClearDoors();
+                    AfterStructuralEdit();
+                }
+            }
         }
     }
 
@@ -860,12 +963,46 @@ public sealed class LabLevelEditorWindow : EditorWindow
             }
         }
 
+        if (data.keys != null)
+        {
+            var seenKeys = new HashSet<Vector2>();
+            for (int i = 0; i < data.keys.Count; i++)
+            {
+                var key = data.keys[i];
+                if (!data.ContainsPoint(key.position))
+                    issues.Add("第 " + i + " 把钥匙不在编辑范围内：" + key.position);
+                if (!seenKeys.Add(key.position))
+                    issues.Add("第 " + i + " 把钥匙和前面的钥匙重合：" + key.position);
+
+                RectInt cell = key.Cells();
+                if (data.HasCell(new Vector2Int(cell.x, cell.y)))
+                    issues.Add("第 " + i + " 把钥匙在地形里：" + new Vector2Int(cell.x, cell.y));
+            }
+        }
+
+        if (data.doors != null)
+        {
+            for (int i = 0; i < data.doors.Count; i++)
+            {
+                var door = data.doors[i];
+                if (!data.ContainsPoint(door.position))
+                    issues.Add("第 " + i + " 扇门不在编辑范围内：" + door.position);
+
+                RectInt cells = door.Cells();
+                for (int y = cells.y; y < cells.y + cells.height; y++)
+                {
+                    var cell = new Vector2Int(cells.x, y);
+                    if (data.HasCell(cell)) issues.Add("第 " + i + " 扇门和地形重叠：" + cell);
+                }
+            }
+        }
+
         validated = true;
 
         if (issues.Count == 0)
         {
-            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 个关卡分区。",
-                level.SolidCellCount, level.MergedRectCount, level.RopeCount,
+            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 个关卡分区。",
+                level.SolidCellCount, level.MergedRectCount, level.RopeCount, level.KeyCount, level.DoorCount,
                 data.partitions != null ? data.partitions.Count : 0), level);
         }
         else
@@ -931,6 +1068,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawBoundsHandle(data);
         DrawPartitionHandles(data);
         DrawRopeHandles(data);
+        DrawKeyDoorHandles(data);
         if (showSpawns) DrawSpawnHandles(data);
         if (showCameraFrames) DrawCameraFrames(data);
 
@@ -1024,6 +1162,35 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
             case Tool.Partition:
                 BeginPartition(cell);
+                break;
+
+            case Tool.Key:
+                if (!inBounds)
+                {
+                    Notify(view, "钥匙必须放在相机范围里。");
+                    return;
+                }
+                Record("放钥匙");
+                level.Data.keys.Add(new LabKeySpec(new Vector2(cell.x + 0.5f, cell.y + 0.5f)));
+                AfterStructuralEdit();
+                break;
+
+            case Tool.Door:
+                if (!inBounds)
+                {
+                    Notify(view, "门必须放在相机范围里。");
+                    return;
+                }
+                if (cell.y + LabDoorSpec.CellHeight > level.Data.bounds.yMax)
+                {
+                    Notify(view, "门有 3 格高，超出相机范围上沿。");
+                    return;
+                }
+                Record("放门");
+                level.Data.doors.Add(new LabDoorSpec(
+                    new Vector2(cell.x + 0.5f, cell.y + LabDoorSpec.CellHeight * 0.5f),
+                    newDoorColor));
+                AfterStructuralEdit();
                 break;
         }
     }
@@ -1246,6 +1413,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case KeyCode.Alpha5: tool = Tool.SpawnA; break;
             case KeyCode.Alpha6: tool = Tool.SpawnB; break;
             case KeyCode.Alpha7: tool = Tool.Partition; break;
+            case KeyCode.Alpha8: tool = Tool.Key; break;
+            case KeyCode.Alpha9: tool = Tool.Door; break;
             case KeyCode.Delete:
                 if (tool != Tool.Partition || partitionIndex < 0) return false;
                 DeleteSelectedPartition();
@@ -1320,6 +1489,31 @@ public sealed class LabLevelEditorWindow : EditorWindow
             Handles.DrawWireCube(
                 new Vector3(rope.center.x, rope.center.y, 0f),
                 new Vector3(RopeStripWidth, rope.cells, 0.01f));
+        }
+    }
+
+    void DrawKeyDoorHandles(LabLevelData data)
+    {
+        if (data.keys != null)
+        {
+            Handles.color = new Color(1f, 0.85f, 0.1f, 0.9f);
+            for (int i = 0; i < data.keys.Count; i++)
+            {
+                var key = data.keys[i];
+                Handles.DrawWireCube(new Vector3(key.position.x, key.position.y, 0f), Vector3.one);
+            }
+        }
+
+        if (data.doors != null)
+        {
+            for (int i = 0; i < data.doors.Count; i++)
+            {
+                var door = data.doors[i];
+                Handles.color = new Color(door.color.r, door.color.g, door.color.b, 0.9f);
+                Handles.DrawWireCube(
+                    new Vector3(door.position.x, door.position.y, 0f),
+                    new Vector3(1f, LabDoorSpec.CellHeight, 0.01f));
+            }
         }
     }
 
@@ -1484,6 +1678,26 @@ public sealed class LabLevelEditorWindow : EditorWindow
             return;
         }
 
+        if (tool == Tool.Key)
+        {
+            Handles.color = inBounds
+                ? new Color(color.r, color.g, color.b, 0.6f)
+                : new Color(1f, 0.3f, 0.25f, 0.9f);
+            Handles.DrawWireCube(CellCenter(cell), Vector3.one);
+            return;
+        }
+
+        if (tool == Tool.Door)
+        {
+            Handles.color = inBounds
+                ? new Color(color.r, color.g, color.b, 0.7f)
+                : new Color(1f, 0.3f, 0.25f, 0.9f);
+            Handles.DrawWireCube(
+                new Vector3(cell.x + 0.5f, cell.y + LabDoorSpec.CellHeight * 0.5f, 0f),
+                new Vector3(1f, LabDoorSpec.CellHeight, 0.01f));
+            return;
+        }
+
         Handles.color = new Color(color.r, color.g, color.b, 0.18f);
         Handles.DrawSolidRectangleWithOutline(
             RectVerts(cell.x, cell.y, cell.x + 1, cell.y + 1),
@@ -1517,6 +1731,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.SpawnA: return TuningLab.ColorA;
             case Tool.SpawnB: return TuningLab.ColorB;
             case Tool.Partition: return new Color(1f, 0.85f, 0.3f, 0.95f);
+            case Tool.Key: return new Color(1f, 0.85f, 0.1f, 0.95f);
+            case Tool.Door: return new Color(newDoorColor.r, newDoorColor.g, newDoorColor.b, 0.95f);
             default: return new Color(1f, 0.85f, 0.3f, 0.95f);
         }
     }

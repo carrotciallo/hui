@@ -23,6 +23,10 @@ public sealed class LabLevelData
     public float cameraMaxSize = TuningLab.DefaultCameraMaxSize;
     public List<Vector2Int> solids = new List<Vector2Int>();
     public List<LabRopeSpec> ropes = new List<LabRopeSpec>();
+    /// <summary>钥匙（1×1，拾取后消失）。</summary>
+    public List<LabKeySpec> keys = new List<LabKeySpec>();
+    /// <summary>门（1×3，任意一把钥匙开任意一扇门）。</summary>
+    public List<LabDoorSpec> doors = new List<LabDoorSpec>();
     /// <summary>连续关卡分区。每个分区的 bounds 同时是它的相机范围；B 进入哪个分区就用哪个分区。</summary>
     public List<LabLevelPartition> partitions = new List<LabLevelPartition>();
 
@@ -50,6 +54,18 @@ public sealed class LabLevelData
         else ropes.Clear();
     }
 
+    public void ClearKeys()
+    {
+        if (keys == null) keys = new List<LabKeySpec>();
+        else keys.Clear();
+    }
+
+    public void ClearDoors()
+    {
+        if (doors == null) doors = new List<LabDoorSpec>();
+        else doors.Clear();
+    }
+
     public bool ContainsCell(Vector2Int cell)
     {
         return cell.x >= bounds.x && cell.x < bounds.x + bounds.width
@@ -67,7 +83,20 @@ public sealed class LabLevelData
     {
         if (solids == null) solids = new List<Vector2Int>();
         if (ropes == null) ropes = new List<LabRopeSpec>();
+        if (keys == null) keys = new List<LabKeySpec>();
+        if (doors == null) doors = new List<LabDoorSpec>();
         if (partitions == null) partitions = new List<LabLevelPartition>();
+
+        // 门色漏写/手填成透明时回落到默认色，否则门在场景里完全看不见。
+        for (int i = 0; i < doors.Count; i++)
+        {
+            var door = doors[i];
+            if (door.color.a <= 0.01f)
+            {
+                door.color = LabDoor.DefaultClosedColor;
+                doors[i] = door;
+            }
+        }
 
         // 旧场景里没有这两个字段时读出来是 0：回落到 Tuning Lab 默认，避免相机被锁死在 0.1。
         if (cameraMinSize <= 0f) cameraMinSize = TuningLab.DefaultCameraMinSize;
@@ -122,6 +151,8 @@ public sealed class LabLevelData
             cameraMaxSize = TuningLab.DefaultCameraMaxSize;
             solids = new List<Vector2Int>();
             ropes = new List<LabRopeSpec>();
+            keys = new List<LabKeySpec>();
+            doors = new List<LabDoorSpec>();
             partitions = new List<LabLevelPartition>();
             return;
         }
@@ -133,6 +164,8 @@ public sealed class LabLevelData
         cameraMaxSize = other.cameraMaxSize;
         solids = new List<Vector2Int>(other.solids ?? new List<Vector2Int>());
         ropes = new List<LabRopeSpec>(other.ropes ?? new List<LabRopeSpec>());
+        keys = new List<LabKeySpec>(other.keys ?? new List<LabKeySpec>());
+        doors = new List<LabDoorSpec>(other.doors ?? new List<LabDoorSpec>());
         partitions = new List<LabLevelPartition>();
         if (other.partitions != null)
         {
@@ -263,6 +296,28 @@ public sealed class LabLevelData
             }
         }
 
+        if (keys != null)
+        {
+            for (int i = 0; i < keys.Count; i++)
+            {
+                var key = keys[i];
+                if (!oldRect.Contains(key.position)) continue;
+                key.position += shift;
+                keys[i] = key;
+            }
+        }
+
+        if (doors != null)
+        {
+            for (int i = 0; i < doors.Count; i++)
+            {
+                var door = doors[i];
+                if (!oldRect.Contains(door.position)) continue;
+                door.position += shift;
+                doors[i] = door;
+            }
+        }
+
         if (oldRect.Contains(spawnA)) spawnA += shift;
         if (oldRect.Contains(spawnB)) spawnB += shift;
     }
@@ -312,6 +367,10 @@ public sealed class LabLevelData
                 solids.RemoveAll(cell => rect.Contains(new Vector2(cell.x + 0.5f, cell.y + 0.5f)));
             if (ropes != null)
                 ropes.RemoveAll(rope => rect.Contains(rope.center));
+            if (keys != null)
+                keys.RemoveAll(key => rect.Contains(key.position));
+            if (doors != null)
+                doors.RemoveAll(door => rect.Contains(door.position));
         }
 
         partitions.RemoveAt(index);
@@ -460,6 +519,52 @@ public struct LabRopeSpec
         this.cells = cells;
         this.chainId = chainId;
     }
+}
+
+/// <summary>
+/// 一把钥匙。1×1，位置是中心；编辑器按格中心摆放，所以 x/y 都是格 + 0.5。
+/// </summary>
+[System.Serializable]
+public struct LabKeySpec
+{
+    public Vector2 position;
+
+    public LabKeySpec(Vector2 position)
+    {
+        this.position = position;
+    }
+
+    /// <summary>钥匙盖住的格子（1×1）。</summary>
+    public RectInt Cells() => new RectInt(
+        Mathf.FloorToInt(position.x),
+        Mathf.FloorToInt(position.y),
+        1, 1);
+}
+
+/// <summary>
+/// 一扇门。1×3，位置是中心；任意一把钥匙都能开任意一扇门，颜色只用于区分/辨认。
+/// </summary>
+[System.Serializable]
+public struct LabDoorSpec
+{
+    public const int CellHeight = 3;
+
+    public Vector2 position;
+    public Color color;
+
+    public LabDoorSpec(Vector2 position, Color color)
+    {
+        this.position = position;
+        this.color = color;
+    }
+
+    public static LabDoorSpec At(Vector2 position) => new LabDoorSpec(position, LabDoor.DefaultClosedColor);
+
+    /// <summary>门盖住的格子：宽 1、高 <see cref="CellHeight"/>，按中心算。</summary>
+    public RectInt Cells() => new RectInt(
+        Mathf.FloorToInt(position.x),
+        Mathf.FloorToInt(position.y - CellHeight * 0.5f),
+        1, CellHeight);
 }
 
 /// <summary>
