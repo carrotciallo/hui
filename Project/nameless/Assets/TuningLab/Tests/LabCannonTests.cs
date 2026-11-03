@@ -64,7 +64,7 @@ public sealed class LabCannonTests
         int hits = 0;
         lab.PlayerHit += info => hits++;
 
-        Shatter(a, LabPlayer.Edge.Bottom);
+        Shatter(a, LabPlayer.Edge.Top);            // 口朝上：B 只能从上面进膛
         Assert.AreEqual(LabForm.Cannon, a.Form);
 
         // 有速度、但不在冲刺态：照旧走进动量互换，不进膛
@@ -81,7 +81,10 @@ public sealed class LabCannonTests
         // 同样的方向、同样的入口，换成冲刺态就进膛
         yield return LoadInto(a, b, Vector2.down, EntrySpeed);
         Assert.IsTrue(a.Loaded, "有且仅能以冲刺态进入");
-        Assert.IsTrue(b.Suspended);
+        Assert.IsTrue(b.Suspended,
+            $"膛里有人但 B 不认账：a.loaded={a.Loaded} b.Host={(b.Host == null ? "null" : b.Host.name)} " +
+            $"a=({a.transform.position.x:F2},{a.transform.position.y:F2}) b=({b.transform.position.x:F2},{b.transform.position.y:F2}) " +
+            $"a.form={a.Form} b.form={b.Form}");
     }
 
     [UnityTest]
@@ -112,6 +115,39 @@ public sealed class LabCannonTests
         Assert.Greater(hits, 0, "退回原来的动量互换");
     }
 
+    // 朝向门控：只有撞在炮口（灵体边）上才装填 --------------------------
+
+    [UnityTest]
+    public IEnumerator DashIntoASolidEdgeDoesNotLoad()
+    {
+        MakeFloor();
+        var a = MakeFrame();
+        var b = MakeChunk();
+        Link(a, b);
+        int hits = 0;
+        lab.PlayerHit += info => hits++;
+
+        Shatter(a, LabPlayer.Edge.Top);
+        Assert.AreEqual("u 大炮 口朝↑", a.FormLabel);
+
+        // 同一门炮、同样以冲刺态撞上去，只是改从侧面顶还没碎的左壁：朝向不对就不该进膛
+        b.Teleport(new Vector2(a.transform.position.x - (AHalf + BHalf + 1.5f), a.transform.position.y));
+        b.ApplyDash(new LabPlayer.DashState
+        {
+            active = true,
+            dir = Vector2.right,
+            speed = EntrySpeed,
+            exitSpeed = EntrySpeed,
+            timer = 2f / EntrySpeed
+        });
+
+        yield return WaitUntil(() => hits > 0, 3f);
+
+        Assert.IsFalse(a.Loaded, "撞在实体边上不进膛");
+        Assert.IsFalse(b.Suspended, "撞在实体边上不把自己交出去");
+        Assert.Greater(hits, 0, "朝向不对的冲刺撞击退回常规对撞结算");
+    }
+
     // 装填态 -----------------------------------------------------------
 
     [UnityTest]
@@ -122,7 +158,7 @@ public sealed class LabCannonTests
         var b = MakeChunk();
         Link(a, b);
 
-        Shatter(a, LabPlayer.Edge.Bottom);
+        Shatter(a, LabPlayer.Edge.Top);            // 口朝上，B 从上方冲进来才对得上
         yield return LoadInto(a, b, Vector2.down, EntrySpeed);
 
         Assert.IsFalse(b.GetComponent<Collider2D>().enabled, "膛内没有碰撞");
@@ -155,7 +191,7 @@ public sealed class LabCannonTests
         var b = MakeChunk();
         Link(a, b);
 
-        Shatter(a, LabPlayer.Edge.Bottom);
+        Shatter(a, LabPlayer.Edge.Top);            // 口朝上，B 从上方冲进来才对得上
         yield return LoadInto(a, b, Vector2.down, EntrySpeed);
 
         float vBefore = a.ChamberVelocity.magnitude;
@@ -188,7 +224,7 @@ public sealed class LabCannonTests
         var a = MakeFrame();
         var b = MakeChunk();
         Link(a, b);
-        Shatter(a, LabPlayer.Edge.Bottom);
+        Shatter(a, LabPlayer.Edge.Top);               // 口朝上：B 从上面落进来才对着炮口
 
         float topOfA = a.transform.position.y + AHalf;
         float startY = topOfA + BHalf + drop;
@@ -267,10 +303,10 @@ public sealed class LabCannonTests
         var a = MakeFrame();
         var b = MakeChunk();
         Link(a, b);
-        Shatter(a, LabPlayer.Edge.Bottom);
+        Shatter(a, LabPlayer.Edge.Top);            // 口朝上，B 从上方冲进来才对得上
         yield return LoadInto(a, b, Vector2.down, EntrySpeed);
 
-        Shatter(a, LabPlayer.Edge.Left);         // u → L：二者分开（下+左 = 相邻）
+        Shatter(a, LabPlayer.Edge.Left);         // u → L：二者分开（上+左 = 相邻）
 
         Assert.AreEqual(LabForm.Converter, a.Form);
         Assert.IsFalse(a.Loaded);
@@ -287,11 +323,11 @@ public sealed class LabCannonTests
         var a = MakeFrame();
         var b = MakeChunk();
         Link(a, b);
-        Shatter(a, LabPlayer.Edge.Bottom);
+        Shatter(a, LabPlayer.Edge.Top);            // 口朝上，B 从上方冲进来才对得上
         yield return LoadInto(a, b, Vector2.down, EntrySpeed);
 
-        Heat(a, LabPlayer.Edge.Top);
-        a.StrikeEdge(LabPlayer.Edge.Top, true);        // 热二遇红热 = A 死亡
+        Heat(a, LabPlayer.Edge.Bottom);
+        a.StrikeEdge(LabPlayer.Edge.Bottom, true);      // 热二遇红热 = A 死亡（口在上方，不能碎边）
 
         Assert.IsFalse(b.Suspended, "膛里的人不能跟着宿主一起没");
         Assert.IsTrue(b.GetComponent<Collider2D>().enabled);
@@ -363,7 +399,7 @@ public sealed class LabCannonTests
         var a = MakeFrame();
         var b = MakeChunk();
         Link(a, b);
-        Shatter(a, LabPlayer.Edge.Bottom);
+        Shatter(a, LabPlayer.Edge.Top);            // 口朝上，B 从上方冲进来才对得上
         yield return LoadInto(a, b, Vector2.down, EntrySpeed);
 
         Shatter(a, LabPlayer.Edge.Left);        // 碎边组合变了 → 不再是 u → 退膛

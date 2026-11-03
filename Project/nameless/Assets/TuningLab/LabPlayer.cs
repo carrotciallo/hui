@@ -702,13 +702,21 @@ public class LabPlayer : MonoBehaviour
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// 膛空的大炮只吃"冲刺态"撞进来的 B；不在这个状态就退回原来的动量互换。
+    /// 膛空的大炮只吃"从炮口撞进来的冲刺态 B"。撞的是哪条边按两人中心差的主分量判，
+    /// 和加热、动量互换用的是同一个读数：那条边已经是灵体（= 炮口）才装填，
+    /// 撞在还没碎的边上就退回常规对撞结算 —— 四个朝向到这里才第一次有区别。
     /// 装填成功返回 true，这次碰撞不再走进挡位互换。
     /// </summary>
     bool TryAbsorb(LabPlayer b)
     {
         if (!CanLoad || b == null || b.host != null) return false;
         if (!b.InDashState) return false;
+
+        Vector2 to = (Vector2)b.transform.position - (Vector2)transform.position;
+        Edge struck = EdgeFor(Mathf.Abs(to.x) >= Mathf.Abs(to.y)
+            ? new Vector2(Mathf.Sign(to.x), 0f)
+            : new Vector2(0f, Mathf.Sign(to.y)));
+        if (!IsSpirit(struck)) return false;
 
         loaded = b;
         b.host = this;
