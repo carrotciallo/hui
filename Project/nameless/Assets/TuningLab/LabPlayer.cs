@@ -101,6 +101,11 @@ public class LabPlayer : MonoBehaviour
     /// <summary>哪几条边碎成了灵体；形态完全由它算出来。</summary>
     public int SpiritMask => spiritMask;
     public LabForm Form => form;
+    /// <summary>已装入身体、尚未被门消耗的钥匙数量。</summary>
+    public int KeyCount { get; private set; }
+    /// <summary>A 只有普通态和灵体态可拾取；B 在所有形态下都可拾取。</summary>
+    public bool CanCollectKey => !Suspended &&
+        (!canBeRedHot || form == LabForm.Normal || form == LabForm.Spirit);
     /// <summary>形态读数，带朝向，给 HUD 用。</summary>
     public string FormLabel => LabForms.Label(spiritMask, form);
     /// <summary>炮口朝向 = 唯一（或最后）碎掉的那条边。</summary>
@@ -677,7 +682,8 @@ public class LabPlayer : MonoBehaviour
                 {
                     Eject();                       // 膛里的人不能跟着宿主一起没
                     EdgeCollapsed?.Invoke(this, e);
-                    Destroy(gameObject);             // 热二再遭遇红色碰撞，角色直接死亡
+                    if (lab != null && lab.TryRespawn(this)) return;
+                    Destroy(gameObject);             // 没有重生点时沿用原实验台行为
                 }
                 else
                 {
@@ -711,6 +717,22 @@ public class LabPlayer : MonoBehaviour
     }
 
     public void SetHitCooldown(float until) => nextHitTime = until;
+
+    public bool TryCollectKey(LabKey key)
+    {
+        if (key == null || !CanCollectKey) return false;
+        KeyCount++;
+        return true;
+    }
+
+    public bool ConsumeKey()
+    {
+        if (KeyCount <= 0) return false;
+        KeyCount--;
+        return true;
+    }
+
+    public void ClearKeys() => KeyCount = 0;
 
     // ------------------------------------------------------------------
     // 大炮（Issue #15）：冲刺态进入 → 存速 → 反向射出
@@ -909,6 +931,16 @@ public class LabPlayer : MonoBehaviour
         LandedApexDescent = 0f;
         LaunchFootY = FootY;
         ApexFootY = FootY;
+    }
+
+    public void TeleportPreservingState(Vector2 position, Vector2 velocity)
+    {
+        var savedEdges = new EdgeState[4];
+        for (int i = 0; i < savedEdges.Length; i++) savedEdges[i] = edgeStates[i];
+
+        Teleport(position);
+        for (int i = 0; i < savedEdges.Length; i++) SetEdge((Edge)i, savedEdges[i]);
+        rb.linearVelocity = velocity;
     }
 
     // ------------------------------------------------------------------
