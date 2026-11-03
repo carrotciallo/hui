@@ -172,7 +172,7 @@ public class LabHud : MonoBehaviour
         lab.tierSpacingCells = 4f;
         lab.redHotTierIndex = 1;
         lab.forgeTierIndex = 0;
-        lab.redHotDuration = 1.5f;
+        lab.redHotDuration = 2.25f;
         lab.maxFallSpeed = TierMath.SpeedForCells(17f, g);
     }
 
@@ -281,11 +281,15 @@ public class LabHud : MonoBehaviour
     /// <summary>膛内状态：是否装填、是否可装填，以及这一发会打出多大速度。</summary>
     string ChamberText(LabPlayer a)
     {
+        if (a.ConverterLoaded)
+            return string.Format("转向装填  {0:0.0}s 后自动从另一缺口射出（原速）",
+                a.ConverterTimeLeft);
         if (a.Loaded)
             return string.Format("已装填  Vb={0:0.0} → v'={1:0.0}（B 的句号开炮）",
                 a.ChamberVelocity.magnitude, a.LaunchSpeed);
+        if (a.Form == LabForm.Converter) return "L 转向器  空膛（速度高于 v0 即可进入）";
         if (a.CanLoad) return "空膛  可装填（B 以冲刺态撞进口里）";
-        return "不装填（不是 u 形）";
+        return "不装填（不是 u 形或 L 形）";
     }
 
     static string EdgeGlyph(LabPlayer.EdgeState s)
