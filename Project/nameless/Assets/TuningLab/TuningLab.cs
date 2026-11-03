@@ -60,6 +60,8 @@ public class TuningLab : MonoBehaviour
     [Range(0, 4)] public int redHotTierIndex = 1;
     [Tooltip("红热态 1 持续多久回到常态。红热态 2 永久。")]
     public float redHotDuration = 1.5f;
+    [Tooltip("场景撞击的锻造门槛取哪一级（0 = v0/v1 边界）。到不了这个速度什么都不发生；到了就砸那一条边，够不到红热门槛只砸不加热。")]
+    [Range(0, 4)] public int forgeTierIndex = 0;
     public bool verticalHitEnabled = true;
 
     [Header("等级（等距）")]
@@ -113,6 +115,13 @@ public class TuningLab : MonoBehaviour
     public float Vd1 => TierMath.SpeedForCells(Boundary(0) + Mathf.Max(0.01f, dashOverV0Cells), gravity);
     /// <summary>冲刺态的位移（格），恒定。</summary>
     public float DashDistance => Mathf.Max(0f, dashDistanceCells);
+
+    /// <summary>红热门槛（速度）。双人撞击比的是 Vp = 速度平方，用时再平方。</summary>
+    public float RedHotSpeed => SpeedForCells(Boundary(redHotTierIndex));
+    /// <summary>锻造门槛（速度）：场景撞击的下限，永不高于红热门槛。</summary>
+    public float ForgeSpeed => SpeedForCells(Boundary(Mathf.Min(forgeTierIndex, redHotTierIndex)));
+    /// <summary>大炮发射的增量 = 一个等级间距的 v²（= 2·g·间距格数）。v' = √(Vb² + 这个数)。</summary>
+    public float CannonBoostV2 => 2f * gravity * Mathf.Max(0.01f, tierSpacingCells);
 
     // ---- 等级门槛：等距生成，不再手填数组 ----
     float[] cachedBounds;
@@ -299,6 +308,8 @@ public class TuningLab : MonoBehaviour
         if (kb.rKey.wasPressedThisFrame) ResetPlayers();
         if (kb.pKey.wasPressedThisFrame) showPixelGrid = !showPixelGrid;
         if (kb.tabKey.wasPressedThisFrame) showGrid = !showGrid;
+        if (kb.f1Key.wasPressedThisFrame && PlayerA != null) PlayerA.DebugShatterNextEdge();
+        if (kb.f2Key.wasPressedThisFrame && PlayerA != null) PlayerA.ResetEdges();
     }
 
     void LateUpdate()

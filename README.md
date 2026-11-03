@@ -44,6 +44,7 @@ Unity 打开工程可能重写 `ProjectSettings/`。提交前先检查 `git stat
 
 - [当前基准导航](docs/current-baseline.md)
 - [Tuning Lab 使用手册](docs/tuning-lab.md)
+- [冲刺与对撞：现行规则](docs/冲刺与对撞-现行规则.md)（按代码写的冲刺 / 对撞 / 锻造 / 形态 / 大炮规则）
 - [Tuning Lab 关卡编辑器](docs/tuning-lab-level-editor.md)
 - [策划 → 程序交接](docs/agents/策划-程序交接.md)
 - [Issue 流程](docs/agents/issue-tracker.md)

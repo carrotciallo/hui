@@ -2,7 +2,8 @@ using UnityEngine;
 
 /// <summary>
 /// 自由相机：跟随两名玩家的中点，按两人的距离缩放，并限制在当前关卡范围内。
-/// 从仓库的 CoopCamera 移植，去掉 PlayerLife / World 依赖（调试台里玩家不会死）。
+/// 从仓库的 CoopCamera 移植，去掉 PlayerLife / World 依赖。
+/// 锻造塌框会销毁一名玩家：那时相机改绑存活者，尺寸收到最小值，不再按距离伸缩。
 ///
 /// 连续关卡时，用 B 的位置向 TuningLab 查当前关卡分区（bounds / minSize / maxSize）；
 /// 分区切换时 active 值会按 frameBlend 混合，避免相机直接跳。
@@ -64,29 +65,38 @@ public sealed class LabCamera : MonoBehaviour
 
     void LateUpdate()
     {
-        if (cam == null || a == null || b == null) return;
+        if (cam == null) return;
 
-        UpdateFrameTarget();
+        // 一方死亡（GameObject 被销毁）后，相机绑在活着的这个人身上，spread 归零 = 不再伸缩。
+        bool hasA = a != null;
+        bool hasB = b != null;
+        if (!hasA && !hasB) return;
+        bool solo = !hasA || !hasB;
 
-        Vector3 mid = (a.position + b.position) * 0.5f;
-        mid.z = transform.position.z;
+        Vector3 focus = solo
+            ? (hasA ? a.position : b.position)
+            : (a.position + b.position) * 0.5f;
+        focus.z = transform.position.z;
 
-        float spread = Mathf.Max(Mathf.Abs(a.position.x - b.position.x),
-                                 Mathf.Abs(a.position.y - b.position.y));
+        UpdateFrameTarget(focus);
+
+        float spread = solo
+            ? 0f
+            : Mathf.Max(Mathf.Abs(a.position.x - b.position.x), Mathf.Abs(a.position.y - b.position.y));
 
         float t = 1f - Mathf.Exp(-smoothing * Time.deltaTime);
         float targetSize = Mathf.Clamp(activeMinSize + spread * sizePerUnit, activeMinSize, activeMaxSize);
         cam.orthographicSize = Mathf.Lerp(cam.orthographicSize, targetSize, t);
 
-        Vector3 next = Vector3.Lerp(transform.position, mid + offset, t);
+        Vector3 next = Vector3.Lerp(transform.position, focus + offset, t);
         transform.position = Clamp(next, cam.orthographicSize);
     }
 
     /// <summary>
-    /// 每帧从 TuningLab 取当前关卡分区（B 的位置判定），再按 frameBlend 混合 active 取景。
+    /// 每帧从 TuningLab 取当前关卡分区（用取景点的位置判定），再按 frameBlend 混合 active 取景。
     /// 没有 TuningLab 时退回 Inspector 上的 bounds / minSize / maxSize。
     /// </summary>
-    void UpdateFrameTarget()
+    void UpdateFrameTarget(Vector2 probe)
     {
         Rect targetBounds = bounds;
         float targetMin = minSize;
@@ -94,7 +104,7 @@ public sealed class LabCamera : MonoBehaviour
 
         if (lab != null)
         {
-            lab.GetCameraFrame(b.position, out targetBounds, out targetMin, out targetMax);
+            lab.GetCameraFrame(probe, out targetBounds, out targetMin, out targetMax);
             bounds = targetBounds;
             minSize = targetMin;
             maxSize = targetMax;

@@ -22,6 +22,8 @@ public class LabVisual : MonoBehaviour
     SpriteRenderer eye;
     SpriteRenderer[] edges;          // 上 下 左 右
     Transform eyeT;
+    readonly System.Collections.Generic.List<SpriteRenderer> parts =
+        new System.Collections.Generic.List<SpriteRenderer>();
 
     float eyeOffset;
     Color baseColor = Color.white;
@@ -97,7 +99,15 @@ public class LabVisual : MonoBehaviour
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sprite;
         sr.sortingOrder = sortingOrder;
+        parts.Add(sr);
         return sr;
+    }
+
+    /// <summary>装填态：整块 B 不可视，但 GameObject 还在，由宿主带着走。</summary>
+    public void SetVisible(bool visible)
+    {
+        for (int i = 0; i < parts.Count; i++)
+            if (parts[i] != null) parts[i].enabled = visible;
     }
 
     // ------------------------------------------------------------------
@@ -136,6 +146,7 @@ public class LabVisual : MonoBehaviour
         {
             case LabPlayer.EdgeState.Hot1: sr.color = new Color(1f, 0.55f, 0.15f); break;
             case LabPlayer.EdgeState.Hot2: sr.color = new Color(1f, 0.12f, 0.08f); break;
+            case LabPlayer.EdgeState.Spirit: sr.color = new Color(1f, 1f, 1f, 0.15f); break;
             default: sr.color = baseColor * 0.65f; break;
         }
     }
