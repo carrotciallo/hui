@@ -410,6 +410,62 @@ public sealed class LabCannonTests
                         "退膛必须带进入时的速度，不能把人原地放下");
     }
 
+    // L 形转向器（Issue #21）------------------------------------------
+
+    [UnityTest]
+    public IEnumerator ConverterLoadsFromOneOpeningAndAutoFiresThroughTheOther()
+    {
+        MakeFloor();
+        var a = MakeFrame();
+        var b = MakeChunk();
+        Link(a, b);
+        Shatter(a, LabPlayer.Edge.Top);
+        Shatter(a, LabPlayer.Edge.Right);
+        Assert.AreEqual(LabForm.Converter, a.Form);
+
+        b.Teleport((Vector2)a.transform.position + Vector2.right * (AHalf + BHalf + 1.5f));
+        b.SetVelocity(Vector2.left * EntrySpeed);
+        yield return WaitUntil(() => a.Loaded, 3f);
+
+        Assert.IsTrue(b.Suspended);
+        yield return StepFixed(Mathf.CeilToInt(0.8f / Time.fixedDeltaTime));
+        Assert.IsTrue(a.Loaded, "L 形装填未满 1 秒前不能发射");
+
+        yield return WaitUntil(() => !a.Loaded, 1f);
+        Assert.IsFalse(b.Suspended);
+        Assert.Greater(b.Velocity.y, 0f, "从右侧进入应从上侧射出");
+        Assert.AreEqual(EntrySpeed, b.Velocity.magnitude, 0.5f,
+                        "L 形应保持 B 的原速，不叠加 A 的速度");
+        Assert.IsFalse(b.InDashState, "普通速度进入不能被伪造为冲刺态");
+    }
+
+    [UnityTest]
+    public IEnumerator ConverterPreservesDashStateAndUsesOppositeOpening()
+    {
+        MakeFloor();
+        var a = MakeFrame();
+        var b = MakeChunk();
+        Link(a, b);
+        Shatter(a, LabPlayer.Edge.Top);
+        Shatter(a, LabPlayer.Edge.Right);
+
+        b.Teleport((Vector2)a.transform.position + Vector2.up * (AHalf + BHalf + 1.5f));
+        b.ApplyDash(new LabPlayer.DashState
+        {
+            active = true,
+            dir = Vector2.down,
+            speed = EntrySpeed,
+            exitSpeed = EntrySpeed,
+            timer = 0.5f
+        });
+        yield return WaitUntil(() => a.Loaded, 3f);
+        yield return WaitUntil(() => !a.Loaded, 1f);
+
+        Assert.IsTrue(b.InDashState, "冲刺态进入应以冲刺态射出");
+        Assert.Greater(b.Velocity.x, 0f, "从上侧进入应从右侧射出");
+        Assert.AreEqual(EntrySpeed, b.Velocity.magnitude, 0.5f);
+    }
+
     // 工具 -------------------------------------------------------------
 
     /// <summary>按一次 B 的句号键（走 ReadInput → 冲刺进入 / 开炮的真实路径）。</summary>

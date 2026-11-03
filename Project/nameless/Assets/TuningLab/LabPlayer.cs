@@ -108,6 +108,9 @@ public class LabPlayer : MonoBehaviour
 
     /// <summary>膛里有人（A 侧）。</summary>
     public bool Loaded => loaded != null;
+    /// <summary>L 形转向器正在等待自动出射。</summary>
+    public bool ConverterLoaded => loaded != null && loadedConverter;
+    public float ConverterTimeLeft => ConverterLoaded ? Mathf.Max(0f, converterLoadTimer) : 0f;
     /// <summary>我被装在大炮膛里（B 侧）：不移动、不充能、不算地面。</summary>
     public bool Suspended => host != null;
     public LabPlayer Host => host;
@@ -149,6 +152,11 @@ public class LabPlayer : MonoBehaviour
     Vector2 chamberVelocity;        // B 进入时的速度 V前
     Vector2 chamberDir;             // B 进入时的冲刺轴，射出取它的反向
     bool gliding;                   // 水平射出：速度降到零级之前不受重力
+
+    bool loadedConverter;
+    Edge converterExitEdge;
+    DashState loadedDash;
+    float converterLoadTimer;
 
     float moveX;
     float vertInput;
@@ -214,6 +222,12 @@ public class LabPlayer : MonoBehaviour
             rb.position = host.rb.position;
             transform.position = host.transform.position;
             return;
+        }
+
+        if (loaded != null && loadedConverter)
+        {
+            converterLoadTimer -= dt;
+            if (converterLoadTimer <= 0f) FireConverter();
         }
 
         bool wasGrounded = grounded;
@@ -448,6 +462,7 @@ public class LabPlayer : MonoBehaviour
         LabPlayer dart = canBeRedHot ? other : this;
         if (dart.Suspended) return;
         if (cannon.TryAbsorb(dart)) return;
+        if (cannon.TryAbsorbConverter(dart)) return;
 
         if (Time.time < nextHitTime) return;
 
@@ -631,13 +646,13 @@ public class LabPlayer : MonoBehaviour
         UpdateForm();
     }
 
-    /// <summary>碎边组合一变，形态跟着变；不再是 u 形就把膛里的人放出去。</summary>
+    /// <summary>碎边组合一变，形态跟着变；只有仍是 L 形的转向装填才能继续保留。</summary>
     void UpdateForm()
     {
         LabForm next = LabForms.Of(spiritMask);
         if (next == form) return;
         form = next;
-        if (form != LabForm.Cannon) Eject();
+        if (loaded != null && (!loadedConverter || form != LabForm.Converter)) Eject();
         if (FormChanged != null) FormChanged(this, form);
     }
 
@@ -729,6 +744,47 @@ public class LabPlayer : MonoBehaviour
         return true;
     }
 
+    bool TryAbsorbConverter(LabPlayer b)
+    {
+        if (!canBeRedHot || form != LabForm.Converter || loaded != null || b == null || b.host != null)
+            return false;
+
+        float speed = b.PreImpactVelocity.magnitude;
+        if (lab == null || speed <= lab.V0Speed + 0.0001f)
+            return false;
+
+        Vector2 to = (Vector2)b.transform.position - (Vector2)transform.position;
+        Edge entry = EdgeFor(Mathf.Abs(to.x) >= Mathf.Abs(to.y)
+            ? new Vector2(Mathf.Sign(to.x), 0f)
+            : new Vector2(0f, Mathf.Sign(to.y)));
+        if (!IsSpirit(entry)) return false;
+
+        Edge exit = entry;
+        for (int i = 0; i < 4; i++)
+        {
+            Edge candidate = (Edge)i;
+            if (candidate != entry && IsSpirit(candidate))
+            {
+                exit = candidate;
+                break;
+            }
+        }
+        if (exit == entry) return false;
+
+        loaded = b;
+        loadedConverter = true;
+        converterExitEdge = exit;
+        converterLoadTimer = 1f;
+        loadedDash = b.CaptureDash();
+        b.chamberVelocity = b.PreImpactVelocity;
+        b.chamberDir = b.DashDirection;
+        b.SuspendIn();
+
+        nextHitTime = Time.time + 0.18f;
+        b.SetHitCooldown(Time.time + 0.18f);
+        return true;
+    }
+
     /// <summary>
     /// 开炮：v' = √(Vb² + 一个等级间距的 v²)，不看 A 自己的速度；
     /// 方向取进入方向的反向 —— 从它进来的那个口退出去。
@@ -736,13 +792,37 @@ public class LabPlayer : MonoBehaviour
     public void Fire()
     {
         var b = loaded;
-        if (b == null || lab == null) return;
+        if (b == null || lab == null || loadedConverter) return;
 
         loaded = null;
+        loadedConverter = false;
         float speed = Mathf.Sqrt(Mathf.Max(0f, b.chamberVelocity.sqrMagnitude + lab.CannonBoostV2));
         Vector2 dir = -b.chamberDir;
         b.Wake(rb.position + dir * (HalfHeight + b.HalfHeight + 0.05f), dir * speed);
         b.gliding = Mathf.Abs(dir.x) > 0.5f;         // 只有水平射出才免重力
+    }
+
+    void FireConverter()
+    {
+        var b = loaded;
+        if (b == null) return;
+
+        loaded = null;
+        loadedConverter = false;
+        Vector2 dir = LabForms.EdgeNormal(converterExitEdge);
+        float speed = b.chamberVelocity.magnitude;
+        b.Wake(rb.position + dir * (HalfHeight + b.HalfHeight + 0.05f), dir * speed);
+        if (loadedDash.active)
+        {
+            loadedDash.dir = dir;
+            b.ApplyDash(loadedDash);
+            b.gliding = Mathf.Abs(dir.x) > 0.5f;
+        }
+        else
+        {
+            b.gliding = Mathf.Abs(dir.x) > 0.5f;
+        }
+        loadedDash = default(DashState);
     }
 
     /// <summary>A 结构改变（u→L、u→=）或死亡：没开出去的人按进入时的速度退回膛外。</summary>
@@ -751,6 +831,9 @@ public class LabPlayer : MonoBehaviour
         var b = loaded;
         if (b == null) return;
         loaded = null;
+        loadedConverter = false;
+        converterLoadTimer = 0f;
+        loadedDash = default(DashState);
 
         Vector2 dir = b.chamberDir.sqrMagnitude > 0.0001f ? -b.chamberDir : Vector2.up;
         b.Wake(rb.position + dir * (HalfHeight + b.HalfHeight + 0.05f), b.chamberVelocity);

@@ -168,7 +168,7 @@ MonoBehaviour:
   dashCooldown: 0.8
   groundOnlyDash: 0
   redHotTierIndex: 1
-  redHotDuration: 1.5
+  redHotDuration: 2.25
   verticalHitEnabled: 1
   tierFirstCells: 4
   tierSpacingCells: 4
