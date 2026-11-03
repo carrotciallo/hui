@@ -956,11 +956,9 @@ public class LabPlayer : MonoBehaviour
         for (int i = 0; i < hits.Length; i++)
         {
             var hit = hits[i].collider;
-            if (hit != null && hit != col)
-            {
-                support = hit;
-                return true;
-            }
+            if (hit == null || hit == col || hit.isTrigger) continue;
+            support = hit;
+            return true;
         }
         return false;
     }
