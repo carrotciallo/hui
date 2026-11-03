@@ -105,6 +105,8 @@ public class TuningLab : MonoBehaviour
     public LabPlayer PlayerB { get; private set; }
     public Camera Cam { get; private set; }
     public LabHud Hud { get; private set; }
+    public LabRespawnPoint ActiveRespawnPoint { get; private set; }
+    public event System.Action MapReset;
 
     // ---- 派生量：所有"速度"都由格算出来，改重力自动跟着走 ----
     public float FixedDt => Time.fixedDeltaTime;
@@ -336,6 +338,26 @@ public class TuningLab : MonoBehaviour
             Vector2 feet = level != null ? level.Data.spawnB : SpawnBFeet;
             PlayerB.Teleport(new Vector2(feet.x, feet.y + PlayerB.HalfHeight));
         }
+    }
+
+    public void RegisterRespawnPoint(LabRespawnPoint point)
+    {
+        if (point != null) ActiveRespawnPoint = point;
+    }
+
+    public bool TryRespawn(LabPlayer deadPlayer)
+    {
+        if (ActiveRespawnPoint != null)
+        {
+            ActiveRespawnPoint.RespawnPlayers(this);
+            return true;
+        }
+        return false;
+    }
+
+    public void ResetMap()
+    {
+        MapReset?.Invoke();
     }
 
     // ------------------------------------------------------------------

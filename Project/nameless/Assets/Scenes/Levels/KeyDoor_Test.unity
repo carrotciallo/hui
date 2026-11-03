@@ -1,0 +1,107 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1001}
+  - component: {fileID: 1002}
+  - component: {fileID: 1003}
+  m_Layer: 0
+  m_Name: KeyDoor_Test
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94a56449bed4e0343a7e8ea109dbc0f9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: GameJam.Lab::TuningLab
+  timeScale: 1
+  roomScale: 1
+  freeCamera: 1
+  gravity: 50
+  jumpCells: 2.2
+  holdToJump: 0
+  coyoteTime: 0.08
+  jumpBufferTime: 0.08
+  walkSpeed: 8
+  walkAccel: 140
+  groundBrake: 30
+  airBrake: 0
+  horizontalAirDrag: 1
+  dashDistanceCells: 4
+  dashOverV0Cells: 0.05
+  dashLockTime: 0
+  dashCooldown: 0.8
+  groundOnlyDash: 0
+  redHotTierIndex: 1
+  redHotDuration: 2.25
+  forgeTierIndex: 0
+  verticalHitEnabled: 1
+  tierFirstCells: 4
+  tierSpacingCells: 4
+  tierCount: 4
+  maxFallSpeed: 42
+  showPixelGrid: 0
+  showGrid: 1
+  autoBuild: 1
+  level: {fileID: 0}
+  defaultCameraMinSize: 6.75
+  defaultCameraMaxSize: 27
+  defaultCameraBounds:
+    serializedVersion: 2
+    x: -13
+    y: -1
+    width: 26
+    height: 17
+  cameraFrameBlend: 8
+--- !u!4 &1002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1000}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a20a28e4b45c4dbf8c789f3754c99d8e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  keyA: {x: -6, y: 1}
+  keyB: {x: 7, y: 1}
+  doorA: {x: -3, y: 1.5}
+  doorB: {x: 4, y: 1.5}
+--- !u!1660057539 &9223372036854775807
+SceneRoots:
+  m_ObjectHideFlags: 0
+  m_Roots:
+  - {fileID: 1002}

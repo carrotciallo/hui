@@ -330,6 +330,7 @@ public class LabHud : MonoBehaviour
 
         GUILayout.Label(string.Format("等级 v{0}   速度 {1:0.0}   v² {2:0}   折算 {3:0.00} 格",
             p.SpeedTier, p.Speed, p.Speed * p.Speed, lab.CellsForSpeed(p.Speed)), small);
+        GUILayout.Label("　钥匙 " + p.KeyCount, small);
 
         // 只认轴的游戏里，真正可用的是这两个分轴等级；上面那个合速度等级只是"总量"
         if (p.canBeRedHot)
