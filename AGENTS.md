@@ -77,7 +77,7 @@ Review 其他智能代理提交的 PR 时，按以下优先级检查：
 
 ### Issue tracker
 
-Issues live in GitHub Issues on `sfher/-`, driven by the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues on `sfher/hui`, driven by the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
