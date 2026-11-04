@@ -593,6 +593,169 @@ public sealed class LabLevelData
         return true;
     }
 
+    // ------------------------------------------------------------------
+    // 选区操作：编辑器里的矩形选区直接改这份数据
+    // ------------------------------------------------------------------
+
+    /// <summary>一个点是否落在任意选区里。</summary>
+    public static bool InAnyArea(IList<RectInt> areas, Vector2 point)
+    {
+        if (areas == null) return false;
+        for (int i = 0; i < areas.Count; i++)
+            if (ToRect(areas[i]).Contains(point)) return true;
+        return false;
+    }
+
+    static Vector2 CellCenter(Vector2Int cell) => new Vector2(cell.x + 0.5f, cell.y + 0.5f);
+
+    /// <summary>
+    /// 把选区里的内容整体平移。地形按格心、绳/钥匙/门/重生点按中心、地刺/冰块按格心判定；
+    /// 每个物件只移动一次（多个选区重叠也不会移两遍）。出生点和关卡分区不算"物件"，不参与。
+    /// 返回移动到的条目数。
+    /// </summary>
+    public int MoveContents(IList<RectInt> areas, Vector2Int delta)
+    {
+        if (areas == null || areas.Count == 0 || delta == Vector2Int.zero) return 0;
+        int moved = 0;
+        var shift = new Vector2(delta.x, delta.y);
+
+        if (solids != null)
+        {
+            for (int i = 0; i < solids.Count; i++)
+            {
+                if (!InAnyArea(areas, CellCenter(solids[i]))) continue;
+                solids[i] += delta;
+                moved++;
+            }
+        }
+
+        if (ropes != null)
+        {
+            for (int i = 0; i < ropes.Count; i++)
+            {
+                var rope = ropes[i];
+                if (!InAnyArea(areas, rope.center)) continue;
+                rope.center += shift;
+                ropes[i] = rope;
+                moved++;
+            }
+        }
+
+        if (keys != null)
+        {
+            for (int i = 0; i < keys.Count; i++)
+            {
+                var key = keys[i];
+                if (!InAnyArea(areas, key.position)) continue;
+                key.position += shift;
+                keys[i] = key;
+                moved++;
+            }
+        }
+
+        if (doors != null)
+        {
+            for (int i = 0; i < doors.Count; i++)
+            {
+                var door = doors[i];
+                if (!InAnyArea(areas, door.position)) continue;
+                door.position += shift;
+                doors[i] = door;
+                moved++;
+            }
+        }
+
+        if (spikes != null)
+        {
+            for (int i = 0; i < spikes.Count; i++)
+            {
+                var spike = spikes[i];
+                if (!InAnyArea(areas, CellCenter(spike.cell))) continue;
+                spike.cell += delta;
+                spikes[i] = spike;
+                moved++;
+            }
+        }
+
+        if (ices != null)
+        {
+            for (int i = 0; i < ices.Count; i++)
+            {
+                var ice = ices[i];
+                if (!InAnyArea(areas, CellCenter(ice.cell))) continue;
+                ice.cell += delta;
+                ices[i] = ice;
+                moved++;
+            }
+        }
+
+        if (respawnPoints != null)
+        {
+            for (int i = 0; i < respawnPoints.Count; i++)
+            {
+                var point = respawnPoints[i];
+                if (!InAnyArea(areas, point.position)) continue;
+                point.position += shift;
+                respawnPoints[i] = point;
+                moved++;
+            }
+        }
+
+        return moved;
+    }
+
+    /// <summary>删掉选区里的内容，返回删掉的条目数。includeSolids = false 时只删摆放物件。</summary>
+    public int DeleteContents(IList<RectInt> areas, bool includeSolids)
+    {
+        if (areas == null || areas.Count == 0) return 0;
+        int removed = 0;
+
+        if (includeSolids && solids != null)
+            removed += solids.RemoveAll(cell => InAnyArea(areas, CellCenter(cell)));
+
+        if (ropes != null) removed += ropes.RemoveAll(rope => InAnyArea(areas, rope.center));
+        if (keys != null) removed += keys.RemoveAll(key => InAnyArea(areas, key.position));
+        if (doors != null) removed += doors.RemoveAll(door => InAnyArea(areas, door.position));
+        if (spikes != null) removed += spikes.RemoveAll(spike => InAnyArea(areas, CellCenter(spike.cell)));
+        if (ices != null) removed += ices.RemoveAll(ice => InAnyArea(areas, CellCenter(ice.cell)));
+        if (respawnPoints != null)
+            removed += respawnPoints.RemoveAll(point => InAnyArea(areas, point.position));
+
+        return removed;
+    }
+
+    /// <summary>选区里有几个条目（地形格也算一个），给面板显示用。</summary>
+    public int CountContents(IList<RectInt> areas, bool includeSolids)
+    {
+        if (areas == null || areas.Count == 0) return 0;
+        int count = 0;
+
+        if (includeSolids && solids != null)
+            for (int i = 0; i < solids.Count; i++)
+                if (InAnyArea(areas, CellCenter(solids[i]))) count++;
+
+        if (ropes != null)
+            for (int i = 0; i < ropes.Count; i++)
+                if (InAnyArea(areas, ropes[i].center)) count++;
+        if (keys != null)
+            for (int i = 0; i < keys.Count; i++)
+                if (InAnyArea(areas, keys[i].position)) count++;
+        if (doors != null)
+            for (int i = 0; i < doors.Count; i++)
+                if (InAnyArea(areas, doors[i].position)) count++;
+        if (spikes != null)
+            for (int i = 0; i < spikes.Count; i++)
+                if (InAnyArea(areas, CellCenter(spikes[i].cell))) count++;
+        if (ices != null)
+            for (int i = 0; i < ices.Count; i++)
+                if (InAnyArea(areas, CellCenter(ices[i].cell))) count++;
+        if (respawnPoints != null)
+            for (int i = 0; i < respawnPoints.Count; i++)
+                if (InAnyArea(areas, respawnPoints[i].position)) count++;
+
+        return count;
+    }
+
     /// <summary>
     /// 把实心格合并成尽量少的矩形，降低 Collider 数量，也保证运行时生成出来的
     /// 就是 TuningLab 那种"一整块平台一个 BoxCollider2D"。

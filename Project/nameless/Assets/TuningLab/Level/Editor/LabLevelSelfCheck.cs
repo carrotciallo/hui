@@ -458,6 +458,110 @@ public static class LabLevelSelfCheck
             "A 里的冰块被删，B 的留下");
 
         sb.AppendLine();
+        sb.AppendLine("=== 11. 重生点：去重 / 随分区移动与删除 ===");
+        Expect(sb, ref failures, data.respawnPoints.Count == 0,
+            "基准房间没有重生点，实际 " + data.respawnPoints.Count);
+
+        var respawnLevel = new LabLevelData();
+        respawnLevel.partitions.Add(new LabLevelPartition { name = "A", bounds = new RectInt(0, 0, 10, 10) });
+        respawnLevel.partitions.Add(new LabLevelPartition { name = "B", bounds = new RectInt(20, 0, 10, 10) });
+
+        Expect(sb, ref failures, respawnLevel.PlaceRespawnPoint(new Vector2Int(2, 1)), "A 里放一个重生点");
+        Expect(sb, ref failures, respawnLevel.PlaceRespawnPoint(new Vector2Int(22, 1)), "B 里放一个重生点");
+        Expect(sb, ref failures, !respawnLevel.PlaceRespawnPoint(new Vector2Int(2, 1)),
+            "同一格重复放 = 无变化");
+        Expect(sb, ref failures, respawnLevel.HasRespawnPoint(new Vector2Int(2, 1)), "查得到 A 的重生点");
+        Expect(sb, ref failures, !respawnLevel.HasRespawnPoint(new Vector2Int(7, 7)), "没放过的格没有重生点");
+        Expect(sb, ref failures,
+            SamePoint(respawnLevel.respawnPoints[0].position, new Vector2(2.5f, 1.5f)),
+            "重生点落在格中心");
+
+        respawnLevel.respawnPoints.Add(new LabRespawnPointSpec(new Vector2(2.5f, 1.5f)));
+        respawnLevel.Normalize();
+        Expect(sb, ref failures, respawnLevel.respawnPoints.Count == 2,
+            "Normalize 同位置去重，实际 " + respawnLevel.respawnPoints.Count);
+
+        var respawnClone = respawnLevel.Clone();
+        Expect(sb, ref failures, respawnClone.respawnPoints.Count == 2, "Clone 带上重生点");
+        respawnClone.respawnPoints[0] = new LabRespawnPointSpec(new Vector2(99f, 99f));
+        Expect(sb, ref failures, respawnLevel.HasRespawnPoint(new Vector2Int(2, 1)), "Clone 是深拷贝");
+
+        Expect(sb, ref failures, respawnLevel.MovePartition(0, new Vector2Int(3, 4), true),
+            "移动分区 A");
+        Expect(sb, ref failures, respawnLevel.HasRespawnPoint(new Vector2Int(5, 5)),
+            "A 里的重生点跟着移动");
+        Expect(sb, ref failures, !respawnLevel.HasRespawnPoint(new Vector2Int(2, 1)),
+            "旧位置的重生点没有留下");
+        Expect(sb, ref failures, respawnLevel.HasRespawnPoint(new Vector2Int(22, 1)),
+            "分区 B 的重生点不动");
+
+        Expect(sb, ref failures, respawnLevel.RemoveRespawnPoint(new Vector2Int(5, 5)),
+            "按格删掉 A 的重生点");
+        Expect(sb, ref failures, !respawnLevel.RemoveRespawnPoint(new Vector2Int(5, 5)),
+            "同一格再删返回 false");
+
+        Expect(sb, ref failures, respawnLevel.DeletePartition(0, true), "删除分区 A（带内容）");
+        Expect(sb, ref failures,
+            respawnLevel.respawnPoints.Count == 1 && respawnLevel.HasRespawnPoint(new Vector2Int(22, 1)),
+            "A 里的重生点被删，B 的留下");
+
+        sb.AppendLine();
+        sb.AppendLine("=== 12. 选区：平移 / 删除 / 减法 ===");
+        var marqueeLevel = new LabLevelData();
+        marqueeLevel.AddCell(new Vector2Int(1, 1));
+        marqueeLevel.AddCell(new Vector2Int(2, 1));
+        marqueeLevel.AddCell(new Vector2Int(10, 1));
+        marqueeLevel.keys.Add(new LabKeySpec(new Vector2(1.5f, 1.5f)));
+        marqueeLevel.spikes.Add(new LabSpikeSpec(new Vector2Int(2, 1), LabSpikeDir.Up));
+        marqueeLevel.respawnPoints.Add(new LabRespawnPointSpec(new Vector2(10.5f, 1.5f)));
+
+        var marqueeArea = new List<RectInt> { new RectInt(1, 1, 2, 1) };
+        Expect(sb, ref failures, marqueeLevel.MoveContents(marqueeArea, new Vector2Int(0, 3)) == 4,
+            "选区平移搬动 2 格地形 + 1 把钥匙 + 1 根地刺");
+        Expect(sb, ref failures,
+            marqueeLevel.HasCell(new Vector2Int(1, 4)) && marqueeLevel.HasCell(new Vector2Int(2, 4)),
+            "地形跟着选区移动");
+        Expect(sb, ref failures, SamePoint(marqueeLevel.keys[0].position, new Vector2(1.5f, 4.5f)),
+            "钥匙跟着选区移动");
+        Expect(sb, ref failures, marqueeLevel.spikes[0].cell == new Vector2Int(2, 4),
+            "地刺跟着选区移动");
+        Expect(sb, ref failures, SamePoint(marqueeLevel.respawnPoints[0].position, new Vector2(10.5f, 1.5f)),
+            "选区外的重生点不动");
+        Expect(sb, ref failures, marqueeLevel.HasCell(new Vector2Int(10, 1)) && !marqueeLevel.HasCell(new Vector2Int(1, 1)),
+            "选区外的地形不动");
+
+        var overlapLevel = new LabLevelData();
+        overlapLevel.AddCell(new Vector2Int(1, 1));
+        overlapLevel.AddCell(new Vector2Int(2, 1));
+        var overlapAreas = new List<RectInt>
+        {
+            new RectInt(1, 1, 2, 1),
+            new RectInt(2, 1, 1, 1)
+        };
+        overlapLevel.MoveContents(overlapAreas, new Vector2Int(1, 0));
+        Expect(sb, ref failures,
+            !overlapLevel.HasCell(new Vector2Int(1, 1)) && overlapLevel.HasCell(new Vector2Int(2, 1))
+            && overlapLevel.HasCell(new Vector2Int(3, 1)) && !overlapLevel.HasCell(new Vector2Int(4, 1)),
+            "两个重叠选区里每个物件只移动一次");
+
+        var deleteArea = new List<RectInt> { new RectInt(2, 4, 1, 1) };
+        Expect(sb, ref failures, marqueeLevel.DeleteContents(deleteArea, true) > 0, "删选区内容");
+        Expect(sb, ref failures, !marqueeLevel.HasCell(new Vector2Int(2, 4)), "选区里的地形被删");
+        Expect(sb, ref failures, marqueeLevel.HasCell(new Vector2Int(1, 4)), "选区外的地形保留");
+
+        var subtract = new List<RectInt> { new RectInt(0, 0, 10, 10) };
+        LabLevelEditorWindow.SubtractRect(subtract, new RectInt(4, 4, 2, 2));
+        int subtractArea = 0;
+        bool coversCut = false;
+        foreach (var rect in subtract)
+        {
+            subtractArea += rect.width * rect.height;
+            if (rect.Contains(new Vector2Int(4, 4)) || rect.Contains(new Vector2Int(5, 5))) coversCut = true;
+        }
+        Expect(sb, ref failures, subtractArea == 100 - 4, "挖掉 2×2 后面积 = 96，实际 " + subtractArea);
+        Expect(sb, ref failures, !coversCut, "被挖掉的格子不再属于任何选区");
+
+        sb.AppendLine();
         fails = failures;
         sb.AppendLine(failures == 0 ? "全部通过。" : ("失败 " + failures + " 项。"));
         return sb;

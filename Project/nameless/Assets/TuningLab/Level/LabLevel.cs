@@ -223,7 +223,8 @@ public sealed class LabLevel : MonoBehaviour
         var go = new GameObject("RespawnPoint");
         go.transform.SetParent(parent, false);
         go.transform.position = spec.position;
-        go.AddComponent<LabRespawnPoint>();
+        var point = go.AddComponent<LabRespawnPoint>();
+        point.ApplyShape();
     }
 
     void AddKey(Transform parent, LabKeySpec spec, bool preview)

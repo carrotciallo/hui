@@ -29,7 +29,36 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Door = 9,
         Spike = 10,
         Ice = 11,
-        RespawnPoint = 12
+        RespawnPoint = 12,
+        Marquee = 13,
+        Move = 14
+    }
+
+    /// <summary>下一次拉选区时怎么处理已有的选区。</summary>
+    enum MarqueeMode
+    {
+        Replace = 0,
+        Add = 1,
+        Subtract = 2
+    }
+
+    /// <summary>选择工具点中的东西。</summary>
+    enum PickKind
+    {
+        None = 0,
+        Solid = 1,
+        Rope = 2,
+        Key = 3,
+        Door = 4,
+        Spike = 5,
+        Ice = 6,
+        RespawnPoint = 7
+    }
+
+    struct Pick
+    {
+        public PickKind kind;
+        public int index;
     }
 
     const int EditMargin = 8;                 // 相机范围外还能画多少格
@@ -38,8 +67,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     static readonly string[] ToolLabels =
     {
-        "铺地形", "擦地形", "矩形", "竖绳", "横绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺", "冰块", "重生点"
+        "铺地形", "擦地形", "矩形", "竖绳", "横绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺", "冰块", "重生点",
+        "选区", "选择"
     };
+
+    static readonly string[] MarqueeModeLabels = { "重新选择", "增加选区", "删除选区" };
 
     static readonly string[] SpikeDirLabels = { "朝上", "朝下", "朝左", "朝右" };
     static readonly LabSpikeDir[] SpikeDirs =
@@ -71,6 +103,22 @@ public sealed class LabLevelEditorWindow : EditorWindow
     Vector2Int rectStart;
     Vector2Int rectEnd;
     Vector2Int lastCell;
+
+    // 连续摆放：拖动时每个经过的格子都按第一次的"放/删"语义执行。
+    bool dragAdds;
+
+    // 选区
+    MarqueeMode marqueeMode = MarqueeMode.Replace;
+    readonly List<RectInt> marquees = new List<RectInt>();
+    bool marqueeDragging;
+    Vector2Int marqueeStart;
+    Vector2Int marqueeEnd;
+    Vector2 marqueeScroll;
+
+    // 选择 / 拖动
+    Pick picked;
+    bool movingContent;
+    Vector2Int moveLastCell;
 
     int partitionIndex = -1;
     bool movePartitionContents = true;
@@ -201,6 +249,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawHeader();
         EditorGUILayout.Space();
         DrawTools();
+        EditorGUILayout.Space();
+        DrawSelection();
         EditorGUILayout.Space();
         DrawTerrain();
         EditorGUILayout.Space();
@@ -391,9 +441,73 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     MessageType.None);
                 break;
 
+            case Tool.Marquee:
+                EditorGUILayout.HelpBox(
+                    "左键拖出一个矩形选区，起点和对角就是它的两个顶点。\n" +
+                    "下一次拉选区怎么处理已有的：重新选择（默认，清掉旧的）/ 增加选区 / 删除选区（从已有选区里挖掉这块）。",
+                    MessageType.None);
+                marqueeMode = (MarqueeMode)GUILayout.SelectionGrid((int)marqueeMode, MarqueeModeLabels, 3);
+                break;
+
+            case Tool.Move:
+                EditorGUILayout.HelpBox(
+                    "左键点中物件后拖动 = 移动那个物件；场景里有选区时，改成拖动选区里的所有内容。\n" +
+                    "Del：有选区删选区内容，没选区删点中的物件。移动和删除都能撤销。",
+                    MessageType.None);
+                break;
+
         }
 
         if (GUILayout.Button("跳到关卡")) FrameLevel();
+    }
+
+    void DrawSelection()
+    {
+        EditorGUILayout.LabelField("选区 / 选择", EditorStyles.boldLabel);
+
+        marqueeMode = (MarqueeMode)GUILayout.SelectionGrid((int)marqueeMode, MarqueeModeLabels, 3);
+
+        if (marquees.Count == 0)
+        {
+            EditorGUILayout.LabelField("（没有选区）");
+        }
+        else
+        {
+            marqueeScroll = EditorGUILayout.BeginScrollView(marqueeScroll, GUILayout.MaxHeight(90f));
+            for (int i = 0; i < marquees.Count; i++)
+            {
+                var rect = marquees[i];
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField(
+                        string.Format("选区 {0}：{1}×{2} @ ({3}, {4})",
+                            i, rect.width, rect.height, rect.x, rect.y),
+                        EditorStyles.miniLabel);
+                    if (GUILayout.Button("×", GUILayout.Width(24f)))
+                    {
+                        marquees.RemoveAt(i);
+                        break;
+                    }
+                }
+            }
+            EditorGUILayout.EndScrollView();
+        }
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            using (new EditorGUI.DisabledScope(marquees.Count == 0))
+            {
+                if (GUILayout.Button("清空选区")) marquees.Clear();
+                if (GUILayout.Button("删除选区内容")) DeleteSelection();
+            }
+        }
+
+        EditorGUILayout.LabelField("选中", picked.kind == PickKind.None ? "（无）" : PickLabel(picked));
+
+        EditorGUILayout.HelpBox(
+            "选区只是编辑器的状态，不存进关卡数据；拖动和删除作用在选区覆盖的物件上。\n" +
+            "地形格、绳、钥匙、门、地刺、冰块、重生点都算物件；出生点和关卡分区不算。",
+            MessageType.None);
     }
 
     void DrawTerrain()
@@ -1259,13 +1373,35 @@ public sealed class LabLevelEditorWindow : EditorWindow
             }
         }
 
+        if (data.respawnPoints != null)
+        {
+            for (int i = 0; i < data.respawnPoints.Count; i++)
+            {
+                var point = data.respawnPoints[i];
+                if (!data.ContainsPoint(point.position))
+                    issues.Add("第 " + i + " 个重生点不在编辑范围内：" + point.position);
+
+                var cell = new Vector2Int(
+                    Mathf.FloorToInt(point.position.x), Mathf.FloorToInt(point.position.y));
+                if (data.HasCell(cell))
+                    issues.Add("第 " + i + " 个重生点在地形里：" + cell);
+
+                Rect rect = RespawnPointRect(point.position);
+                for (int j = 0; j < i; j++)
+                {
+                    if (rect.Overlaps(RespawnPointRect(data.respawnPoints[j].position)))
+                        issues.Add("第 " + i + " 个重生点和第 " + j + " 个重叠，接触时会抢同一个触发区。");
+                }
+            }
+        }
+
         validated = true;
 
         if (issues.Count == 0)
         {
-            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 根刺，{6} 块冰，{7} 个关卡分区。",
+            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 根刺，{6} 块冰，{7} 个重生点，{8} 个关卡分区。",
                 level.SolidCellCount, level.MergedRectCount, level.RopeCount, level.KeyCount, level.DoorCount,
-                level.SpikeCount, level.IceCount,
+                level.SpikeCount, level.IceCount, level.RespawnPointCount,
                 data.partitions != null ? data.partitions.Count : 0), level);
         }
         else
@@ -1333,6 +1469,10 @@ public sealed class LabLevelEditorWindow : EditorWindow
             Mathf.RoundToInt(rect.height));
     }
 
+    /// <summary>重生点的 3×3 触发区（中心坐标 → 世界矩形）。</summary>
+    static Rect RespawnPointRect(Vector2 center)
+        => new Rect(center.x - 1.5f, center.y - 1.5f, 3f, 3f);
+
     // ------------------------------------------------------------------
     // Scene 视图
     // ------------------------------------------------------------------
@@ -1351,6 +1491,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawSpikeHandles(data);
         DrawIceHandles(data);
         DrawRespawnPointHandles(data);
+        DrawMarquees();
+        DrawPickedHighlight();
         if (showSpawns) DrawSpawnHandles(data);
         if (showCameraFrames) DrawCameraFrames(data);
 
@@ -1389,6 +1531,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     void BeginGesture(Vector2Int cell, bool inBounds, SceneView view)
     {
+        if (IsPlaceTool()) dragAdds = ShouldAddAtStart(cell);
+
         switch (tool)
         {
             case Tool.Paint:
@@ -1559,6 +1703,46 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 }
                 AfterStructuralEdit();
                 break;
+
+            case Tool.Marquee:
+                gesture = true;
+                marqueeDragging = true;
+                marqueeStart = cell;
+                marqueeEnd = cell;
+                Repaint();
+                break;
+
+            case Tool.Move:
+                if (marquees.Count > 0)
+                {
+                    Record("移动选区内容");
+                    movingContent = true;
+                    moveLastCell = cell;
+                    gesture = true;
+                    Repaint();
+                    break;
+                }
+
+                picked = PickAt(cell);
+                if (picked.kind == PickKind.None)
+                {
+                    Repaint();
+                    break;
+                }
+
+                Record("拖动物件");
+                movingContent = true;
+                moveLastCell = cell;
+                gesture = true;
+                Repaint();
+                break;
+        }
+
+        // 摆放类工具：第一次已经落笔，后续拖动按同一个"放/删"语义连续执行。
+        if (IsPlaceTool())
+        {
+            gesture = true;
+            lastCell = cell;
         }
     }
 
@@ -1567,6 +1751,43 @@ public sealed class LabLevelEditorWindow : EditorWindow
         if (tool == Tool.Partition)
         {
             ContinuePartition(cell);
+            return;
+        }
+
+        if (tool == Tool.Marquee)
+        {
+            if (marqueeEnd == cell) return;
+            marqueeEnd = cell;
+            Repaint();
+            return;
+        }
+
+        if (tool == Tool.Move)
+        {
+            if (!movingContent) return;
+            var delta = cell - moveLastCell;
+            if (delta == Vector2Int.zero) return;
+
+            var areas = CurrentMoveAreas();
+            if (areas == null) return;
+
+            moveLastCell = cell;
+            level.Data.MoveContents(areas, delta);
+            MarkDirty(true);
+            return;
+        }
+
+        if (IsPlaceTool())
+        {
+            if (cell == lastCell) return;
+            // 沿直线补齐，快速拖动也不会漏格；起点那格已经落过笔，跳过。
+            foreach (var lineCell in LineCells(lastCell, cell))
+            {
+                if (lineCell == lastCell) continue;
+                ApplyToolAtCell(lineCell, dragAdds);
+            }
+            lastCell = cell;
+            MarkDirty(true);
             return;
         }
 
@@ -1584,14 +1805,6 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 rectEnd = cell;
                 Repaint();
                 break;
-
-            case Tool.Ice:
-                if (cell == lastCell) return;
-                lastCell = cell;
-                if (!InEditArea(cell, level.Data) || !level.Data.ContainsCell(cell)) break;
-                if (level.Data.HasCell(cell)) break;
-                if (level.Data.PlaceIce(cell, iceGroupId)) MarkDirty(true);
-                break;
         }
     }
 
@@ -1600,6 +1813,28 @@ public sealed class LabLevelEditorWindow : EditorWindow
         if (tool == Tool.Partition)
         {
             EndPartition();
+            return;
+        }
+
+        if (tool == Tool.Marquee)
+        {
+            CommitMarquee();
+            marqueeDragging = false;
+            gesture = false;
+            Repaint();
+            return;
+        }
+
+        if (tool == Tool.Move)
+        {
+            movingContent = false;
+            gesture = false;
+            level.Data.Normalize();
+            level.RebuildPreview();
+            EditorUtility.SetDirty(level);
+            MarkSceneDirty();
+            validated = false;
+            Repaint();
             return;
         }
 
@@ -1745,10 +1980,38 @@ public sealed class LabLevelEditorWindow : EditorWindow
         if (erase)
         {
             data.RemoveCell(cell);
-            data.RemoveSpike(cell);      // 擦地形 = 这一格的东西一起擦掉
-            data.RemoveIce(cell);
+            EraseObjectsAt(data, cell);  // 擦地形 = 这一格摆的东西一起擦掉
         }
         else data.AddCell(cell);
+    }
+
+    /// <summary>擦掉落在这一格上的所有摆放物件（地形格另算）。</summary>
+    static void EraseObjectsAt(LabLevelData data, Vector2Int cell)
+    {
+        if (data.keys != null) data.keys.RemoveAll(key => key.Cells().Contains(cell));
+        if (data.doors != null) data.doors.RemoveAll(door => door.Cells().Contains(cell));
+        if (data.spikes != null) data.spikes.RemoveAll(spike => spike.cell == cell);
+        if (data.ices != null) data.ices.RemoveAll(ice => ice.cell == cell);
+        if (data.respawnPoints != null)
+            data.respawnPoints.RemoveAll(point => point.Cells().Contains(cell));
+        if (data.ropes != null) data.ropes.RemoveAll(rope => RopeCoversCell(rope, cell));
+    }
+
+    /// <summary>这根绳（竖或横）是否盖住这一格。</summary>
+    static bool RopeCoversCell(LabRopeSpec rope, Vector2Int cell)
+    {
+        if (rope.orientation == LabRopeOrientation.Horizontal)
+        {
+            int row = Mathf.FloorToInt(rope.center.y - 0.125f);
+            if (cell.y != row) return false;
+            float half = rope.cells * 0.5f;
+            return cell.x + 1 > rope.center.x - half && cell.x < rope.center.x + half;
+        }
+
+        if (cell.x != Mathf.FloorToInt(rope.center.x)) return false;
+        float bottom = rope.center.y - rope.cells * 0.5f;
+        float top = rope.center.y + rope.cells * 0.5f;
+        return cell.y + 1 > bottom && cell.y < top;
     }
 
     void PaintLine(Vector2Int from, Vector2Int to, bool erase)
@@ -1779,11 +2042,333 @@ public sealed class LabLevelEditorWindow : EditorWindow
         }
     }
 
+    // ------------------------------------------------------------------
+    // 摆放 / 擦除：同一个手势里按格连续执行
+    // ------------------------------------------------------------------
+
+    bool IsPlaceTool()
+    {
+        switch (tool)
+        {
+            case Tool.Key:
+            case Tool.Door:
+            case Tool.Rope:
+            case Tool.HorizontalRope:
+            case Tool.Spike:
+            case Tool.Ice:
+            case Tool.RespawnPoint:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>按下第一格时决定这个手势是"放"还是"删"：开关型工具点在已存在的同类上就是删。</summary>
+    bool ShouldAddAtStart(Vector2Int cell)
+    {
+        var data = level.Data;
+        switch (tool)
+        {
+            case Tool.Spike:
+            {
+                var existing = data.FindSpike(cell);
+                return !(existing.HasValue && existing.Value.dir == newSpikeDir);
+            }
+            case Tool.Ice:
+            {
+                var existing = data.FindIce(cell);
+                return !(existing.HasValue && existing.Value.groupId == iceGroupId);
+            }
+            case Tool.RespawnPoint:
+                return !data.HasRespawnPoint(cell);
+            default:
+                return true;
+        }
+    }
+
+    /// <summary>对单个格子执行当前摆放工具的"放"或"删"。不 Record，由手势开始时统一记一次。</summary>
+    bool ApplyToolAtCell(Vector2Int cell, bool add)
+    {
+        var data = level.Data;
+        switch (tool)
+        {
+            case Tool.Key:
+                if (!add) return data.keys.RemoveAll(key => key.Cells().Contains(cell)) > 0;
+                if (!data.ContainsCell(cell)) return false;
+                data.keys.Add(new LabKeySpec(new Vector2(cell.x + 0.5f, cell.y + 0.5f)));
+                return true;
+
+            case Tool.Door:
+                if (!add) return data.doors.RemoveAll(door => door.Cells().Contains(cell)) > 0;
+                if (!data.ContainsCell(cell)) return false;
+                if (cell.y + LabDoorSpec.CellHeight > data.bounds.yMax) return false;
+                data.doors.Add(new LabDoorSpec(
+                    new Vector2(cell.x + 0.5f, cell.y + LabDoorSpec.CellHeight * 0.5f), newDoorColor));
+                return true;
+
+            case Tool.Rope:
+            case Tool.HorizontalRope:
+            {
+                if (!add) return data.ropes.RemoveAll(rope => RopeCoversCell(rope, cell)) > 0;
+
+                var orientation = tool == Tool.HorizontalRope
+                    ? LabRopeOrientation.Horizontal
+                    : LabRopeOrientation.Vertical;
+                if (orientation == LabRopeOrientation.Vertical && cell.y + ropeLength > data.bounds.yMax)
+                    return false;
+                if (orientation == LabRopeOrientation.Horizontal &&
+                    (cell.x + ropeLength > data.bounds.xMax || cell.y + 1 > data.bounds.yMax))
+                    return false;
+
+                Vector2 center = orientation == LabRopeOrientation.Horizontal
+                    ? new Vector2(cell.x + ropeLength * 0.5f, cell.y + 1.125f)
+                    : new Vector2(cell.x + 0.5f, cell.y + ropeLength * 0.5f);
+                data.ropes.Add(new LabRopeSpec(center, ropeLength, ropeChainId, orientation));
+                return true;
+            }
+
+            case Tool.Spike:
+                if (!add) return data.RemoveSpike(cell);
+                if (data.HasCell(cell)) return false;
+                return data.PlaceSpike(cell, newSpikeDir);
+
+            case Tool.Ice:
+                if (!add) return data.RemoveIce(cell);
+                if (!data.ContainsCell(cell) || data.HasCell(cell)) return false;
+                return data.PlaceIce(cell, iceGroupId);
+
+            case Tool.RespawnPoint:
+                if (!add) return data.RemoveRespawnPoint(cell);
+                if (!data.ContainsCell(cell)) return false;
+                return data.PlaceRespawnPoint(cell);
+        }
+        return false;
+    }
+
+    /// <summary>Bresenham 走过的格子，拖动时用来补齐，免得快速拖动漏格。</summary>
+    static IEnumerable<Vector2Int> LineCells(Vector2Int from, Vector2Int to)
+    {
+        int x = from.x;
+        int y = from.y;
+        int dx = Mathf.Abs(to.x - from.x);
+        int dy = -Mathf.Abs(to.y - from.y);
+        int sx = from.x < to.x ? 1 : -1;
+        int sy = from.y < to.y ? 1 : -1;
+        int err = dx + dy;
+
+        while (true)
+        {
+            yield return new Vector2Int(x, y);
+            if (x == to.x && y == to.y) break;
+            int e2 = 2 * err;
+            if (e2 >= dy)
+            {
+                err += dy;
+                x += sx;
+            }
+            if (e2 <= dx)
+            {
+                err += dx;
+                y += sy;
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 选择 / 选区
+    // ------------------------------------------------------------------
+
+    static RectInt CellRect(Vector2 point)
+        => new RectInt(Mathf.FloorToInt(point.x), Mathf.FloorToInt(point.y), 1, 1);
+
+    /// <summary>这一格上最上层的物件。优先级：重生点 &gt; 钥匙 &gt; 冰块 &gt; 地刺 &gt; 门 &gt; 绳 &gt; 地形。</summary>
+    Pick PickAt(Vector2Int cell)
+    {
+        var data = level.Data;
+
+        if (data.respawnPoints != null)
+            for (int i = 0; i < data.respawnPoints.Count; i++)
+                if (data.respawnPoints[i].Cells().Contains(cell))
+                    return new Pick { kind = PickKind.RespawnPoint, index = i };
+
+        if (data.keys != null)
+            for (int i = 0; i < data.keys.Count; i++)
+                if (data.keys[i].Cells().Contains(cell))
+                    return new Pick { kind = PickKind.Key, index = i };
+
+        if (data.ices != null)
+            for (int i = 0; i < data.ices.Count; i++)
+                if (data.ices[i].cell == cell)
+                    return new Pick { kind = PickKind.Ice, index = i };
+
+        if (data.spikes != null)
+            for (int i = 0; i < data.spikes.Count; i++)
+                if (data.spikes[i].cell == cell)
+                    return new Pick { kind = PickKind.Spike, index = i };
+
+        if (data.doors != null)
+            for (int i = 0; i < data.doors.Count; i++)
+                if (data.doors[i].Cells().Contains(cell))
+                    return new Pick { kind = PickKind.Door, index = i };
+
+        if (data.ropes != null)
+            for (int i = 0; i < data.ropes.Count; i++)
+                if (RopeCoversCell(data.ropes[i], cell))
+                    return new Pick { kind = PickKind.Rope, index = i };
+
+        if (data.solids != null)
+            for (int i = 0; i < data.solids.Count; i++)
+                if (data.solids[i] == cell)
+                    return new Pick { kind = PickKind.Solid, index = i };
+
+        return new Pick { kind = PickKind.None, index = -1 };
+    }
+
+    /// <summary>撤销之后索引可能失效，用之前先验一遍。</summary>
+    bool ValidPick(Pick pick)
+    {
+        var data = level.Data;
+        switch (pick.kind)
+        {
+            case PickKind.Solid: return pick.index >= 0 && pick.index < data.solids.Count;
+            case PickKind.Rope: return pick.index >= 0 && pick.index < data.ropes.Count;
+            case PickKind.Key: return pick.index >= 0 && pick.index < data.keys.Count;
+            case PickKind.Door: return pick.index >= 0 && pick.index < data.doors.Count;
+            case PickKind.Spike: return pick.index >= 0 && pick.index < data.spikes.Count;
+            case PickKind.Ice: return pick.index >= 0 && pick.index < data.ices.Count;
+            case PickKind.RespawnPoint: return pick.index >= 0 && pick.index < data.respawnPoints.Count;
+            default: return false;
+        }
+    }
+
+    RectInt PickArea(Pick pick)
+    {
+        var data = level.Data;
+        switch (pick.kind)
+        {
+            case PickKind.Solid: return new RectInt(data.solids[pick.index], Vector2Int.one);
+            case PickKind.Rope: return CellRect(data.ropes[pick.index].center);
+            case PickKind.Key: return CellRect(data.keys[pick.index].position);
+            case PickKind.Door: return CellRect(data.doors[pick.index].position);
+            case PickKind.Spike: return new RectInt(data.spikes[pick.index].cell, Vector2Int.one);
+            case PickKind.Ice: return new RectInt(data.ices[pick.index].cell, Vector2Int.one);
+            case PickKind.RespawnPoint: return CellRect(data.respawnPoints[pick.index].position);
+            default: return new RectInt(0, 0, 0, 0);
+        }
+    }
+
+    string PickLabel(Pick pick)
+    {
+        switch (pick.kind)
+        {
+            case PickKind.Solid: return "地形格 " + level.Data.solids[pick.index];
+            case PickKind.Rope: return "绳 #" + pick.index;
+            case PickKind.Key: return "钥匙 #" + pick.index;
+            case PickKind.Door: return "门 #" + pick.index;
+            case PickKind.Spike: return "地刺 #" + pick.index;
+            case PickKind.Ice: return "冰块 #" + pick.index;
+            case PickKind.RespawnPoint: return "重生点 #" + pick.index;
+            default: return "（无）";
+        }
+    }
+
+    /// <summary>拖动时作用到的范围：有选区就是选区，否则是点中的那个物件。</summary>
+    IList<RectInt> CurrentMoveAreas()
+    {
+        if (marquees.Count > 0) return marquees;
+        if (!ValidPick(picked)) return null;
+        return new List<RectInt> { PickArea(picked) };
+    }
+
+    void DeleteSelection()
+    {
+        bool hasMarquee = marquees.Count > 0;
+        if (!hasMarquee && !ValidPick(picked)) return;
+
+        Record("删除选区内容");
+
+        bool did;
+        if (hasMarquee)
+        {
+            did = level.Data.DeleteContents(marquees, true) > 0;
+        }
+        else
+        {
+            var area = new List<RectInt> { PickArea(picked) };
+            did = level.Data.DeleteContents(area, picked.kind == PickKind.Solid) > 0;
+        }
+
+        picked = default;
+        if (!did)
+        {
+            Repaint();
+            return;
+        }
+        AfterStructuralEdit();
+    }
+
+    static RectInt MarqueeRect(Vector2Int a, Vector2Int b)
+    {
+        int x0 = Mathf.Min(a.x, b.x);
+        int y0 = Mathf.Min(a.y, b.y);
+        return new RectInt(x0, y0, Mathf.Abs(a.x - b.x) + 1, Mathf.Abs(a.y - b.y) + 1);
+    }
+
+    void CommitMarquee()
+    {
+        RectInt rect = MarqueeRect(marqueeStart, marqueeEnd);
+        bool empty = rect.width <= 1 && rect.height <= 1;
+
+        switch (marqueeMode)
+        {
+            case MarqueeMode.Replace:
+                marquees.Clear();
+                if (!empty) AddMarqueeRect(marquees, rect);
+                break;
+            case MarqueeMode.Add:
+                if (!empty) AddMarqueeRect(marquees, rect);
+                break;
+            case MarqueeMode.Subtract:
+                if (!empty) SubtractRect(marquees, rect);
+                break;
+        }
+    }
+
+    static void AddMarqueeRect(List<RectInt> list, RectInt rect)
+    {
+        if (rect.width > 0 && rect.height > 0) list.Add(rect);
+    }
+
+    /// <summary>从一组选区里挖掉一块：被切开的部分按 左/右/上/下 拆成最多四块。</summary>
+    internal static void SubtractRect(List<RectInt> list, RectInt cut)
+    {
+        for (int i = list.Count - 1; i >= 0; i--)
+        {
+            RectInt rect = list[i];
+            if (rect.x >= cut.x + cut.width || cut.x >= rect.x + rect.width ||
+                rect.y >= cut.y + cut.height || cut.y >= rect.y + rect.height)
+                continue;
+
+            list.RemoveAt(i);
+
+            int x0 = rect.x, x1 = rect.x + rect.width;
+            int y0 = rect.y, y1 = rect.y + rect.height;
+            int cx0 = cut.x, cx1 = cut.x + cut.width;
+            int cy0 = cut.y, cy1 = cut.y + cut.height;
+
+            AddMarqueeRect(list, new RectInt(x0, y0, cx0 - x0, y1 - y0));           // 左
+            AddMarqueeRect(list, new RectInt(cx1, y0, x1 - cx1, y1 - y0));          // 右
+            int midX0 = Mathf.Max(x0, cx0);
+            int midX1 = Mathf.Min(x1, cx1);
+            AddMarqueeRect(list, new RectInt(midX0, y0, midX1 - midX0, cy0 - y0));  // 下
+            AddMarqueeRect(list, new RectInt(midX0, cy1, midX1 - midX0, y1 - cy1)); // 上
+        }
+    }
+
     bool HandleKey(Event e)
     {
         // 拖动过程中不让工具键改工具，否则一个手势会跨到别的工具上。
         if (gesture && e.keyCode != KeyCode.Escape) return false;
-
         switch (e.keyCode)
         {
             case KeyCode.Alpha1: tool = Tool.Paint; break;
@@ -1799,7 +2384,19 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case KeyCode.Minus: tool = Tool.Spike; break;
             case KeyCode.Equals: tool = Tool.Ice; break;
             case KeyCode.R: tool = Tool.RespawnPoint; break;
+            case KeyCode.S: tool = Tool.Marquee; break;
+            case KeyCode.V: tool = Tool.Move; break;
             case KeyCode.Delete:
+                if (tool == Tool.Marquee)
+                {
+                    marquees.Clear();
+                    break;
+                }
+                if (tool == Tool.Move)
+                {
+                    DeleteSelection();
+                    break;
+                }
                 if (tool != Tool.Partition || partitionIndex < 0) return false;
                 DeleteSelectedPartition();
                 break;
@@ -1810,6 +2407,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case KeyCode.Escape:
                 if (!gesture) return false;
                 gesture = false;
+                marqueeDragging = false;
+                movingContent = false;
                 partitionCreating = false;
                 partitionDragIndex = -1;
                 break;
@@ -1900,6 +2499,34 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     new Vector3(1f, LabDoorSpec.CellHeight, 0.01f));
             }
         }
+    }
+
+    void DrawMarquees()
+    {
+        for (int i = 0; i < marquees.Count; i++)
+        {
+            RectInt rect = marquees[i];
+            DrawFilledRect(rect.x, rect.y, rect.x + rect.width - 1, rect.y + rect.height - 1,
+                new Color(0.35f, 0.9f, 1f, 0.10f), new Color(0.35f, 0.9f, 1f, 0.9f));
+            Handles.Label(new Vector3(rect.x + 0.5f, rect.y + rect.height - 0.5f, 0f), "选区 " + i);
+        }
+
+        if (!marqueeDragging) return;
+
+        RectInt preview = MarqueeRect(marqueeStart, marqueeEnd);
+        DrawFilledRect(preview.x, preview.y, preview.x + preview.width - 1, preview.y + preview.height - 1,
+            new Color(1f, 0.9f, 0.35f, 0.16f), new Color(1f, 0.9f, 0.35f, 0.95f));
+        Handles.Label(new Vector3(preview.x + 0.5f, preview.y + preview.height - 0.5f, 0f),
+            preview.width + "×" + preview.height);
+    }
+
+    void DrawPickedHighlight()
+    {
+        if (!ValidPick(picked)) return;
+        RectInt area = PickArea(picked);
+        DrawFilledRect(area.x, area.y, area.x + area.width - 1, area.y + area.height - 1,
+            new Color(1f, 0.55f, 0.2f, 0.10f), new Color(1f, 0.55f, 0.2f, 0.95f));
+        Handles.Label(new Vector3(area.x + 0.5f, area.y + area.height - 0.5f, 0f), PickLabel(picked));
     }
 
     void DrawSpawnHandles(LabLevelData data)
@@ -2063,6 +2690,33 @@ public sealed class LabLevelEditorWindow : EditorWindow
             return;
         }
 
+        if (tool == Tool.Marquee)
+        {
+            RectInt preview = marqueeDragging
+                ? MarqueeRect(marqueeStart, marqueeEnd)
+                : new RectInt(cell.x, cell.y, 1, 1);
+            DrawFilledRect(preview.x, preview.y, preview.x + preview.width - 1, preview.y + preview.height - 1,
+                new Color(0.35f, 0.9f, 1f, 0.12f), new Color(0.35f, 0.9f, 1f, 0.9f));
+            return;
+        }
+
+        if (tool == Tool.Move)
+        {
+            var hover = PickAt(cell);
+            Handles.color = new Color(1f, 0.55f, 0.2f, 0.9f);
+            if (hover.kind == PickKind.None)
+            {
+                Handles.DrawWireCube(CellCenter(cell), Vector3.one);
+                return;
+            }
+
+            RectInt area = PickArea(hover);
+            Handles.DrawWireCube(
+                new Vector3(area.x + area.width * 0.5f, area.y + area.height * 0.5f, 0f),
+                new Vector3(area.width, area.height, 0.01f));
+            return;
+        }
+
         if (!inArea) return;
 
         Color color = ToolColor();
@@ -2221,6 +2875,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Spike: return new Color(0.75f, 0.82f, 0.92f, 0.95f);
             case Tool.Ice: return new Color(0.42f, 0.75f, 1f, 0.95f);
             case Tool.RespawnPoint: return new Color(0.35f, 1f, 0.65f, 0.95f);
+            case Tool.Marquee: return new Color(0.35f, 0.9f, 1f, 0.95f);
+            case Tool.Move: return new Color(1f, 0.55f, 0.2f, 0.95f);
             default: return new Color(1f, 0.85f, 0.3f, 0.95f);
         }
     }

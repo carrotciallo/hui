@@ -35,8 +35,9 @@
 | `Assets/TuningLab/LabVerticalRope.cs` | 竖绳；`ApplyShape` 同时服务预览和 Play |
 | `Assets/TuningLab/LabHorizontalRope.cs` | 横绳平台；零/一级挡住、二级向下穿过、三级以上反弹并提升一级 |
 | `Assets/TuningLab/LabIce.cs` | 冰块：`groupId` 编组、单块融化、整组破坏和地图重置恢复 |
-| `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据：实心格、绳、钥匙/门、地刺、冰块、出生点、相机尺寸、**关卡分区** |
-| `Assets/TuningLab/Level/LabLevel.cs` | 数据 → 合并 `BoxCollider2D` / 绳 / 地刺 / 冰块；编辑器预览和 Play 共用 |
+| `Assets/TuningLab/LabRespawnPoint.cs` | 重生点：3×3 触发区，唯一玩家接触才记录；`ApplyShape` 同时服务预览和 Play |
+| `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据：实心格、绳、钥匙/门、地刺、冰块、重生点、出生点、相机尺寸、**关卡分区** |
+| `Assets/TuningLab/Level/LabLevel.cs` | 数据 → 合并 `BoxCollider2D` / 绳 / 地刺 / 冰块 / 重生点；编辑器预览和 Play 共用 |
 | `Assets/TuningLab/Level/Editor/LabLevelScene.cs` | 从 `TuningLab.unity` 派生关卡场景；默认 `Level 1` 分区 |
 | `Assets/TuningLab/Level/Editor/LabLevelEditorWindow.cs` | 关卡编辑器：地形/绳/出生点/分区/相机面板 |
 | `Assets/TuningLab/Level/Editor/LabLevelSelfCheck.cs` | 纯数据自检（基准 73 格 ↔ 8 块、分区移动/删除、相机分区内外） |
@@ -46,7 +47,7 @@
 
 ### 3.1 `LabLevelData`
 
-- `solids`：实心格；`ropes`：竖绳/横绳；`keys`、`doors`、`spikes`、`ices`：机关；`spawnA/B`：脚底落点。
+- `solids`：实心格；`ropes`：竖绳/横绳；`keys`、`doors`、`spikes`、`ices`、`respawnPoints`：机关；`spawnA/B`：脚底落点。
 - `cameraMinSize / cameraMaxSize`：**关卡级**相机跟随尺寸（正交 size，半高）。
 - `bounds`：编辑范围；没有分区时也作为单关相机 clamp 范围。
 - `partitions`：关卡分区列表。
@@ -115,10 +116,10 @@
 
 只要策划要在编辑器里摆、撤销、跟着分区移动、存盘后重新生成，就走第三条：
 
-1. **数据**：在 `LabLevelData.cs` 加 `[Serializable]` spec、`List<>`、`Normalize`、`CopyFrom`、`Add/Move/Delete`；空间物件要接进 `MovePartition/TranslatePartition/DeletePartition`。
-2. **生成**：在 `LabLevel.Build` 里生成真实物体，预览/Play 同路径；尺寸 = 碰撞 = 视觉；不要依赖已删的 `Assets/Art`。
+1. **数据**：在 `LabLevelData.cs` 加 `[Serializable]` spec、`List<>`、`Normalize`、`CopyFrom`、`Add/Move/Delete`；空间物件要接进 `MovePartition/TranslatePartition/DeletePartition`，还要接进 `MoveContents/DeleteContents/CountContents`，选区和选择工具才会带上它。
+2. **生成**：在 `LabLevel.Build` 里生成真实物体，预览/Play 同路径；尺寸 = 碰撞 = 视觉；不要依赖已删的 `Assets/Art`。组件把初始化写进 `ApplyShape()`，`Build` 里显式调一次，编辑器预览才不会是一坨看不见的空物体。
 3. **运行时**：自己的 `MonoBehaviour` 放 `Assets/TuningLab/Level/`；和玩家交互用 `LabPlayer` 公开接口/碰撞回调；不要往 `LabPlayer` 塞表现逻辑，也不要另起一套速度规则。
-4. **编辑器**：`LabLevelEditorWindow` 加工具/面板、`Record`、`AfterStructuralEdit`、Handles 预览、校验。
+4. **编辑器**：`LabLevelEditorWindow` 加工具、`ToolLabels`、面板、`Record`、`AfterStructuralEdit`、Handles 预览、校验；再把它接进 `IsPlaceTool / ShouldAddAtStart / ApplyToolAtCell`（拖动连续摆放）、`EraseObjectsAt`（擦地形带掉）、`PickAt / PickArea / ValidPick / PickLabel`（选择与拖动），这样"拖动摆放 + 擦除 + 选区 + 选择"四件事就自动有了。
 5. **默认值**：规则/基准放 `TuningLab` Inspector；关卡内容放 `LabLevelData`。
 6. **资源**：每个 `.cs/.prefab/.png` 和文件夹都要 `.meta`；`.cs` 用 LF。
 
@@ -195,6 +196,9 @@
 | `0` | 门 |
 | `-` | 地刺 |
 | `=` | 冰块 |
+| `R` | 重生点 |
+| `S` | 选区 |
+| `V` | 选择 |
 
 常用操作：
 
@@ -202,8 +206,13 @@
 - 门从最下面那一格开始，向上占 `3` 格。
 - 地刺面板选择朝上、朝下、朝左或朝右；同一格再次放置会改方向，不会生成第二根。
 - 冰块按 `groupId` 编组；同一格再次放置同组会删除，换组号再点会改组。`0` 也是普通组，「新建组」会取当前最大组号 + 1。
+- 重生点是 3×3 触发区：同一格再点一次删除。面板可以逐个删除或清空；校验会提示「在地形里」和「两个重生点重叠」。
 - 分区工具在空白处拖出分区，在分区内部拖动可移动分区；重叠分区会标红并且不能创建。
-- 面板中的 **钥匙 / 门**、**地刺**、**冰块**、**分区**可以逐条删除或清空。
+- 面板中的 **钥匙 / 门**、**地刺**、**冰块**、**重生点**、**分区**可以逐条删除或清空。
+- 所有摆放工具都能**按住拖动连续摆放**：钥匙、门、竖绳、横绳、地刺、冰块、重生点，拖着走一路铺过去。开关型工具（地刺 / 冰块 / 重生点）按第一格的状态决定这一笔是"放"还是"删"，整笔保持一致。
+- **擦地形**不只擦实心格：这一格上的钥匙、门、地刺、冰块、重生点、绳也一起擦掉，拖动可以连续擦。
+- **选区工具**（`S`）：左键拖出一个矩形，起点和对角是它的两个顶点。下一次拉选区怎么处理已有选区由面板的三种模式决定——**重新选择**（默认，清掉旧的）、**增加选区**、**删除选区**（从已有选区里按矩形挖掉一块）。选区只存在于编辑器，不写进关卡数据。
+- **选择工具**（`V`）：点中物件后拖动移动它；场景里有选区时，改为拖动选区里的全部内容（地形格、绳、钥匙、门、地刺、冰块、重生点都算，出生点和关卡分区不算）。`Del` 删除：有选区删选区内容，没有选区删点中的那个物件。移动和删除都可撤销。
 - 所有编辑操作都支持撤销/重做。
 
 地图数据保存在 `LabLevelData` 中，不要直接修改预览生成出来的碰撞体。预览和 Play 使用同一条生成路径，所以编辑器里看到的几何就是运行时实际碰撞的几何。
