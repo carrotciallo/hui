@@ -167,6 +167,68 @@ public sealed class LabIceTests
         Assert.Greater(lab.IceMaxSpeed, lab.IceBreakSpeed, "冰面加速上限高于破坏门槛");
     }
 
+    // 滑行 ---------------------------------------------------------------
+
+    [UnityTest]
+    public IEnumerator SlidingAcrossIceAtV2DoesNotBreakTheGroup()
+    {
+        MakeFloor();
+        var row = new System.Collections.Generic.List<LabIce>();
+        for (int x = 0; x < 20; x++) row.Add(MakeIce(new Vector2Int(x, 0), 1));
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(0.5f, 1f + a.HalfHeight));
+        yield return WaitUntil(() => a.Grounded, 2f);
+        Assert.IsTrue(a.OnIce, "起始站在冰面上");
+
+        a.SetVelocity(new Vector2(lab.IceBreakSpeed + 4f, 0f));
+        for (int i = 0; i < 20; i++) yield return new WaitForFixedUpdate();
+
+        Assert.IsFalse(row[0].Broken, "在冰面上滑行不应触发整组破坏");
+        Assert.IsFalse(row[19].Broken, "滑过的冰块也不应被破坏");
+    }
+
+    [UnityTest]
+    public IEnumerator SlidingAcrossIceKeepsHorizontalSpeed()
+    {
+        MakeFloor();
+        for (int x = 0; x < 30; x++) MakeIce(new Vector2Int(x, 0), 1);
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(0.5f, 1f + a.HalfHeight));
+        yield return WaitUntil(() => a.Grounded, 2f);
+
+        const float startSpeed = 24f;
+        a.SetVelocity(new Vector2(startSpeed, 0f));
+        float minSpeed = startSpeed;
+        for (int i = 0; i < 30; i++)
+        {
+            yield return new WaitForFixedUpdate();
+            minSpeed = Mathf.Min(minSpeed, a.Velocity.x);
+        }
+
+        Assert.Greater(minSpeed, startSpeed - 1f,
+            "滑过冰块接缝时不应突然掉速，最低 " + minSpeed);
+    }
+
+    [UnityTest]
+    public IEnumerator HittingIceSideAtV2StillBreaksTheGroup()
+    {
+        MakeFloor();
+        var ice = MakeIce(new Vector2Int(1, 0), 1);
+        var neighbor = MakeIce(new Vector2Int(2, 0), 1);   // 同组，侧撞应一起碎
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(0.1f, a.HalfHeight));
+        yield return WaitUntil(() => a.Grounded, 2f);
+
+        a.SetVelocity(new Vector2(lab.IceBreakSpeed + 4f, 0f));
+        yield return WaitUntil(() => ice.Broken, 2f);
+
+        Assert.IsTrue(ice.Broken, "侧撞 v2 应破坏这一块");
+        Assert.IsTrue(neighbor.Broken, "同组冰块应一起碎");
+    }
+
     // 工具 ---------------------------------------------------------------
 
     void MakeFloor()
