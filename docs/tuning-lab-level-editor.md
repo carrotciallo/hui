@@ -34,8 +34,9 @@
 | `Assets/TuningLab/LabCamera.cs` | 跟随 A/B 中点；按 B 查当前分区的 bounds/min-max，并做混合 |
 | `Assets/TuningLab/LabVerticalRope.cs` | 竖绳；`ApplyShape` 同时服务预览和 Play |
 | `Assets/TuningLab/LabHorizontalRope.cs` | 横绳平台；零/一级挡住、二级向下穿过、三级以上反弹并提升一级 |
-| `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据：实心格、绳、出生点、相机尺寸、**关卡分区** |
-| `Assets/TuningLab/Level/LabLevel.cs` | 数据 → 合并 `BoxCollider2D` / `LabVerticalRope`；编辑器预览和 Play 共用 |
+| `Assets/TuningLab/LabIce.cs` | 冰块：`groupId` 编组、单块融化、整组破坏和地图重置恢复 |
+| `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据：实心格、绳、钥匙/门、地刺、冰块、出生点、相机尺寸、**关卡分区** |
+| `Assets/TuningLab/Level/LabLevel.cs` | 数据 → 合并 `BoxCollider2D` / 绳 / 地刺 / 冰块；编辑器预览和 Play 共用 |
 | `Assets/TuningLab/Level/Editor/LabLevelScene.cs` | 从 `TuningLab.unity` 派生关卡场景；默认 `Level 1` 分区 |
 | `Assets/TuningLab/Level/Editor/LabLevelEditorWindow.cs` | 关卡编辑器：地形/绳/出生点/分区/相机面板 |
 | `Assets/TuningLab/Level/Editor/LabLevelSelfCheck.cs` | 纯数据自检（基准 73 格 ↔ 8 块、分区移动/删除、相机分区内外） |
@@ -45,7 +46,7 @@
 
 ### 3.1 `LabLevelData`
 
-- `solids`：实心格；`ropes`：竖绳；`spawnA/B`：脚底落点。
+- `solids`：实心格；`ropes`：竖绳/横绳；`keys`、`doors`、`spikes`、`ices`：机关；`spawnA/B`：脚底落点。
 - `cameraMinSize / cameraMaxSize`：**关卡级**相机跟随尺寸（正交 size，半高）。
 - `bounds`：编辑范围；没有分区时也作为单关相机 clamp 范围。
 - `partitions`：关卡分区列表。
@@ -55,7 +56,9 @@
 ### 3.2 `LabLevel.Build`
 
 - 把 `solids` 合并成尽量少的矩形，每个矩形一个 `BoxCollider2D`；竖绳生成 `LabVerticalRope`，横绳生成 `LabHorizontalRope`。
+- 钥匙、门、地刺、冰块都逐格生成；冰块按 `groupId` 共享整组破坏，不能并入 `MergedRects`。
 - 绳子规格保存在 `LabRopeSpec.orientation`；旧数据缺省为竖绳。
+- 地图重置时恢复被拾取的钥匙、关回门并恢复所有冰块。
 - **预览和 Play 走同一条 `Build`**：编辑器里看到的几何就是 Play 撞到的几何。
 - 预览物体带 `HideFlags.DontSaveInEditor`，不写进场景；`OnEnable` 重建，`ClearGenerated` 清理。
 - 运行时用 `TuningLab.WhiteSprite` / 运行时材质；不依赖外部 Sprite 资产，避免烘焙场景丢引用。
@@ -79,9 +82,10 @@
 
 ### 4.2 编辑器操作
 
-- `1–0`：铺地形 / 擦地形 / 矩形 / 竖绳 / 横绳 / 出生点 A / 出生点 B / 关卡分区 / 钥匙 / 门；`-` 选择地刺。
+- `1–0`：铺地形 / 擦地形 / 矩形 / 竖绳 / 横绳 / 出生点 A / 出生点 B / 关卡分区 / 钥匙 / 门；`-` 地刺；`=` 冰块。
 - 分区面板：新建、命名、X/Y/宽/高、删除、移动时带物件。
-- 分区工具（`7`）：空白处拖出新分区；分区内部拖动移动；重叠时预览变红、不能创建。
+- 分区工具（`8`）：空白处拖出新分区；分区内部拖动移动；重叠时预览变红、不能创建。
+- 冰块工具（`=`）：同一格再点同组 = 删除，换组号再点 = 改组；「新建组」取当前最大组号 + 1。
 - 所有修改走 `Undo.RecordObject`，改完 `AfterStructuralEdit()` / `RebuildPreview()`。
 
 ### 4.3 相机
@@ -123,7 +127,7 @@
 - **先 Play**：TuningLab HUD 直接看速度、折算格数、等级、充能、撞击读数；`R` 重置，`P` 像素网格，`Tab` 格线；timeScale/重力/跳高/冲刺都能拖。
 - **Scene 视图**：预览就是 Play 的几何；分区、相机框、编辑范围都有 Handles/Gizmos。新组件自己加 `OnDrawGizmosSelected`。
 - **分而治之**：`New Level From Tuning Lab` 建小场景，只放这个组件；用分区把 B 限制在一小段单独看相机/碰撞。
-- **日志**：`Debug.Log(..., this)`；`LabProbe`（`Assets/TuningLab/Diagnostics`）可落盘到 `Logs/TuningLabDiagnostics.txt`；看 `Logs/Editor.log`。
+- **日志**：`Debug.Log(..., this)`；看 `Logs/Editor.log`。
 - **常见症状**：
   - 编辑器看得到、Play 没有：`autoBuild`、`TuningLab.level`、`ClearGenerated`。
   - Play 有、编辑器没有：`RebuildPreview`、`OnEnable`、预览 `HideFlags`。
@@ -183,20 +187,23 @@
 | `2` | 擦地形 |
 | `3` | 矩形地形 |
 | `4` | 竖绳 |
-| `5` | 出生点 A |
-| `6` | 出生点 B |
-| `7` | 关卡分区 |
-| `8` | 钥匙 |
-| `9` | 门 |
-| `0` | 地刺 |
+| `5` | 横绳 |
+| `6` | 出生点 A |
+| `7` | 出生点 B |
+| `8` | 关卡分区 |
+| `9` | 钥匙 |
+| `0` | 门 |
+| `-` | 地刺 |
+| `=` | 冰块 |
 
 常用操作：
 
 - 在格子上点击或拖动即可编辑。
 - 门从最下面那一格开始，向上占 `3` 格。
 - 地刺面板选择朝上、朝下、朝左或朝右；同一格再次放置会改方向，不会生成第二根。
+- 冰块按 `groupId` 编组；同一格再次放置同组会删除，换组号再点会改组。`0` 也是普通组，「新建组」会取当前最大组号 + 1。
 - 分区工具在空白处拖出分区，在分区内部拖动可移动分区；重叠分区会标红并且不能创建。
-- 面板中的 **钥匙 / 门**、**地刺**、**分区**可以逐条删除或清空。
+- 面板中的 **钥匙 / 门**、**地刺**、**冰块**、**分区**可以逐条删除或清空。
 - 所有编辑操作都支持撤销/重做。
 
 地图数据保存在 `LabLevelData` 中，不要直接修改预览生成出来的碰撞体。预览和 Play 使用同一条生成路径，所以编辑器里看到的几何就是运行时实际碰撞的几何。
@@ -209,7 +216,7 @@
 2. **看 Scene 预览**：确认位置、尺寸、朝向和相机分区正确。
 3. **进 Play 测碰撞**：不要只看画面，实际走过去、跳、撞、拿钥匙、开门或触发死亡。
 4. **检查分区**：B 的中心位置决定当前分区和相机范围；B 不在任何分区时，相机不应被错误夹到原点。
-5. **需要日志时**：使用 `Debug.Log(..., this)`；`LabProbe` 可将诊断写到 `Logs/TuningLabDiagnostics.txt`，编辑器日志在 `Logs/Editor.log`。
+5. **需要日志时**：使用 `Debug.Log(..., this)`；编辑器日志在 `Logs/Editor.log`。
 
 常见问题：
 
@@ -246,7 +253,8 @@
 - 编辑器预览和 Play 一致；
 - 摆放、撤销、重做、保存、重新打开都正常；
 - 分区新建、移动、改大小、删除正常，移动时内容跟随；
-- 钥匙、门、地刺的尺寸、方向、碰撞和重置正常；
+- 钥匙、门、地刺、竖绳、横绳的尺寸、方向、碰撞和重置正常；
+- 冰块的 1×1 碰撞、组号、红热融一块、v2 碎整组和地图重置恢复正常；
 - B 在分区内和分区外时，相机范围正确；
 - 没有新字段或分区的旧关卡仍能打开。
 
@@ -259,7 +267,9 @@
 - 相机跟随 A/B 中点，但只用 **B 的中心**判断当前分区。
 - 分区不能重叠，贴边相邻允许。
 - 钥匙和门是共享的：任意钥匙可以打开任意门，门的颜色只用于区分。
+- 绳按 `{ center, cells, chainId, orientation }` 保存；`orientation = Vertical/Horizontal`，旧数据缺省为竖绳。横绳是平台：零/一级挡住、二级向下穿过、三级以上反弹并提升一级。
 - 地刺按 `{ cell, dir }` 保存；每格最多一根，碰到即死。
+- 冰块按 `{ cell, groupId }` 保存；1×1 实体，可站立/滑行。红热边（Hot1/Hot2）接触只融一块并把边回普通；组内任意一块被 v2 碰撞则整组碎。冰面按住方向按 `a = g` 加速，4 格升一级，封顶 v4；松手保留滑行。
 - 预览生成物不保存到场景；运行时重新从数据生成。
 
 ### 场景用途
@@ -300,8 +310,8 @@
 `LabLevelData` 保存：
 
 - `solids`：实心格；
-- `ropes`：竖绳；
-- `keys`、`doors`、`spikes`：机关；
+- `ropes`：竖绳/横绳；
+- `keys`、`doors`、`spikes`、`ices`：机关；
 - `spawnA/B`：出生点脚底位置；
 - `cameraMinSize/cameraMaxSize`：关卡级相机尺寸；
 - `bounds`：编辑范围和无分区时的相机范围；
@@ -309,9 +319,9 @@
 
 `Normalize()` 负责排序、去重、旧字段回落、相机尺寸限制和分区尺寸修正；`CopyFrom()` 做深拷贝，撤销、重置和派生都依赖它。
 
-`LabLevel.Build` 会把实心格合并成尽量少的矩形 `BoxCollider2D`，再生成绳、钥匙、门和地刺。钥匙、门、地刺的 `ApplyShape()` 同时用于预览和 Play，因此不会出现“看起来能走、实际撞不到”的两套几何。
+`LabLevel.Build` 会把实心格合并成尽量少的矩形 `BoxCollider2D`，再生成绳、钥匙、门、地刺和冰块。钥匙、门、地刺、冰块的 `ApplyShape()` 同时用于预览和 Play，因此不会出现“看起来能走、实际撞不到”的两套几何。
 
-地图重置时，`LabLevel` 会重新生成被拾取的钥匙并关回门。运行时订阅 `TuningLab.MapReset`，清理生成物时退订。
+地图重置时，`LabLevel` 会重新生成被拾取的钥匙、关回门并恢复所有冰块。运行时订阅 `TuningLab.MapReset`，清理生成物时退订。
 
 ### 相机如何选择范围
 
@@ -346,9 +356,11 @@
 | `Assets/TuningLab/LabPlayer.cs` | 玩家移动、跳、冲刺、撞击和死亡 |
 | `Assets/TuningLab/LabCamera.cs` | A/B 中点跟随和分区相机范围 |
 | `Assets/TuningLab/LabVerticalRope.cs` | 竖绳及其形状应用 |
+| `Assets/TuningLab/LabHorizontalRope.cs` | 横绳平台及其形状应用 |
 | `Assets/TuningLab/LabKey.cs` | 钥匙 |
 | `Assets/TuningLab/LabDoor.cs` | 门 |
 | `Assets/TuningLab/LabSpike.cs` | 地刺 |
+| `Assets/TuningLab/LabIce.cs` | 冰块：编组、单块融化、整组破坏和恢复 |
 | `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据和分区 |
 | `Assets/TuningLab/Level/LabLevel.cs` | 数据到碰撞体和运行时物体的生成 |
 | `Assets/TuningLab/Level/Editor/LabLevelScene.cs` | 从 Tuning Lab 派生关卡 scene |
@@ -365,10 +377,13 @@
 5. **分区移动必须带上内容。** 只移动 bounds 会让地形、机关和出生点留在原地。
 6. **重叠检查必须在数据层拒绝。** 不能只在编辑器里显示警告。
 7. **不要把 ProjectSettings、用户生成的关卡和 packages-lock 的无关改动带进提交。**
+8. **冰块组号 0 是普通组。** 编辑器默认从 1 开始分配新组；手动把多块冰设成 0 会让它们共享整组破坏。冰块不并入 `MergedRects`，必须逐格生成才能单块融化。
 
 ## 当前限制
 
 - 分区尺寸目前通过面板数值修改，Scene 视图只支持拖动，不支持边角拖拽。
 - 相机 min/max 是关卡级，不能为每个分区单独设置。
 - 鼠标交互不能在无头批处理模式模拟，仍需要在 Unity 编辑器内手测。
+- 红热边融冰只在碰撞进入（`OnCollisionEnter`）时结算；贴冰站立后边才变红不会融脚下这块。
+- 冰面加速按 `a = g` 持续加速，封顶 v4；已超速的玩家在冰面上不会被强制减速。
 - README 和 `docs/策划案` 仍可能包含清理前的旧游戏描述；关卡编辑以本文和 `Assets/TuningLab` 代码为准。
