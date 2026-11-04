@@ -463,13 +463,16 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Move:
                 EditorGUILayout.HelpBox(
                     "左键点中物件后拖动 = 移动那个物件；场景里有选区时，改成拖动选区里的所有内容。\n" +
-                    "Del：有选区删选区内容，没选区删点中的物件。移动和删除都能撤销。",
+                    "删除用下面「选区 / 选择」面板里的按钮。移动和删除都能撤销。",
                     MessageType.None);
                 break;
 
         }
 
         if (GUILayout.Button("跳到关卡")) FrameLevel();
+        showGrid = EditorGUILayout.ToggleLeft("显示网格", showGrid);
+        EditorGUILayout.LabelField("快捷键：1 铺地形 / 3 擦地形 / 4 选区 / 5 选择（禁止新增）",
+            EditorStyles.miniLabel);
     }
 
     void DrawSelection()
@@ -2490,56 +2493,22 @@ public sealed class LabLevelEditorWindow : EditorWindow
         }
     }
 
+    /// <summary>
+    /// 只保留四个快捷键：1 铺地形 / 3 擦地形 / 4 选区 / 5 选择。
+    /// 不要新增或恢复其它快捷键；其它工具一律从工具面板选择。
+    /// </summary>
     bool HandleKey(Event e)
     {
         // 拖动过程中不让工具键改工具，否则一个手势会跨到别的工具上。
-        if (gesture && e.keyCode != KeyCode.Escape) return false;
+        if (gesture) return false;
+
         switch (e.keyCode)
         {
             case KeyCode.Alpha1: tool = Tool.Paint; break;
-            case KeyCode.Alpha2: tool = Tool.Erase; break;
-            case KeyCode.Alpha3: tool = Tool.Rect; break;
-            case KeyCode.Alpha4: tool = Tool.Rope; break;
-            case KeyCode.Alpha5: tool = Tool.HorizontalRope; break;
-            case KeyCode.Alpha6: tool = Tool.SpawnA; break;
-            case KeyCode.Alpha7: tool = Tool.SpawnB; break;
-            case KeyCode.Alpha8: tool = Tool.Partition; break;
-            case KeyCode.Alpha9: tool = Tool.Key; break;
-            case KeyCode.Alpha0: tool = Tool.Door; break;
-            case KeyCode.Minus: tool = Tool.Spike; break;
-            case KeyCode.Equals: tool = Tool.Ice; break;
-            case KeyCode.R: tool = Tool.RespawnPoint; break;
-            case KeyCode.T: tool = Tool.TeleportPoint; break;
-            case KeyCode.S: tool = Tool.Marquee; break;
-            case KeyCode.V: tool = Tool.Move; break;
-            case KeyCode.Delete:
-                if (tool == Tool.Marquee)
-                {
-                    marquees.Clear();
-                    break;
-                }
-                if (tool == Tool.Move)
-                {
-                    DeleteSelection();
-                    break;
-                }
-                if (tool != Tool.Partition || partitionIndex < 0) return false;
-                DeleteSelectedPartition();
-                break;
-            case KeyCode.G: showGrid = !showGrid; break;
-            case KeyCode.Home: FrameLevel(); break;
-            case KeyCode.LeftBracket: ropeLength = Mathf.Max(1, ropeLength - 1); break;
-            case KeyCode.RightBracket: ropeLength = Mathf.Min(MaxRopeLength, ropeLength + 1); break;
-            case KeyCode.Escape:
-                if (!gesture) return false;
-                gesture = false;
-                marqueeDragging = false;
-                movingContent = false;
-                partitionCreating = false;
-                partitionDragIndex = -1;
-                break;
-            default:
-                return false;
+            case KeyCode.Alpha3: tool = Tool.Erase; break;
+            case KeyCode.Alpha4: tool = Tool.Marquee; break;
+            case KeyCode.Alpha5: tool = Tool.Move; break;
+            default: return false;
         }
 
         Repaint();
