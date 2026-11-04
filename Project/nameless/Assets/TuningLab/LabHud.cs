@@ -195,10 +195,12 @@ public class LabHud : MonoBehaviour
         GUILayout.BeginArea(new Rect(Screen.width - w - 10f, 10f, w, Screen.height - 20f), GUI.skin.box);
 
         GUILayout.Label("读数", title);
-        if (lab.PlayerA == null) GUILayout.Label("P1 塌框死亡：相机改绑 P2，尺寸不再伸缩", WarnStyle());
+        if (lab.PlayerA == null) GUILayout.Label("P1 已销毁：相机改绑 P2", WarnStyle());
+        else if (!lab.PlayerA.IsAlive) GUILayout.Label("P1 死亡：隐藏等待队友", WarnStyle());
         else DrawPlayer(lab.PlayerA, "P1");
         GUILayout.Space(6f);
-        if (lab.PlayerB == null) GUILayout.Label("P2 塌框死亡：相机改绑 P1，尺寸不再伸缩", WarnStyle());
+        if (lab.PlayerB == null) GUILayout.Label("P2 已销毁：相机改绑 P1", WarnStyle());
+        else if (!lab.PlayerB.IsAlive) GUILayout.Label("P2 死亡：隐藏等待队友", WarnStyle());
         else DrawPlayer(lab.PlayerB, "P2");
 
         GUILayout.Space(10f);

@@ -73,7 +73,7 @@ Project/nameless/
 | [#29](https://github.com/sfher/hui/issues/29) | 冰块 | 尚未进入当前基准；包含破坏、编组和冰面加速。对应主线 L3/L4。 |
 | [#27](https://github.com/sfher/hui/issues/27) | 绳子 | 已有 `LabVerticalRope` 基础实现，但策划中的完整交互、反馈和关卡用途仍待补齐。 |
 | [#34](https://github.com/sfher/hui/issues/34) | 地刺 | 待加入并接入关卡编辑器；对应主线绳子进阶与 L9。 |
-| [#32](https://github.com/sfher/hui/issues/32) | 重生点 | 已补齐基础功能；Issue #48 起任一玩家接触即让双人固定 A 左 B 右重生，并在每次触发时刷新地图。 |
+| [#32](https://github.com/sfher/hui/issues/32) | 重生点 | 已补齐基础功能；任一玩家从区域外进入触发区即让双人固定 A 左 B 右重生并刷新地图；单人死亡隐藏等待，两人都死亡才一起回激活的重生点。 |
 | [#33](https://github.com/sfher/hui/issues/33) | 传送点 | 已补齐关卡编辑器摆放；所有传送点互为终点，进入后 `A/D` 选终点、`Enter` 确认，传送会重置地图并吞钥匙。靠近点亮/收集门槛未实现。 |
 | [#35](https://github.com/sfher/hui/issues/35) | 大炮方向 bug | 已知小 bug：B 从开口朝上的 A 进入时，射出方向可能与冲刺方向相反。 |
 | [#26](https://github.com/sfher/hui/issues/26) | 像素美术资源 | 资源清单和规格已明确，当前仍是程序生成占位显示。 |

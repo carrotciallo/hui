@@ -1,7 +1,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>3×3 重生点：任一玩家接触时激活，并让两人以全新状态固定在左右重生。</summary>
+/// <summary>
+/// 3×3 重生点：任一玩家从区域外进入触发区时激活，两人以全新状态固定在左右重生。
+/// 已经在区域里、贴着边缘停留都不会重复触发；全员离开后再次进入才再次触发。
+/// 被传送、复活或出生直接放进区域不算“进入”。
+/// </summary>
 [RequireComponent(typeof(BoxCollider2D), typeof(SpriteRenderer))]
 public sealed class LabRespawnPoint : MonoBehaviour
 {
@@ -14,6 +18,18 @@ public sealed class LabRespawnPoint : MonoBehaviour
     SpriteRenderer renderer;
     readonly HashSet<LabPlayer> touching = new HashSet<LabPlayer>();
     bool contactResolved;
+
+    // 每名玩家上一次采样时的状态。只有“活着、不在膛里”的身体从区域外跨进来才算进入；
+    // TeleportCount 变了说明这次重叠是传送/复活放进去的，也不能算进入。
+    LabPlayer trackedA;
+    LabPlayer trackedB;
+    bool activeA;
+    bool activeB;
+    bool insideA;
+    bool insideB;
+    int teleportsA;
+    int teleportsB;
+
     static Sprite cachedSprite;
 
     void Awake() => ApplyShape();
@@ -46,35 +62,86 @@ public sealed class LabRespawnPoint : MonoBehaviour
         lab = GetComponentInParent<TuningLab>();
         if (lab == null) lab = FindAnyObjectByType<TuningLab>();
         if (lab != null) lab.RegisterRespawnPoint(this);
-    }
-
-    void OnTriggerEnter2D(Collider2D other) => TryActivate(other);
-    void OnTriggerStay2D(Collider2D other) => TryActivate(other);
-    void OnTriggerExit2D(Collider2D other)
-    {
-        var player = other.GetComponentInParent<LabPlayer>();
-        if (player == null) return;
-        touching.Remove(player);
-        if (touching.Count == 0)
-        {
-            contactResolved = false;
-        }
-    }
-
-    void TryActivate(Collider2D other)
-    {
-        var player = other.GetComponentInParent<LabPlayer>();
-        if (player == null || lab == null) return;
-        touching.Add(player);
+        SeedTracks();
     }
 
     void FixedUpdate()
     {
-        if (lab == null || contactResolved || touching.Count == 0) return;
+        if (lab == null) return;
 
-        if (!touching.Contains(lab.PlayerA) && !touching.Contains(lab.PlayerB)) return;
-        lab.ActivateRespawnPoint(this);
-        RespawnPlayers(lab);
+        bool entered = false;
+        entered |= Sample(lab.PlayerA, ref trackedA, ref activeA, ref insideA, ref teleportsA);
+        entered |= Sample(lab.PlayerB, ref trackedB, ref activeB, ref insideB, ref teleportsB);
+
+        if (entered && !contactResolved)
+        {
+            contactResolved = true;
+            lab.ActivateRespawnPoint(this);
+            RespawnPlayers(lab);
+        }
+
+        // 被销毁的玩家不会再来采样，清掉之后才能判定“全员离开”。
+        touching.RemoveWhere(player => player == null);
+
+        // 全员离开（或都死亡/进膛）之后才重新允许触发。
+        if (touching.Count == 0) contactResolved = false;
+    }
+
+    /// <summary>Start 时先记录一次当前位置：出生/放置就在区域里的玩家不算“进入”。</summary>
+    void SeedTracks()
+    {
+        if (lab == null) return;
+        Seed(lab.PlayerA, ref trackedA, ref activeA, ref insideA, ref teleportsA);
+        Seed(lab.PlayerB, ref trackedB, ref activeB, ref insideB, ref teleportsB);
+    }
+
+    void Seed(LabPlayer player, ref LabPlayer tracked, ref bool active, ref bool inside, ref int teleports)
+    {
+        if (tracked != null && tracked != player) touching.Remove(tracked);
+        tracked = player;
+        active = IsTrackable(player);
+        inside = active && Overlaps(player);
+        teleports = player != null ? player.TeleportCount : 0;
+        SetTouching(player, inside);
+    }
+
+    /// <summary>采样一名玩家；返回 true 表示这一步发生了真正的“从区域外进入”。</summary>
+    bool Sample(LabPlayer player, ref LabPlayer tracked, ref bool active, ref bool inside, ref int teleports)
+    {
+        if (player != tracked)
+        {
+            // 玩家引用换了（例如后生成的玩家）：重新取初值，不把换人当成进入。
+            Seed(player, ref tracked, ref active, ref inside, ref teleports);
+            return false;
+        }
+
+        bool wasActive = active;
+        bool wasInside = inside;
+        int wasTeleports = teleports;
+
+        active = IsTrackable(player);
+        inside = active && Overlaps(player);
+        teleports = player != null ? player.TeleportCount : 0;
+        SetTouching(player, inside);
+
+        bool teleported = teleports != wasTeleports;
+        return active && wasActive && inside && !wasInside && !teleported;
+    }
+
+    static bool IsTrackable(LabPlayer player)
+        => player != null && player.IsAlive && !player.Suspended;
+
+    bool Overlaps(LabPlayer player)
+    {
+        if (trigger == null) trigger = GetComponent<BoxCollider2D>();
+        return trigger != null && player.BodyBounds.Intersects(trigger.bounds);
+    }
+
+    void SetTouching(LabPlayer player, bool inside)
+    {
+        if (player == null) return;
+        if (inside) touching.Add(player);
+        else touching.Remove(player);
     }
 
     internal void SetActive(bool active)
@@ -84,11 +151,6 @@ public sealed class LabRespawnPoint : MonoBehaviour
     }
 
     public bool IsTouching(LabPlayer player) => player != null && touching.Contains(player);
-
-    public void RespawnAfterDeath(TuningLab owner, LabPlayer _)
-    {
-        RespawnPlayers(owner);
-    }
 
     public void RespawnPlayers(TuningLab owner)
     {
@@ -112,6 +174,12 @@ public sealed class LabRespawnPoint : MonoBehaviour
         IsActive = false;
         contactResolved = false;
         touching.Clear();
+        trackedA = null;
+        trackedB = null;
+        activeA = false;
+        activeB = false;
+        insideA = false;
+        insideB = false;
         if (renderer != null) renderer.color = inactiveColor;
     }
 
