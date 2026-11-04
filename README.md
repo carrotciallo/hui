@@ -42,7 +42,6 @@ Project/nameless/
 │     │  ├─ LabLevelData.cs       # 格子、绳、出生点、相机和分区数据
 │     │  └─ LabLevel.cs           # 数据 → 场景生成
 │     ├─ Editor/                  # Tuning Lab 菜单和自检
-│     ├─ Diagnostics/             # 调试探针
 │     └─ Tests/                   # PlayMode 验证
 └─ ProjectSettings/               # Unity 项目配置
 ```
