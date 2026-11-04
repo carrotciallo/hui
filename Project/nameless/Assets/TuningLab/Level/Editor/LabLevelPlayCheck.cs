@@ -24,6 +24,9 @@ public static class LabLevelPlayCheck
 
     /// <summary>验证用刺所在格：底座 (-6, -1) 是基准地板，离 x=8/10 的两名玩家很远。</summary>
     static readonly Vector2Int SpikeCell = new Vector2Int(-6, 0);
+    /// <summary>验证用冰块：同样放在远处地板上，只验证"数据 → 实体碰撞"和重置。</summary>
+    static readonly Vector2Int IceCell = new Vector2Int(-8, 0);
+    const int IceGroup = 5;
 
     const string ActiveKey = "LabLevelPlayCheck.Active";
     const string StartedKey = "LabLevelPlayCheck.Started";
@@ -89,6 +92,8 @@ public static class LabLevelPlayCheck
             // 离两名玩家很远的地板上一根朝上的刺：只验证"数据 → 物件"这条管子，不验证死亡。
             level.Data.ClearSpikes();
             level.Data.PlaceSpike(SpikeCell, LabSpikeDir.Up);
+            level.Data.ClearIces();
+            level.Data.PlaceIce(IceCell, IceGroup);
 
             var lab = Object.FindAnyObjectByType<TuningLab>();
             if (lab != null)
@@ -242,12 +247,13 @@ public static class LabLevelPlayCheck
                 "合并矩形 = 8，实际 " + level.MergedRectCount);
             Check(sb, ref fails, level.RopeCount == 1, "绳 = 1");
             Check(sb, ref fails, level.SpikeCount == 1, "地刺 = 1，实际 " + level.SpikeCount);
+            Check(sb, ref fails, level.IceCount == 1, "冰块 = 1，实际 " + level.IceCount);
 
             Transform generated = lab.transform.Find(LabLevel.GeneratedRootName);
             Check(sb, ref fails, generated != null, "生成根 " + LabLevel.GeneratedRootName + " 存在");
             if (generated != null)
-                Check(sb, ref fails, generated.childCount == 10,
-                    "生成物 = 8 块地形 + 1 根绳 + 1 根刺，实际 " + generated.childCount);
+                Check(sb, ref fails, generated.childCount == 11,
+                    "生成物 = 8 块地形 + 1 根绳 + 1 根刺 + 1 块冰，实际 " + generated.childCount);
 
             Check(sb, ref fails,
                 Mathf.Abs(level.Data.spawnA.x - TuningLab.SpawnAFeet.x) < 0.0001f &&
@@ -312,6 +318,36 @@ public static class LabLevelPlayCheck
             Check(sb, ref fails,
                 Physics2D.OverlapPoint(new Vector2(strip.StripCenter.x, strip.StripCenter.y + 0.5f)) == null,
                 "刺上方半格没有碰撞（只有那 6 像素 lethal）");
+        }
+
+        var ices = Object.FindObjectsByType<LabIce>();
+        Check(sb, ref fails, ices.Length == 1, "冰块组件 = 1，实际 " + ices.Length);
+        if (ices.Length == 1)
+        {
+            LabIce ice = ices[0];
+            var center = new Vector2(IceCell.x + 0.5f, IceCell.y + 0.5f);
+            Check(sb, ref fails,
+                Mathf.Abs(ice.transform.position.x - center.x) < 0.0001f &&
+                Mathf.Abs(ice.transform.position.y - center.y) < 0.0001f,
+                "冰块生成在 " + center + "，实际 " + ice.transform.position);
+            Check(sb, ref fails, ice.groupId == IceGroup,
+                "冰块组号 = " + IceGroup + "，实际 " + ice.groupId);
+
+            var iceBody = ice.GetComponent<BoxCollider2D>();
+            Check(sb, ref fails, iceBody != null && !iceBody.isTrigger
+                && Mathf.Abs(iceBody.size.x - 1f) < 0.0001f
+                && Mathf.Abs(iceBody.size.y - 1f) < 0.0001f,
+                "冰块碰撞 = 实体 1×1");
+            Check(sb, ref fails, Physics2D.OverlapPoint(center) != null,
+                "冰块中心查得到碰撞");
+
+            // 破坏 → 地图重置恢复，验证 MapReset 管路。
+            ice.BreakOne();
+            Check(sb, ref fails, ice.Broken && iceBody != null && !iceBody.enabled,
+                "破坏后冰块碰撞关闭");
+            lab.ResetMap();
+            Check(sb, ref fails, !ice.Broken && iceBody != null && iceBody.enabled,
+                "MapReset 后冰块恢复");
         }
         Check(sb, ref fails, lab.PlayerA != null && lab.PlayerB != null,
             "离刺很远的两名玩家没有被误杀");

@@ -26,7 +26,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Partition = 6,
         Key = 7,
         Door = 8,
-        Spike = 9
+        Spike = 9,
+        Ice = 10
     }
 
     const int EditMargin = 8;                 // 相机范围外还能画多少格
@@ -35,7 +36,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     static readonly string[] ToolLabels =
     {
-        "铺地形", "擦地形", "矩形", "竖绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺"
+        "铺地形", "擦地形", "矩形", "竖绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺", "冰块"
     };
 
     static readonly string[] SpikeDirLabels = { "朝上", "朝下", "朝左", "朝右" };
@@ -53,6 +54,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     int ropeChainId;
     Color newDoorColor = LabDoor.DefaultClosedColor;
     LabSpikeDir newSpikeDir = LabSpikeDir.Up;
+    int iceGroupId = 1;
     bool showGrid = true;
     bool showSpawns = true;
     bool showCameraFrames = true;
@@ -60,6 +62,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     Vector2 ropeScroll;
     Vector2 keyDoorScroll;
     Vector2 spikeScroll;
+    Vector2 iceScroll;
 
     bool gesture;
     Vector2Int rectStart;
@@ -205,6 +208,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawKeyDoors();
         EditorGUILayout.Space();
         DrawSpikes();
+        EditorGUILayout.Space();
+        DrawIces();
         EditorGUILayout.Space();
         DrawSpawns();
         EditorGUILayout.Space();
@@ -357,6 +362,19 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 int spikeDirIndex = System.Array.IndexOf(SpikeDirs, newSpikeDir);
                 spikeDirIndex = GUILayout.SelectionGrid(spikeDirIndex, SpikeDirLabels, 4);
                 newSpikeDir = SpikeDirs[Mathf.Clamp(spikeDirIndex, 0, SpikeDirs.Length - 1)];
+                break;
+            case Tool.Ice:
+                EditorGUILayout.HelpBox(
+                    "左键放一块 1×1 冰块，按住拖可以连续铺。同组冰块共享 v2 整组破坏；\n" +
+                    "红热边接触只融一块。同格再点 = 删除，换组号再点 = 改组。\n" +
+                    "0 也是普通组；「新建组」会给一个当前最大组号 + 1 的新组。",
+                    MessageType.None);
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    iceGroupId = EditorGUILayout.IntField("组号", iceGroupId);
+                    if (GUILayout.Button("新建组", GUILayout.Width(64f)))
+                        iceGroupId = level.Data.NextIceGroupId();
+                }
                 break;
         }
 
@@ -695,6 +713,58 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 if (!EditorUtility.DisplayDialog("清空地刺", "删掉所有地刺？", "清空", "取消")) return;
                 Record("清空地刺");
                 level.Data.ClearSpikes();
+                AfterStructuralEdit();
+            }
+        }
+    }
+
+    void DrawIces()
+    {
+        EditorGUILayout.LabelField("冰块", EditorStyles.boldLabel);
+        var data = level.Data;
+        EditorGUILayout.LabelField("冰块", level.IceCount + "（1×1，同组共享 v2 整组破坏）");
+
+        iceScroll = EditorGUILayout.BeginScrollView(iceScroll, GUILayout.MaxHeight(120f));
+        if (data.ices != null)
+        {
+            for (int i = 0; i < data.ices.Count; i++)
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    var ice = data.ices[i];
+                    EditorGUILayout.LabelField(
+                        string.Format("冰 ({0}, {1})", ice.cell.x, ice.cell.y),
+                        EditorStyles.miniLabel, GUILayout.Width(110f));
+
+                    EditorGUI.BeginChangeCheck();
+                    int next = EditorGUILayout.IntField(ice.groupId, GUILayout.Width(48f));
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        Record("改冰块组号");
+                        ice.groupId = next;
+                        data.ices[i] = ice;
+                        MarkDirty(true);
+                    }
+
+                    if (GUILayout.Button("×", GUILayout.Width(24f)))
+                    {
+                        Record("删冰块");
+                        data.ices.RemoveAt(i);
+                        AfterStructuralEdit();
+                        break;
+                    }
+                }
+            }
+        }
+        EditorGUILayout.EndScrollView();
+
+        using (new EditorGUI.DisabledScope(level.IceCount == 0))
+        {
+            if (GUILayout.Button("清空冰块"))
+            {
+                if (!EditorUtility.DisplayDialog("清空冰块", "删掉所有冰块？", "清空", "取消")) return;
+                Record("清空冰块");
+                level.Data.ClearIces();
                 AfterStructuralEdit();
             }
         }
@@ -1103,13 +1173,44 @@ public sealed class LabLevelEditorWindow : EditorWindow
             }
         }
 
+        if (data.ices != null)
+        {
+            for (int i = 0; i < data.ices.Count; i++)
+            {
+                var ice = data.ices[i];
+                if (!data.ContainsCell(ice.cell))
+                    issues.Add("第 " + i + " 块冰不在编辑范围内：" + ice.cell);
+                if (data.HasCell(ice.cell))
+                    issues.Add("第 " + i + " 块冰和地形重叠：" + ice.cell);
+                if (data.HasSpike(ice.cell))
+                    issues.Add("第 " + i + " 块冰和地刺在同一格：" + ice.cell);
+                if (ice.groupId < 0)
+                    issues.Add("第 " + i + " 块冰的组号不能是负数：" + ice.groupId);
+
+                if (SpawnTouchesCell(data.spawnA, TuningLab.A_Pixels / (float)TuningLab.CellPixels, ice.cell))
+                    issues.Add("第 " + i + " 块冰压在 A 的出生点上：" + ice.cell);
+                if (SpawnTouchesCell(data.spawnB, TuningLab.B_Pixels / (float)TuningLab.CellPixels, ice.cell))
+                    issues.Add("第 " + i + " 块冰压在 B 的出生点上：" + ice.cell);
+
+                if (data.keys != null)
+                    for (int k = 0; k < data.keys.Count; k++)
+                        if (data.keys[k].Cells().Contains(ice.cell))
+                            issues.Add("第 " + i + " 块冰和第 " + k + " 把钥匙在同一格：" + ice.cell);
+
+                if (data.doors != null)
+                    for (int d = 0; d < data.doors.Count; d++)
+                        if (data.doors[d].Cells().Contains(ice.cell))
+                            issues.Add("第 " + i + " 块冰在第 " + d + " 扇门里：" + ice.cell);
+            }
+        }
+
         validated = true;
 
         if (issues.Count == 0)
         {
-            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 根刺，{6} 个关卡分区。",
+            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 根刺，{6} 块冰，{7} 个关卡分区。",
                 level.SolidCellCount, level.MergedRectCount, level.RopeCount, level.KeyCount, level.DoorCount,
-                level.SpikeCount,
+                level.SpikeCount, level.IceCount,
                 data.partitions != null ? data.partitions.Count : 0), level);
         }
         else
@@ -1127,6 +1228,13 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Vector2 center = spike.StripCenter;
         Vector2 strip = spike.StripSize;
         return player.Overlaps(new Rect(center.x - strip.x * 0.5f, center.y - strip.y * 0.5f, strip.x, strip.y));
+    }
+
+    /// <summary>出生点上的玩家方框会不会一开场就压在冰块上。</summary>
+    static bool SpawnTouchesCell(Vector2 feet, float size, Vector2Int cell)
+    {
+        var player = new Rect(feet.x - size * 0.5f, feet.y, size, size);
+        return player.Overlaps(new Rect(cell.x, cell.y, 1f, 1f));
     }
 
     void CheckSpawn(string name, Vector2 feet, LabLevelData data)
@@ -1186,6 +1294,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawRopeHandles(data);
         DrawKeyDoorHandles(data);
         DrawSpikeHandles(data);
+        DrawIceHandles(data);
         if (showSpawns) DrawSpawnHandles(data);
         if (showCameraFrames) DrawCameraFrames(data);
 
@@ -1330,6 +1439,32 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 }
                 AfterStructuralEdit();
                 break;
+
+            case Tool.Ice:
+                if (!inBounds)
+                {
+                    Notify(view, "冰块必须放在相机范围里。");
+                    return;
+                }
+                if (level.Data.HasCell(cell))
+                {
+                    Notify(view, "冰块不能放在实心格里：" + cell);
+                    return;
+                }
+
+                var existingIce = level.Data.FindIce(cell);
+                if (existingIce.HasValue && existingIce.Value.groupId == iceGroupId)
+                {
+                    Record("删冰块");
+                    level.Data.RemoveIce(cell);
+                }
+                else
+                {
+                    Record(existingIce.HasValue ? "改冰块组号" : "放冰块");
+                    level.Data.PlaceIce(cell, iceGroupId);
+                }
+                AfterStructuralEdit();
+                break;
         }
     }
 
@@ -1354,6 +1489,14 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Rect:
                 rectEnd = cell;
                 Repaint();
+                break;
+
+            case Tool.Ice:
+                if (cell == lastCell) return;
+                lastCell = cell;
+                if (!InEditArea(cell, level.Data) || !level.Data.ContainsCell(cell)) break;
+                if (level.Data.HasCell(cell)) break;
+                if (level.Data.PlaceIce(cell, iceGroupId)) MarkDirty(true);
                 break;
         }
     }
@@ -1509,6 +1652,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         {
             data.RemoveCell(cell);
             data.RemoveSpike(cell);      // 擦地形 = 这一格的东西一起擦掉
+            data.RemoveIce(cell);
         }
         else data.AddCell(cell);
     }
@@ -1558,6 +1702,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case KeyCode.Alpha8: tool = Tool.Key; break;
             case KeyCode.Alpha9: tool = Tool.Door; break;
             case KeyCode.Alpha0: tool = Tool.Spike; break;
+            case KeyCode.Minus: tool = Tool.Ice; break;
             case KeyCode.Delete:
                 if (tool != Tool.Partition || partitionIndex < 0) return false;
                 DeleteSelectedPartition();
@@ -1781,6 +1926,24 @@ public sealed class LabLevelEditorWindow : EditorWindow
         }
     }
 
+    void DrawIceHandles(LabLevelData data)
+    {
+        if (data.ices == null) return;
+        for (int i = 0; i < data.ices.Count; i++)
+        {
+            var ice = data.ices[i];
+            bool blocked = data.HasCell(ice.cell);
+            Handles.color = blocked ? new Color(1f, 0.35f, 0.3f, 0.95f) : IceGroupColor(ice.groupId);
+            Handles.DrawWireCube(CellCenter(ice.cell), Vector3.one);
+        }
+    }
+
+    static Color IceGroupColor(int groupId)
+    {
+        float hue = Mathf.Repeat(groupId * 0.37f, 1f);
+        return Color.HSVToRGB(hue, 0.55f, 1f);
+    }
+
     void DrawHover(Vector2Int cell, bool inArea, bool inBounds, LabLevelData data)
     {
         if (tool == Tool.Partition)
@@ -1878,6 +2041,18 @@ public sealed class LabLevelEditorWindow : EditorWindow
             return;
         }
 
+        if (tool == Tool.Ice)
+        {
+            bool blocked = !inBounds || data.HasCell(cell) || data.HasSpike(cell);
+            Handles.color = blocked
+                ? new Color(1f, 0.3f, 0.25f, 0.9f)
+                : new Color(IceGroupColor(iceGroupId).r, IceGroupColor(iceGroupId).g,
+                            IceGroupColor(iceGroupId).b, 0.9f);
+            Handles.DrawWireCube(CellCenter(cell), Vector3.one);
+            Handles.Label(CellCenter(cell) + Vector3.up * 0.6f, "冰 组 " + iceGroupId);
+            return;
+        }
+
         Handles.color = new Color(color.r, color.g, color.b, 0.18f);
         Handles.DrawSolidRectangleWithOutline(
             RectVerts(cell.x, cell.y, cell.x + 1, cell.y + 1),
@@ -1914,6 +2089,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Key: return new Color(1f, 0.85f, 0.1f, 0.95f);
             case Tool.Door: return new Color(newDoorColor.r, newDoorColor.g, newDoorColor.b, 0.95f);
             case Tool.Spike: return new Color(0.75f, 0.82f, 0.92f, 0.95f);
+            case Tool.Ice: return new Color(0.42f, 0.75f, 1f, 0.95f);
             default: return new Color(1f, 0.85f, 0.3f, 0.95f);
         }
     }

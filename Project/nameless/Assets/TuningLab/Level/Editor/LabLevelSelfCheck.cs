@@ -405,6 +405,59 @@ public static class LabLevelSelfCheck
             "A 里的刺被删，B 的留下");
 
         sb.AppendLine();
+        sb.AppendLine("=== 10. 冰块：几何 / 编组 / 去重 / 随分区移动与删除 ===");
+        Expect(sb, ref failures, data.ices.Count == 0,
+            "基准房间没有冰块，实际 " + data.ices.Count);
+
+        var iceSpec = new LabIceSpec(new Vector2Int(5, 3), 2);
+        Expect(sb, ref failures,
+            SamePoint(iceSpec.Center, new Vector2(5.5f, 3.5f))
+            && iceSpec.Cells() == new RectInt(5, 3, 1, 1),
+            "冰块占 1×1 格，落点是格中心");
+
+        var iceLevel = new LabLevelData();
+        iceLevel.partitions.Add(new LabLevelPartition { name = "A", bounds = new RectInt(0, 0, 10, 10) });
+        iceLevel.partitions.Add(new LabLevelPartition { name = "B", bounds = new RectInt(20, 0, 10, 10) });
+        iceLevel.PlaceIce(new Vector2Int(2, 1), 7);
+        iceLevel.PlaceIce(new Vector2Int(22, 1), 7);
+        Expect(sb, ref failures, iceLevel.ices.Count == 2, "两格各一块冰");
+        Expect(sb, ref failures, !iceLevel.PlaceIce(new Vector2Int(2, 1), 7),
+            "同格同组重复放 = 无变化");
+        Expect(sb, ref failures, iceLevel.PlaceIce(new Vector2Int(2, 1), 9),
+            "同格换组 = 有变化");
+        Expect(sb, ref failures,
+            iceLevel.ices.Count == 2 &&
+            iceLevel.FindIce(new Vector2Int(2, 1)).Value.groupId == 9,
+            "换组只有一块冰，组号已更新");
+        Expect(sb, ref failures, !iceLevel.HasIce(new Vector2Int(7, 7)), "没放过的格没有冰");
+        Expect(sb, ref failures, iceLevel.NextIceGroupId() == 10,
+            "新建组 = 当前最大组号 + 1");
+        Expect(sb, ref failures, iceLevel.GroupIces(7).Count == 1,
+            "按组查询只返回同组冰块");
+
+        iceLevel.ices.Add(new LabIceSpec(new Vector2Int(2, 1), 3));
+        iceLevel.Normalize();
+        Expect(sb, ref failures, iceLevel.ices.Count == 2,
+            "Normalize 同格去重，实际 " + iceLevel.ices.Count);
+
+        var iceClone = iceLevel.Clone();
+        Expect(sb, ref failures, iceClone.ices.Count == 2, "Clone 带上冰块");
+        iceClone.ices[0] = new LabIceSpec(new Vector2Int(99, 99), 0);
+        Expect(sb, ref failures, iceLevel.HasIce(new Vector2Int(2, 1)) || iceLevel.HasIce(new Vector2Int(22, 1)),
+            "Clone 是深拷贝");
+
+        Expect(sb, ref failures, iceLevel.MovePartition(0, new Vector2Int(3, 4), true),
+            "移动分区 A");
+        Expect(sb, ref failures, iceLevel.HasIce(new Vector2Int(5, 5)), "A 里的冰块跟着移动");
+        Expect(sb, ref failures, !iceLevel.HasIce(new Vector2Int(2, 1)), "旧位置的冰块没有留下");
+        Expect(sb, ref failures, iceLevel.HasIce(new Vector2Int(22, 1)), "分区 B 的冰块不动");
+
+        Expect(sb, ref failures, iceLevel.DeletePartition(0, true), "删除分区 A（带内容）");
+        Expect(sb, ref failures,
+            iceLevel.ices.Count == 1 && iceLevel.HasIce(new Vector2Int(22, 1)),
+            "A 里的冰块被删，B 的留下");
+
+        sb.AppendLine();
         fails = failures;
         sb.AppendLine(failures == 0 ? "全部通过。" : ("失败 " + failures + " 项。"));
         return sb;
