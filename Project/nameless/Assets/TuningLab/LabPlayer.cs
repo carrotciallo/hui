@@ -475,8 +475,9 @@ public class LabPlayer : MonoBehaviour
 
         // 冰块不参与普通地形的锻造状态机，单独结算：
         //   红热边（Hot1/Hot2）→ 只融这一块，边强制回普通；
-        //   否则按相对速度合速度到 v2 → 整组破坏；
+        //   沿接触法线撞进去的分量到 v2 → 整组破坏；
         //   普通边接触 → 什么都不发生。
+        // 只算法线分量：站在冰面上横向滑行时法线是竖直的，水平速度再快也不算撞击。
         var ice = c.collider != null ? c.collider.GetComponentInParent<LabIce>() : null;
         if (ice != null)
         {
@@ -493,8 +494,7 @@ public class LabPlayer : MonoBehaviour
                 }
             }
 
-            float relativeSpeed = lastFixedVelocity.magnitude;
-            if (lab.TierOfSpeed(relativeSpeed) >= lab.IceBreakTier)
+            if (lab.TierOfSpeed(impact) >= lab.IceBreakTier)
             {
                 ice.BreakGroup();
                 return;

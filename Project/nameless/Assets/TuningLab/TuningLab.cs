@@ -65,7 +65,7 @@ public class TuningLab : MonoBehaviour
     public bool verticalHitEnabled = true;
 
     [Header("冰块")]
-    [Tooltip("冰块整组破坏的碰撞等级（2 = v2）。用碰撞前相对速度的合速度套现有等级函数判定。")]
+    [Tooltip("冰块整组破坏的碰撞等级（2 = v2）。只算碰撞前沿接触法线撞进去的分量，站在冰面上横向滑行不算。")]
     [Range(0, 4)] public int iceBreakTierIndex = 2;
 
     /// <summary>没有检查点时的死亡后果。</summary>
