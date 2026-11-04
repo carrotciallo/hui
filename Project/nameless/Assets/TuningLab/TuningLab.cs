@@ -190,6 +190,13 @@ public class TuningLab : MonoBehaviour
     public float SpeedForCells(float cells) => TierMath.SpeedForCells(cells, gravity);
     public float CellsForSpeed(float speed) => TierMath.CellsForSpeed(speed, gravity);
     public int TierOfSpeed(float speed) => TierMath.TierForCells(CellsForSpeed(speed), Bounds);
+
+    /// <summary>绳子三级以上反弹：保留入射速度，并增加一个等级间距。</summary>
+    public float RopeBounceSpeed(float incomingSpeed)
+    {
+        float incomingCells = CellsForSpeed(Mathf.Abs(incomingSpeed));
+        return SpeedForCells(incomingCells + tierSpacingCells);
+    }
     public int TierOfCells(float cells) => TierMath.TierForCells(cells, Bounds);
 
     // ---- 双人碰撞事件：其它机制挂这里 ----

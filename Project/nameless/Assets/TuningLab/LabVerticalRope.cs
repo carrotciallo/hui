@@ -129,21 +129,16 @@ public class LabVerticalRope : MonoBehaviour
         }
 
         // 三级及以上：弹回 + 挡位 +1
-        float speed = BounceSpeed(tier);
+        float speed = BounceSpeed(player, normal);
         player.ApplyBounce(normal, speed);
         Raise(player, tier, normal, false, true);
     }
 
-    /// <summary>弹回速度：目标挡位（封顶四级）的速度上限再高一点点，保证判定落在新挡位里。</summary>
-    float BounceSpeed(int tier)
+    /// <summary>弹回速度：保留碰撞前速度，并增加一个等级间距。</summary>
+    float BounceSpeed(LabPlayer player, Vector2 normal)
     {
-        int next = Mathf.Clamp(tier + 1, 0, 4);
         if (lab == null) return 30f;
-
-        float cells = next >= 4
-            ? lab.Boundary(lab.MaxTier - 1) + 0.05f
-            : lab.Boundary(next) + 0.05f;
-        return lab.SpeedForCells(cells);
+        return lab.RopeBounceSpeed(Vector2.Dot(player.PreImpactVelocity, normal));
     }
 
     void Raise(LabPlayer player, int tier, Vector2 normal, bool passed, bool bounced)

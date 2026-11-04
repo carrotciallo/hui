@@ -87,18 +87,14 @@ public sealed class LabHorizontalRope : MonoBehaviour
             return;
         }
 
-        player.ApplyBounce(Vector2.up, BounceSpeed(tier));
+        player.ApplyBounce(Vector2.up, BounceSpeed(player));
         Raise(player, tier, false, true);
     }
 
-    float BounceSpeed(int tier)
+    float BounceSpeed(LabPlayer player)
     {
-        int next = Mathf.Clamp(tier + 1, 0, 4);
         if (lab == null) return 30f;
-        float cells = next >= 4
-            ? lab.Boundary(lab.MaxTier - 1) + 0.05f
-            : lab.Boundary(next) + 0.05f;
-        return lab.SpeedForCells(cells);
+        return lab.RopeBounceSpeed(Vector2.Dot(player.PreImpactVelocity, Vector2.down));
     }
 
     void Raise(LabPlayer player, int tier, bool passed, bool bounced)
