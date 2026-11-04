@@ -93,6 +93,8 @@ public sealed class LabRopeTests
         var level = BuildLevel(new LabRopeSpec(new Vector2(0f, 3f), 6,
             0, LabRopeOrientation.Horizontal));
 
+        yield return new WaitForFixedUpdate();
+
         var rope = level.GetComponentInChildren<LabHorizontalRope>();
         Assert.IsNotNull(rope, "关卡数据里的横绳没生成");
 
@@ -101,10 +103,24 @@ public sealed class LabRopeTests
         Assert.AreEqual(4f / 16f, body.bounds.size.y, 0.001f,
             $"横绳判定箱厚度不该超过 4px：实际 {body.bounds.size.y:F3} 格");
 
-        var sr = rope.GetComponent<SpriteRenderer>();
+        var sr = rope.GetComponentInChildren<SpriteRenderer>();
         Assert.AreEqual(body.bounds.size.x, sr.bounds.size.x, 0.001f, "判定箱比画出来的绳长");
+    }
 
-        yield return null;
+    [UnityTest]
+    public IEnumerator HorizontalRopeDoesNotJudgeSixCellsPastEitherEnd()
+    {
+        BuildLevel(new LabRopeSpec(new Vector2(0f, 3f), 4,
+            0, LabRopeOrientation.Horizontal));
+
+        yield return new WaitForFixedUpdate();
+
+        Assert.IsNotNull(Physics2D.OverlapPoint(new Vector2(-1.5f, 3f)));
+        Assert.IsNotNull(Physics2D.OverlapPoint(new Vector2(1.5f, 3f)));
+        Assert.IsNull(Physics2D.OverlapPoint(new Vector2(-7.5f, 3f)),
+            "4 格横绳左侧多判了 6 格");
+        Assert.IsNull(Physics2D.OverlapPoint(new Vector2(7.5f, 3f)),
+            "4 格横绳右侧多判了 6 格");
     }
 
     // 撞绳弹回：保留入射速度 + 一个等级间距 ----------------------------
