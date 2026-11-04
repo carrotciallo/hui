@@ -26,10 +26,9 @@ public sealed class RespawnTeleportTestScenario : MonoBehaviour
 
     public void Build()
     {
-        var first = CreateTeleport("Teleport_A", teleportA);
-        var second = CreateTeleport("Teleport_B", teleportB);
-        first.destination = second;
-        second.destination = first;
+        // 所有传送点互为终点，不需要在场景里手工连 destination。
+        CreateTeleport("Teleport_A", teleportA);
+        CreateTeleport("Teleport_B", teleportB);
         CreateRespawn();
         CreateKeysAndDoors();
     }

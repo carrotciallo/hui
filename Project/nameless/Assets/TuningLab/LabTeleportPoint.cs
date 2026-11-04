@@ -1,11 +1,13 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-/// <summary>双人传送点：两人同时进入后标记，进入全局传送选择并保留速度和形态。</summary>
+/// <summary>
+/// 3×3 传送点：两人同时进入后打开终点选择。所有传送点互为终点，
+/// 选择列表由 <see cref="TuningLab"/> 在进入时收集，数据里不保存配对。
+/// </summary>
 [RequireComponent(typeof(BoxCollider2D), typeof(SpriteRenderer))]
 public sealed class LabTeleportPoint : MonoBehaviour
 {
-    public LabTeleportPoint destination;
     public Color inactiveColor = new Color(0.65f, 0.35f, 1f);
     public Color activeColor = new Color(1f, 0.7f, 0.25f);
 
@@ -14,23 +16,42 @@ public sealed class LabTeleportPoint : MonoBehaviour
     TuningLab lab;
     bool aInside;
     bool bInside;
-    public bool Marked { get; private set; }
+    static Sprite cachedSprite;
 
-    void Awake()
+    void Awake() => ApplyShape();
+
+    /// <summary>
+    /// 把 3×3 触发区和贴图应用到碰撞箱和渲染器。关卡的编辑器预览也会直接调它，
+    /// 所以不依赖 Awake；重复调用复用同一张贴图。
+    /// </summary>
+    public void ApplyShape()
     {
-        trigger = GetComponent<BoxCollider2D>();
-        trigger.isTrigger = true;
-        trigger.size = new Vector2(3f, 3f);
+        if (trigger == null) trigger = GetComponent<BoxCollider2D>();
+        if (trigger != null)
+        {
+            trigger.isTrigger = true;
+            trigger.size = new Vector2(3f, 3f);
+        }
 
-        renderer = GetComponent<SpriteRenderer>();
-        renderer.sprite = MakeSprite();
-        renderer.color = inactiveColor;
-        renderer.sortingOrder = -1;
+        if (renderer == null) renderer = GetComponent<SpriteRenderer>();
+        if (renderer != null)
+        {
+            if (cachedSprite == null) cachedSprite = MakeSprite();
+            renderer.sprite = cachedSprite;
+            renderer.color = inactiveColor;
+            renderer.sortingOrder = -1;
+        }
     }
 
     void Start()
     {
         lab = FindAnyObjectByType<TuningLab>();
+        if (lab != null) lab.RegisterTeleport(this);
+    }
+
+    void OnDestroy()
+    {
+        if (lab != null) lab.UnregisterTeleport(this);
     }
 
     void OnTriggerEnter2D(Collider2D other) => SetInside(other, true);
@@ -46,31 +67,35 @@ public sealed class LabTeleportPoint : MonoBehaviour
 
     void Update()
     {
-        if (!aInside || !bInside || destination == null || lab == null || lab.TeleportSelecting) return;
+        if (!aInside || !bInside || lab == null || lab.TeleportSelecting) return;
         var kb = Keyboard.current;
         if (kb == null) return;
         if (kb.leftShiftKey.wasPressedThisFrame || kb.periodKey.wasPressedThisFrame)
             lab.EnterTeleportSelection(this);
     }
 
-    public void SetMarked(bool marked)
+    /// <summary>选择界面里当前选中的终点会亮起来；离开选择界面时由 TuningLab 熄灭。</summary>
+    public void SetHighlighted(bool highlighted)
     {
-        Marked = marked;
-        renderer.color = marked ? activeColor : inactiveColor;
+        if (renderer != null) renderer.color = highlighted ? activeColor : inactiveColor;
     }
 
-    public void TeleportPlayers(TuningLab owner, Vector2 velocityA, Vector2 velocityB)
+    /// <summary>
+    /// 把两名玩家放到这个传送点两侧，保留速度和形态。传送会重置地图并吞掉钥匙；
+    /// 重生点记录不受影响（地图重置不会清 ActiveRespawnPoint）。
+    /// </summary>
+    public void TeleportPlayersHere(TuningLab owner, Vector2 velocityA, Vector2 velocityB)
     {
-        if (owner == null || destination == null) return;
+        if (owner == null) return;
         owner.PlayerA?.ResumeFromTeleportSelection();
         owner.PlayerB?.ResumeFromTeleportSelection();
         owner.ResetMap();
-        if (owner.PlayerA != null)
-            owner.PlayerA.TeleportPreservingState(destination.transform.position + Vector3.left * 0.65f, velocityA);
-        if (owner.PlayerB != null)
-            owner.PlayerB.TeleportPreservingState(destination.transform.position + Vector3.right * 0.65f, velocityB);
-        if (owner.PlayerA != null) owner.PlayerA.ClearKeys();
-        if (owner.PlayerB != null) owner.PlayerB.ClearKeys();
+
+        Vector2 center = transform.position;
+        owner.PlayerA?.TeleportPreservingState(center + Vector2.left * 0.65f, velocityA);
+        owner.PlayerB?.TeleportPreservingState(center + Vector2.right * 0.65f, velocityB);
+        owner.PlayerA?.ClearKeys();
+        owner.PlayerB?.ClearKeys();
     }
 
     static Sprite MakeSprite()

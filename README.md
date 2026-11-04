@@ -74,7 +74,7 @@ Project/nameless/
 | [#27](https://github.com/sfher/hui/issues/27) | 绳子 | 已有 `LabVerticalRope` 基础实现，但策划中的完整交互、反馈和关卡用途仍待补齐。 |
 | [#34](https://github.com/sfher/hui/issues/34) | 地刺 | 待加入并接入关卡编辑器；对应主线绳子进阶与 L9。 |
 | [#32](https://github.com/sfher/hui/issues/32) | 重生点 | 已补齐基础功能；Issue #48 起任一玩家接触即让双人固定 A 左 B 右重生，并在每次触发时刷新地图。 |
-| [#33](https://github.com/sfher/hui/issues/33) | 传送点 | 基础传送已在；选择状态和重置地图时排除重生点待补全，优先级可低。 |
+| [#33](https://github.com/sfher/hui/issues/33) | 传送点 | 已补齐关卡编辑器摆放；所有传送点互为终点，进入后 `A/D` 选终点、`Enter` 确认，传送会重置地图并吞钥匙。靠近点亮/收集门槛未实现。 |
 | [#35](https://github.com/sfher/hui/issues/35) | 大炮方向 bug | 已知小 bug：B 从开口朝上的 A 进入时，射出方向可能与冲刺方向相反。 |
 | [#26](https://github.com/sfher/hui/issues/26) | 像素美术资源 | 资源清单和规格已明确，当前仍是程序生成占位显示。 |
 | [#36](https://github.com/sfher/hui/issues/36) | 项目目录命名 | 已决定保留 `Project/nameless/`；只同步文档描述，不改 Unity 工程目录。 |

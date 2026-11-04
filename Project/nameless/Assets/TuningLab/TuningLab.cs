@@ -125,10 +125,20 @@ public class TuningLab : MonoBehaviour
     public LabHud Hud { get; private set; }
     public LabRespawnPoint ActiveRespawnPoint { get; private set; }
     public event System.Action MapReset;
-    public bool TeleportSelecting => teleportSelection != null;
+    public bool TeleportSelecting => teleportSource != null;
+    /// <summary>选择界面里当前选中的终点；没有在选终点时为 null。</summary>
+    public LabTeleportPoint TeleportTarget =>
+        teleportSelectionIndex >= 0 && teleportSelectionIndex < teleportTargets.Count
+            ? teleportTargets[teleportSelectionIndex]
+            : null;
+    /// <summary>当前可选的终点数量（不含进入的那个传送点）。</summary>
+    public int TeleportTargetCount => teleportTargets.Count;
+    /// <summary>已注册的传送点数量；用来区分"没生成"和"生成了但没注册"。</summary>
+    public int TeleportPointCount => teleports.Count;
 
-    readonly List<LabTeleportPoint> markedTeleports = new List<LabTeleportPoint>();
-    LabTeleportPoint teleportSelection;
+    readonly List<LabTeleportPoint> teleports = new List<LabTeleportPoint>();
+    readonly List<LabTeleportPoint> teleportTargets = new List<LabTeleportPoint>();
+    LabTeleportPoint teleportSource;
     int teleportSelectionIndex;
     Vector2 teleportSelectionVelocityA;
     Vector2 teleportSelectionVelocityB;
@@ -427,27 +437,52 @@ public class TuningLab : MonoBehaviour
         MapReset?.Invoke();
     }
 
+    public void RegisterTeleport(LabTeleportPoint point)
+    {
+        if (point != null && !teleports.Contains(point)) teleports.Add(point);
+    }
+
+    public void UnregisterTeleport(LabTeleportPoint point)
+    {
+        if (point == null) return;
+        teleports.Remove(point);
+        teleportTargets.Remove(point);
+    }
+
+    /// <summary>
+    /// 进入传送点后打开终点选择：所有其它传送点都是候选，按 A/D 切换，Enter 确认。
+    /// 没有其它传送点时什么都不做，避免把自己传送到自己。
+    /// </summary>
     public void EnterTeleportSelection(LabTeleportPoint point)
     {
-        if (point == null || point.destination == null) return;
-        if (!markedTeleports.Contains(point))
-        {
-            markedTeleports.Add(point);
-            point.SetMarked(true);
-        }
+        if (point == null || TeleportSelecting) return;
 
-        teleportSelection = point;
-        teleportSelectionIndex = markedTeleports.IndexOf(point);
+        teleports.RemoveAll(candidate => candidate == null);
+        teleportTargets.Clear();
+        for (int i = 0; i < teleports.Count; i++)
+        {
+            var candidate = teleports[i];
+            if (candidate == point) continue;
+            teleportTargets.Add(candidate);
+        }
+        if (teleportTargets.Count == 0) return;
+
+        teleportSource = point;
+        teleportSelectionIndex = 0;
+        point.SetHighlighted(true);
+        TeleportTarget?.SetHighlighted(true);
+
         teleportSelectionVelocityA = PlayerA != null ? PlayerA.Velocity : Vector2.zero;
         teleportSelectionVelocityB = PlayerB != null ? PlayerB.Velocity : Vector2.zero;
         PlayerA?.FreezeForTeleportSelection();
         PlayerB?.FreezeForTeleportSelection();
-        if (Cam != null) Cam.GetComponent<LabCamera>()?.FocusOn(point.transform.position, TeleportCameraMoveSeconds);
+        if (Cam != null && TeleportTarget != null)
+            Cam.GetComponent<LabCamera>()?.FocusOn(TeleportTarget.transform.position, TeleportCameraMoveSeconds);
     }
 
     void UpdateTeleportSelection(UnityEngine.InputSystem.Keyboard kb)
     {
-        if (teleportSelection == null) return;
+        if (!TeleportSelecting) return;
 
         if (kb.aKey.wasPressedThisFrame)
             SelectTeleport(-1);
@@ -457,22 +492,40 @@ public class TuningLab : MonoBehaviour
             ConfirmTeleport();
     }
 
-    void SelectTeleport(int delta)
+    public void SelectTeleport(int delta)
     {
-        if (markedTeleports.Count == 0) return;
-        teleportSelectionIndex = (teleportSelectionIndex + delta + markedTeleports.Count) % markedTeleports.Count;
-        teleportSelection = markedTeleports[teleportSelectionIndex];
-        if (Cam != null) Cam.GetComponent<LabCamera>()?.FocusOn(
-            teleportSelection.transform.position, TeleportCameraMoveSeconds);
+        if (!TeleportSelecting || teleportTargets.Count == 0) return;
+        TeleportTarget?.SetHighlighted(false);
+        teleportSelectionIndex = (teleportSelectionIndex + delta + teleportTargets.Count) % teleportTargets.Count;
+        TeleportTarget?.SetHighlighted(true);
+        if (Cam != null && TeleportTarget != null)
+            Cam.GetComponent<LabCamera>()?.FocusOn(
+                TeleportTarget.transform.position, TeleportCameraMoveSeconds);
     }
 
-    void ConfirmTeleport()
+    public void ConfirmTeleport()
     {
-        LabTeleportPoint point = teleportSelection;
-        if (point == null || point.destination == null) return;
+        if (!TeleportSelecting) return;
 
-        point.TeleportPlayers(this, teleportSelectionVelocityA, teleportSelectionVelocityB);
-        teleportSelection = null;
+        LabTeleportPoint target = TeleportTarget;
+        Vector2 velocityA = teleportSelectionVelocityA;
+        Vector2 velocityB = teleportSelectionVelocityB;
+        EndTeleportSelection();
+        if (target == null) return;
+        target.TeleportPlayersHere(this, velocityA, velocityB);
+    }
+
+    void EndTeleportSelection()
+    {
+        teleportSource?.SetHighlighted(false);
+        for (int i = 0; i < teleportTargets.Count; i++)
+            teleportTargets[i]?.SetHighlighted(false);
+
+        teleportSource = null;
+        teleportTargets.Clear();
+        teleportSelectionIndex = 0;
+        PlayerA?.ResumeFromTeleportSelection();
+        PlayerB?.ResumeFromTeleportSelection();
         if (Cam != null) Cam.GetComponent<LabCamera>()?.ResumeFollowing();
     }
 
@@ -484,7 +537,7 @@ public class TuningLab : MonoBehaviour
         GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
         GUI.color = Color.white;
         string label = string.Format("传送门 {0}/{1}   A/D 选择   Enter 确认",
-            teleportSelectionIndex + 1, markedTeleports.Count);
+            teleportSelectionIndex + 1, teleportTargets.Count);
         GUI.Label(new Rect(24f, 24f, 500f, 32f), label);
         GUI.color = previous;
     }
