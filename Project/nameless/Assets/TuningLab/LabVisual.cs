@@ -144,7 +144,6 @@ public class LabVisual : MonoBehaviour
 
         switch (s)
         {
-            case LabPlayer.EdgeState.Hot1: sr.color = new Color(1f, 0.55f, 0.15f); break;
             case LabPlayer.EdgeState.Hot2: sr.color = new Color(1f, 0.12f, 0.08f); break;
             case LabPlayer.EdgeState.Spirit: sr.color = new Color(1f, 1f, 1f, 0.15f); break;
             default: sr.color = baseColor * 0.65f; break;

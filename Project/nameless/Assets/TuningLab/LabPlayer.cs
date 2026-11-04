@@ -255,7 +255,6 @@ public class LabPlayer : MonoBehaviour
         coyoteTimer = grounded ? lab.coyoteTime : Mathf.Max(0f, coyoteTimer - dt);
         dashLock = Mathf.Max(0f, dashLock - dt);
         playerContactTimer = Mathf.Max(0f, playerContactTimer - dt);
-        TickEdges(dt);
         HitFlash = Mathf.Max(0f, HitFlash - dt * 4f);
 
         // 充能：接触地面或另一名玩家 = 给这一次充能"上弦"。
@@ -475,7 +474,7 @@ public class LabPlayer : MonoBehaviour
 
         // 冰块不参与普通地形的锻造状态机，单独结算：
         //   沿接触法线撞进去的分量到 v2 → 整组破坏（优先于红热）；
-        //   非承重的红热边（Hot1/Hot2）→ 只融这一块，边强制回普通；
+        //   非承重的红热边（Hot2）→ 只融这一块，边强制回普通；
         //   普通边接触 / 红热边踩在冰面上 → 什么都不发生。
         // 只算法线分量：站在冰面上横向滑行时法线是竖直的，水平速度再快也不算撞击。
         // 冰格落在玩家脚下 footprint 内时一律不结算：交界处侧向接触也可能碰到承重块，
@@ -495,7 +494,7 @@ public class LabPlayer : MonoBehaviour
             {
                 Edge edge = EdgeFor(-n);
                 var state = GetEdge(edge);
-                if (state == EdgeState.Hot1 || state == EdgeState.Hot2)
+                if (state == EdgeState.Hot2)
                 {
                     ice.BreakOne();
                     SetEdge(edge, EdgeState.Normal);
@@ -684,10 +683,9 @@ public class LabPlayer : MonoBehaviour
     // ---- 红热态 ----
 
     public enum Edge { Top = 0, Bottom = 1, Left = 2, Right = 3 }
-    public enum EdgeState { Normal = 0, Hot1 = 1, Hot2 = 2, Spirit = 3 }
+    public enum EdgeState { Normal = 0, Hot2 = 1, Spirit = 2 }
 
     readonly EdgeState[] edgeStates = new EdgeState[4];
-    readonly float[] edgeTimers = new float[4];
 
     public EdgeState GetEdge(Edge e) => edgeStates[(int)e];
     public bool IsSpirit(Edge e) => edgeStates[(int)e] == EdgeState.Spirit;
@@ -712,7 +710,6 @@ public class LabPlayer : MonoBehaviour
         var prev = edgeStates[i];
         if (prev == next) return;
         edgeStates[i] = next;
-        edgeTimers[i] = next == EdgeState.Hot1 ? lab.redHotDuration : 0f;
 
         if (next == EdgeState.Spirit) spiritMask |= 1 << i;
         else spiritMask &= ~(1 << i);
@@ -733,8 +730,9 @@ public class LabPlayer : MonoBehaviour
     }
 
     /// <summary>
-    /// 一记撞击落在某条边上。hot = 到了红热门槛，否则只到了锻造门槛。
-    /// 常态→热一→热二都是加热；热二遇冷→灵体（砸碎）；热二遇热→框塌到本体；灵体不可复锻。
+    /// 一记撞击落在某条边上。hot = 到了红热门槛（挡位 2 及以上），否则只到了锻造门槛。
+    /// 常态遇红热 → 直接热二（没有限时的热一）；热二遇冷→灵体（砸碎）；
+    /// 热二遇热→框塌到本体；灵体不可复锻。
     /// </summary>
     public void StrikeEdge(Edge e, bool hot)
     {
@@ -743,10 +741,7 @@ public class LabPlayer : MonoBehaviour
         switch (edgeStates[(int)e])
         {
             case EdgeState.Normal:
-                if (hot) SetEdge(e, EdgeState.Hot1);
-                break;
-            case EdgeState.Hot1:
-                if (hot) SetEdge(e, EdgeState.Hot2);        // 热 1 再撞 → 永久热 2
+                if (hot) SetEdge(e, EdgeState.Hot2);        // 红热级撞击直接点满
                 break;
             case EdgeState.Hot2:
                 if (hot)
@@ -801,16 +796,6 @@ public class LabPlayer : MonoBehaviour
     {
         if (Mathf.Abs(axis.x) > 0.5f) return axis.x > 0f ? Edge.Right : Edge.Left;
         return axis.y > 0f ? Edge.Top : Edge.Bottom;
-    }
-
-    void TickEdges(float dt)
-    {
-        for (int i = 0; i < 4; i++)
-        {
-            if (edgeStates[i] != EdgeState.Hot1) continue;
-            edgeTimers[i] -= dt;
-            if (edgeTimers[i] <= 0f) SetEdge((Edge)i, EdgeState.Normal);
-        }
     }
 
     public void SetHitCooldown(float until) => nextHitTime = until;

@@ -149,7 +149,6 @@ public class LabHud : MonoBehaviour
         lab.redHotTierIndex = Mathf.RoundToInt(Slider("红热门槛级", lab.redHotTierIndex, 0f, 4f, "0"));
         lab.forgeTierIndex = Mathf.RoundToInt(Slider("锻造门槛级", lab.forgeTierIndex, 0f, 4f, "0"));
         lab.iceBreakTierIndex = Mathf.RoundToInt(Slider("冰块破坏级", lab.iceBreakTierIndex, 0f, 4f, "0"));
-        lab.redHotDuration = Slider("红热1持续(秒)", lab.redHotDuration, 0.2f, 6f, "0.00");
 
         GUILayout.Space(6f);
         if (GUILayout.Button("重置玩家 (R)")) lab.ResetPlayers();
@@ -173,7 +172,6 @@ public class LabHud : MonoBehaviour
         lab.tierSpacingCells = 4f;
         lab.redHotTierIndex = 1;
         lab.forgeTierIndex = 0;
-        lab.redHotDuration = 2.25f;
         lab.maxFallSpeed = TierMath.SpeedForCells(17f, g);
     }
 
@@ -298,7 +296,6 @@ public class LabHud : MonoBehaviour
     static string EdgeGlyph(LabPlayer.EdgeState s)
     {
         if (s == LabPlayer.EdgeState.Hot2) return "②";
-        if (s == LabPlayer.EdgeState.Hot1) return "①";
         if (s == LabPlayer.EdgeState.Spirit) return "◇";
         return "·";
     }

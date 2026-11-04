@@ -34,7 +34,7 @@ public class TuningLab : MonoBehaviour
 
     [Header("地面移动")]
     public float walkSpeed = 8f;
-    public float walkAccel = 140f;
+    public float walkAccel = 400f;
     [Tooltip("松手后的地面制动。调小 = 更滑，等级能保留更久。")]
     public float groundBrake = 30f;
 
@@ -58,8 +58,6 @@ public class TuningLab : MonoBehaviour
     [Header("撞击")]
     [Tooltip("红热判定的门槛取哪一级的边界（1 = v1/v2 边界）。Vp ≥ 该边界的 v² 就红热。")]
     [Range(0, 4)] public int redHotTierIndex = 1;
-    [Tooltip("红热态 1 持续多久回到常态。红热态 2 永久。")]
-    public float redHotDuration = 2.25f;
     [Tooltip("场景撞击的锻造门槛取哪一级（0 = v0/v1 边界）。到不了这个速度什么都不发生；到了就砸那一条边，够不到红热门槛只砸不加热。")]
     [Range(0, 4)] public int forgeTierIndex = 0;
     public bool verticalHitEnabled = true;

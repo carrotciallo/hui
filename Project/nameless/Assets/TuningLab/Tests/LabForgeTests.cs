@@ -58,10 +58,8 @@ public sealed class LabForgeTests
         Assert.AreEqual(LabPlayer.EdgeState.Normal, a.GetEdge(LabPlayer.Edge.Bottom), "一级撞击不该升温");
 
         a.StrikeEdge(LabPlayer.Edge.Bottom, true);
-        Assert.AreEqual(LabPlayer.EdgeState.Hot1, a.GetEdge(LabPlayer.Edge.Bottom));
-
-        a.StrikeEdge(LabPlayer.Edge.Bottom, true);
-        Assert.AreEqual(LabPlayer.EdgeState.Hot2, a.GetEdge(LabPlayer.Edge.Bottom));
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, a.GetEdge(LabPlayer.Edge.Bottom),
+                        "红热级撞击直接到热二，没有中间的热一");
 
         yield return null;
     }
@@ -313,7 +311,7 @@ public sealed class LabForgeTests
 
         yield return WaitUntil(() => a.Grounded, 3f);
 
-        Assert.AreEqual(LabPlayer.EdgeState.Hot1, a.GetEdge(LabPlayer.Edge.Bottom),
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, a.GetEdge(LabPlayer.Edge.Bottom),
                         "红热级的自由落体撞地面也应加热");
     }
 
@@ -378,7 +376,7 @@ public sealed class LabForgeTests
 
         yield return WaitUntil(() => a.HorizontalSpeed < 1f, 3f);     // 被墙挡住 = 撞上了
 
-        Assert.AreEqual(LabPlayer.EdgeState.Hot1, a.GetEdge(LabPlayer.Edge.Right), "撞右边就加热右边");
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, a.GetEdge(LabPlayer.Edge.Right), "撞右边就加热右边");
         Assert.AreEqual(LabPlayer.EdgeState.Normal, a.GetEdge(LabPlayer.Edge.Bottom), "另一条轴不参与");
 
         yield return null;
@@ -403,7 +401,7 @@ public sealed class LabForgeTests
 
         yield return WaitUntil(() => a.GetEdge(LabPlayer.Edge.Right) != LabPlayer.EdgeState.Normal, 3f);
 
-        Assert.AreEqual(LabPlayer.EdgeState.Hot1, a.GetEdge(LabPlayer.Edge.Right), "对撞 Vp 过门槛，A 的迎风边加热");
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, a.GetEdge(LabPlayer.Edge.Right), "对撞 Vp 过门槛，A 的迎风边加热");
         Assert.AreEqual(LabPlayer.EdgeState.Normal, b.GetEdge(LabPlayer.Edge.Left), "B 没有边，不参与锻造");
     }
 
@@ -421,10 +419,9 @@ public sealed class LabForgeTests
 
     // 工具 -------------------------------------------------------------
 
-    /// <summary>把某条边加热到热二（两次红热级撞击）。</summary>
+    /// <summary>把某条边加热到热二（一记红热级撞击就点满，没有热一）。</summary>
     static void Heat(LabPlayer p, LabPlayer.Edge edge)
     {
-        p.StrikeEdge(edge, true);
         p.StrikeEdge(edge, true);
     }
 
