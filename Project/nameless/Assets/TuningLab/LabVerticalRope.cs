@@ -103,12 +103,13 @@ public class LabVerticalRope : MonoBehaviour
 
     void Resolve(LabPlayer player)
     {
-        int tier = player.SpeedTier;
-
         Vector2 normal = (Vector2)player.transform.position - (Vector2)transform.position;
         normal = Mathf.Abs(normal.x) >= Mathf.Abs(normal.y)
             ? new Vector2(Mathf.Sign(normal.x), 0f)
             : new Vector2(0f, Mathf.Sign(normal.y));
+        int tier = lab != null
+            ? lab.TierOfSpeed(Mathf.Abs(Vector2.Dot(player.PreImpactVelocity, normal)))
+            : player.SpeedTier;
 
         // 零级 / 一级：当墙，什么都不做
         if (tier < 2)

@@ -146,17 +146,31 @@ public sealed class LabLevel : MonoBehaviour
 
     void AddRope(Transform parent, LabRopeSpec spec, PhysicsMaterial2D material)
     {
-        var go = new GameObject("VerticalRope");
+        var go = new GameObject(spec.orientation == LabRopeOrientation.Horizontal
+            ? "HorizontalRope" : "VerticalRope");
         go.transform.SetParent(parent, false);
         go.transform.position = spec.center;
 
         var bc = go.AddComponent<BoxCollider2D>();
         if (material != null) bc.sharedMaterial = material;
 
-        var rope = go.AddComponent<LabVerticalRope>();
-        rope.cells = Mathf.Max(1, spec.cells);
-        rope.chainId = spec.chainId;
-        rope.ApplyShape();
+        if (spec.orientation == LabRopeOrientation.Horizontal)
+        {
+            var effector = go.AddComponent<PlatformEffector2D>();
+            effector.useOneWay = true;
+            effector.surfaceArc = 180f;
+            bc.usedByEffector = true;
+            var rope = go.AddComponent<LabHorizontalRope>();
+            rope.cells = Mathf.Max(1, spec.cells);
+            rope.ApplyShape();
+        }
+        else
+        {
+            var rope = go.AddComponent<LabVerticalRope>();
+            rope.cells = Mathf.Max(1, spec.cells);
+            rope.chainId = spec.chainId;
+            rope.ApplyShape();
+        }
     }
 
     /// <summary>把一格里的刺摆进场景：物件落在 1×0.375 刺带自己的中心，碰撞箱不留余量。</summary>
