@@ -937,7 +937,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     {
         EditorGUILayout.LabelField("重生点", EditorStyles.boldLabel);
         var data = level.Data;
-        EditorGUILayout.LabelField("重生点", level.RespawnPointCount + "（3×3，单人接触触发）");
+        EditorGUILayout.LabelField("重生点", level.RespawnPointCount + "（3×3，任一玩家接触触发）");
         if (data.respawnPoints == null) data.respawnPoints = new List<LabRespawnPointSpec>();
 
         respawnScroll = EditorGUILayout.BeginScrollView(respawnScroll, GUILayout.MaxHeight(100f));
