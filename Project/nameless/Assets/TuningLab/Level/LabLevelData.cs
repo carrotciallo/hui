@@ -547,10 +547,14 @@ public sealed class LabLevelData
             for (int i = 0; i < ropes.Count; i++)
             {
                 var rope = ropes[i];
-                int cx0 = Mathf.FloorToInt(rope.center.x - 0.5f);
-                int cx1 = Mathf.CeilToInt(rope.center.x + 0.5f);
-                int cy0 = Mathf.FloorToInt(rope.Bottom);
-                int cy1 = Mathf.CeilToInt(rope.Top);
+                float halfWidth = rope.orientation == LabRopeOrientation.Horizontal
+                    ? rope.cells * 0.5f : 0.1875f;
+                float halfHeight = rope.orientation == LabRopeOrientation.Horizontal
+                    ? 0.125f : rope.cells * 0.5f;
+                int cx0 = Mathf.FloorToInt(rope.center.x - halfWidth);
+                int cx1 = Mathf.CeilToInt(rope.center.x + halfWidth);
+                int cy0 = Mathf.FloorToInt(rope.center.y - halfHeight);
+                int cy1 = Mathf.CeilToInt(rope.center.y + halfHeight);
                 if (!any) { x0 = cx0; y0 = cy0; x1 = cx1; y1 = cy1; any = true; }
                 else
                 {
@@ -571,6 +575,13 @@ public sealed class LabLevelData
 }
 
 [System.Serializable]
+public enum LabRopeOrientation
+{
+    Vertical = 0,
+    Horizontal = 1
+}
+
+[System.Serializable]
 public struct LabRopeSpec
 {
     /// <summary>绳中心（世界坐标）。宽 6 像素、每格 16 像素，所以 x 是连续值。</summary>
@@ -578,15 +589,18 @@ public struct LabRopeSpec
     /// <summary>绳长（格）。</summary>
     public int cells;
     public int chainId;
+    public LabRopeOrientation orientation;
 
-    public float Bottom => center.y - cells * 0.5f;
-    public float Top => center.y + cells * 0.5f;
+    public float Bottom => center.y - (orientation == LabRopeOrientation.Horizontal ? 0.125f : cells * 0.5f);
+    public float Top => center.y + (orientation == LabRopeOrientation.Horizontal ? 0.125f : cells * 0.5f);
 
-    public LabRopeSpec(Vector2 center, int cells, int chainId = 0)
+    public LabRopeSpec(Vector2 center, int cells, int chainId = 0,
+        LabRopeOrientation orientation = LabRopeOrientation.Vertical)
     {
         this.center = center;
         this.cells = cells;
         this.chainId = chainId;
+        this.orientation = orientation;
     }
 }
 
