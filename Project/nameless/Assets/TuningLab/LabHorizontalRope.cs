@@ -10,6 +10,7 @@ public sealed class LabHorizontalRope : MonoBehaviour
 {
     public const int CellPixels = 16;
     public const int ThicknessPixels = 4;
+    const string VisualName = "Visual";
 
     public int cells = 4;
     public Color color = new Color(0.55f, 0.38f, 0.22f);
@@ -42,9 +43,12 @@ public sealed class LabHorizontalRope : MonoBehaviour
     public void ApplyShape()
     {
         if (body == null) body = GetComponent<BoxCollider2D>();
-        body.size = new Vector2(Mathf.Max(1, cells), ThicknessPixels / (float)CellPixels);
+        int length = Mathf.Max(1, cells);
+        // 长度只进入碰撞箱尺寸。根节点不能再按长度缩放，否则 Collider 会被放大两次。
+        transform.localScale = Vector3.one;
+        body.size = new Vector2(length, ThicknessPixels / (float)CellPixels);
         body.offset = Vector2.zero;
-        BuildVisual();
+        BuildVisual(length);
     }
 
     void Update()
@@ -109,13 +113,30 @@ public sealed class LabHorizontalRope : MonoBehaviour
         });
     }
 
-    void BuildVisual()
+    void BuildVisual(int length)
     {
-        var renderer = GetComponent<SpriteRenderer>();
-        if (renderer == null) renderer = gameObject.AddComponent<SpriteRenderer>();
+        // 兼容旧运行时对象：旧实现把 SpriteRenderer 放在根节点上。
+        var legacyRenderer = GetComponent<SpriteRenderer>();
+        if (legacyRenderer != null)
+        {
+            if (Application.isPlaying) Destroy(legacyRenderer);
+            else DestroyImmediate(legacyRenderer);
+        }
+
+        Transform visual = transform.Find(VisualName);
+        if (visual == null)
+        {
+            visual = new GameObject(VisualName).transform;
+            visual.SetParent(transform, false);
+        }
+
+        var renderer = visual.GetComponent<SpriteRenderer>();
+        if (renderer == null) renderer = visual.gameObject.AddComponent<SpriteRenderer>();
         renderer.sprite = RopeSprite();
         renderer.color = color;
-        renderer.transform.localScale = new Vector3(Mathf.Max(1, cells), 1f, 1f);
+        visual.localPosition = Vector3.zero;
+        visual.localRotation = Quaternion.identity;
+        visual.localScale = new Vector3(length, 1f, 1f);
         renderer.sortingOrder = 5;
     }
 
