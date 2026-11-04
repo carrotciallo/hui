@@ -462,7 +462,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
             case Tool.Move:
                 EditorGUILayout.HelpBox(
-                    "左键点中物件后拖动 = 移动那个物件；场景里有选区时，改成拖动选区里的所有内容。\n" +
+                    "左键点中物件后拖动 = 移动那个物件。只要场景里有选区，不管鼠标从哪里开始拖，" +
+                    "都改成拖动选区里的全部内容。\n" +
                     "删除用下面「选区 / 选择」面板里的按钮。移动和删除都能撤销。",
                     MessageType.None);
                 break;
@@ -1590,7 +1591,9 @@ public sealed class LabLevelEditorWindow : EditorWindow
         switch (e.type)
         {
             case EventType.MouseDown when e.button == 0 && !e.alt:
-                if (tool != Tool.Partition && !inArea) return;
+                // 有选区时，移动工具在场景任意位置起手都拖整个选区；其它工具仍限制在编辑范围内。
+                bool movesSelection = tool == Tool.Move && selection.Count > 0;
+                if (tool != Tool.Partition && !inArea && !movesSelection) return;
                 BeginGesture(cell, inBounds, view);
                 e.Use();
                 break;
@@ -2922,8 +2925,17 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
         if (tool == Tool.Move)
         {
-            var hover = PickAt(cell);
             Handles.color = new Color(1f, 0.55f, 0.2f, 0.9f);
+
+            // 有选区时移动工具不按鼠标位置挑物件，任何位置起手都是拖整个选区。
+            if (selection.Count > 0)
+            {
+                Handles.DrawWireCube(CellCenter(cell), Vector3.one);
+                Handles.Label(CellCenter(cell) + Vector3.up * 0.6f, "拖动整个选区");
+                return;
+            }
+
+            var hover = PickAt(cell);
             if (hover.kind == PickKind.None)
             {
                 Handles.DrawWireCube(CellCenter(cell), Vector3.one);
