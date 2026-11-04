@@ -34,11 +34,13 @@ public sealed class LabLevel : MonoBehaviour
     public int KeyCount => Data.keys != null ? Data.keys.Count : 0;
     public int DoorCount => Data.doors != null ? Data.doors.Count : 0;
     public int SpikeCount => Data.spikes != null ? Data.spikes.Count : 0;
+    public int IceCount => Data.ices != null ? Data.ices.Count : 0;
 
     Transform generatedRoot;
-    // 运行时生成的钥匙/门；地图重置时要关回去、把捡走的钥匙长回来。
+    // 运行时生成的钥匙/门/冰；地图重置时要关回去、把捡走的钥匙长回来、把碎掉的冰恢复。
     readonly System.Collections.Generic.List<LabKey> runtimeKeys = new System.Collections.Generic.List<LabKey>();
     readonly System.Collections.Generic.List<LabDoor> runtimeDoors = new System.Collections.Generic.List<LabDoor>();
+    readonly System.Collections.Generic.List<LabIce> runtimeIces = new System.Collections.Generic.List<LabIce>();
     TuningLab resetLab;
 
     void OnEnable()
@@ -87,6 +89,7 @@ public sealed class LabLevel : MonoBehaviour
         if (lab == null) return;
         resetLab = lab;
         lab.MapReset += ResetKeyDoors;
+        lab.MapReset += ResetIces;
     }
 
     /// <summary>地图重置（复活 / 传送）时门关回去，被捡走的钥匙重新长出来。</summary>
@@ -102,6 +105,13 @@ public sealed class LabLevel : MonoBehaviour
             if (runtimeKeys[i] != null) continue;
             runtimeKeys[i] = CreateKey(root, Data.keys[i]);
         }
+    }
+
+    /// <summary>地图重置（复活 / 传送）时把所有被破坏的冰块恢复。</summary>
+    void ResetIces()
+    {
+        for (int i = 0; i < runtimeIces.Count; i++)
+            if (runtimeIces[i] != null) runtimeIces[i].ResetIce();
     }
 
     void Build(Transform parent, PhysicsMaterial2D material, bool preview)
@@ -122,6 +132,7 @@ public sealed class LabLevel : MonoBehaviour
         for (int i = 0; i < data.keys.Count; i++) AddKey(root.transform, data.keys[i], preview);
         for (int i = 0; i < data.doors.Count; i++) AddDoor(root.transform, data.doors[i], preview);
         for (int i = 0; i < data.spikes.Count; i++) AddSpike(root.transform, data.spikes[i]);
+        for (int i = 0; i < data.ices.Count; i++) AddIce(root.transform, data.ices[i], material, preview);
     }
 
     void AddSolid(Transform parent, RectInt rect, PhysicsMaterial2D material)
@@ -172,6 +183,24 @@ public sealed class LabLevel : MonoBehaviour
         spike.ApplyShape();
     }
 
+    /// <summary>把一格冰块摆进场景：物件落在格中心，碰撞箱正好 1×1。</summary>
+    void AddIce(Transform parent, LabIceSpec spec, PhysicsMaterial2D material, bool preview)
+    {
+        var go = new GameObject("Ice");
+        go.transform.SetParent(parent, false);
+        go.transform.position = spec.Center;
+
+        var ice = go.AddComponent<LabIce>();
+        ice.cell = spec.cell;
+        ice.groupId = spec.groupId;
+
+        var body = go.GetComponent<BoxCollider2D>();
+        if (body != null && material != null) body.sharedMaterial = material;
+
+        ice.ApplyShape();
+        if (!preview) runtimeIces.Add(ice);
+    }
+
     void AddKey(Transform parent, LabKeySpec spec, bool preview)
     {
         var key = CreateKey(parent, spec);
@@ -204,6 +233,7 @@ public sealed class LabLevel : MonoBehaviour
         UnbindMapReset();
         runtimeKeys.Clear();
         runtimeDoors.Clear();
+        runtimeIces.Clear();
 
         Transform existing = generatedRoot;
         if (existing == null && transform != null) existing = transform.Find(GeneratedRootName);
@@ -219,6 +249,7 @@ public sealed class LabLevel : MonoBehaviour
     {
         if (resetLab == null) return;
         resetLab.MapReset -= ResetKeyDoors;
+        resetLab.MapReset -= ResetIces;
         resetLab = null;
     }
 

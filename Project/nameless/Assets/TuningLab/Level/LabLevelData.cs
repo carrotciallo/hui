@@ -29,6 +29,8 @@ public sealed class LabLevelData
     public List<LabDoorSpec> doors = new List<LabDoorSpec>();
     /// <summary>地刺（16×6 像素，贴格边，一格一根，碰到即死）。</summary>
     public List<LabSpikeSpec> spikes = new List<LabSpikeSpec>();
+    /// <summary>冰块（1×1，可编组；红热边接触融一块，v2 碰撞碎整组）。</summary>
+    public List<LabIceSpec> ices = new List<LabIceSpec>();
     /// <summary>连续关卡分区。每个分区的 bounds 同时是它的相机范围；B 进入哪个分区就用哪个分区。</summary>
     public List<LabLevelPartition> partitions = new List<LabLevelPartition>();
 
@@ -74,6 +76,12 @@ public sealed class LabLevelData
         else spikes.Clear();
     }
 
+    public void ClearIces()
+    {
+        if (ices == null) ices = new List<LabIceSpec>();
+        else ices.Clear();
+    }
+
     /// <summary>这一格的刺；没有返回 null。</summary>
     public LabSpikeSpec? FindSpike(Vector2Int cell)
     {
@@ -109,6 +117,62 @@ public sealed class LabLevelData
         return spikes.RemoveAll(spike => spike.cell == cell) > 0;
     }
 
+    /// <summary>这一格的冰块；没有返回 null。</summary>
+    public LabIceSpec? FindIce(Vector2Int cell)
+    {
+        if (ices == null) return null;
+        for (int i = 0; i < ices.Count; i++)
+            if (ices[i].cell == cell) return ices[i];
+        return null;
+    }
+
+    public bool HasIce(Vector2Int cell) => FindIce(cell).HasValue;
+
+    /// <summary>放一块冰，或把这一格已有冰块改到新组。组号也相同则什么都不做。</summary>
+    public bool PlaceIce(Vector2Int cell, int groupId)
+    {
+        if (ices == null) ices = new List<LabIceSpec>();
+        for (int i = 0; i < ices.Count; i++)
+        {
+            var ice = ices[i];
+            if (ice.cell != cell) continue;
+            if (ice.groupId == groupId) return false;
+            ice.groupId = groupId;
+            ices[i] = ice;
+            return true;
+        }
+
+        ices.Add(new LabIceSpec(cell, groupId));
+        return true;
+    }
+
+    public bool RemoveIce(Vector2Int cell)
+    {
+        if (ices == null) return false;
+        return ices.RemoveAll(ice => ice.cell == cell) > 0;
+    }
+
+    /// <summary>编辑器新建组用：当前最大组号 + 1；没有冰块时从 1 开始。0 是合法组，不作为默认。</summary>
+    public int NextIceGroupId()
+    {
+        int max = 0;
+        if (ices != null)
+            for (int i = 0; i < ices.Count; i++)
+                if (ices[i].groupId > max) max = ices[i].groupId;
+        return max + 1;
+    }
+
+    /// <summary>同一组的所有冰块（深拷贝，按格排序），给校验和测试用。</summary>
+    public List<LabIceSpec> GroupIces(int groupId)
+    {
+        var list = new List<LabIceSpec>();
+        if (ices == null) return list;
+        for (int i = 0; i < ices.Count; i++)
+            if (ices[i].groupId == groupId) list.Add(ices[i]);
+        list.Sort((a, b) => CompareCells(a.cell, b.cell));
+        return list;
+    }
+
     public bool ContainsCell(Vector2Int cell)
     {
         return cell.x >= bounds.x && cell.x < bounds.x + bounds.width
@@ -129,6 +193,7 @@ public sealed class LabLevelData
         if (keys == null) keys = new List<LabKeySpec>();
         if (doors == null) doors = new List<LabDoorSpec>();
         if (spikes == null) spikes = new List<LabSpikeSpec>();
+        if (ices == null) ices = new List<LabIceSpec>();
         if (partitions == null) partitions = new List<LabLevelPartition>();
 
         // 门色漏写/手填成透明时回落到默认色，否则门在场景里完全看不见。
@@ -192,6 +257,16 @@ public sealed class LabLevelData
             spikes[spikeWrite++] = spikes[read];
         }
         if (spikeWrite < spikes.Count) spikes.RemoveRange(spikeWrite, spikes.Count - spikeWrite);
+
+        // 一格只留一块冰：按格排序后丢掉同格重复项，组号随保留项。
+        ices.Sort((a, b) => CompareCells(a.cell, b.cell));
+        int iceWrite = 0;
+        for (int read = 0; read < ices.Count; read++)
+        {
+            if (iceWrite > 0 && ices[read].cell == ices[iceWrite - 1].cell) continue;
+            ices[iceWrite++] = ices[read];
+        }
+        if (iceWrite < ices.Count) ices.RemoveRange(iceWrite, ices.Count - iceWrite);
     }
 
     public void CopyFrom(LabLevelData other)
@@ -208,6 +283,7 @@ public sealed class LabLevelData
             keys = new List<LabKeySpec>();
             doors = new List<LabDoorSpec>();
             spikes = new List<LabSpikeSpec>();
+            ices = new List<LabIceSpec>();
             partitions = new List<LabLevelPartition>();
             return;
         }
@@ -222,6 +298,7 @@ public sealed class LabLevelData
         keys = new List<LabKeySpec>(other.keys ?? new List<LabKeySpec>());
         doors = new List<LabDoorSpec>(other.doors ?? new List<LabDoorSpec>());
         spikes = new List<LabSpikeSpec>(other.spikes ?? new List<LabSpikeSpec>());
+        ices = new List<LabIceSpec>(other.ices ?? new List<LabIceSpec>());
         partitions = new List<LabLevelPartition>();
         if (other.partitions != null)
         {
@@ -385,6 +462,17 @@ public sealed class LabLevelData
             }
         }
 
+        if (ices != null)
+        {
+            for (int i = 0; i < ices.Count; i++)
+            {
+                var ice = ices[i];
+                if (!oldRect.Contains(new Vector2(ice.cell.x + 0.5f, ice.cell.y + 0.5f))) continue;
+                ice.cell += delta;
+                ices[i] = ice;
+            }
+        }
+
         if (oldRect.Contains(spawnA)) spawnA += shift;
         if (oldRect.Contains(spawnB)) spawnB += shift;
     }
@@ -440,6 +528,8 @@ public sealed class LabLevelData
                 doors.RemoveAll(door => rect.Contains(door.position));
             if (spikes != null)
                 spikes.RemoveAll(spike => rect.Contains(new Vector2(spike.cell.x + 0.5f, spike.cell.y + 0.5f)));
+            if (ices != null)
+                ices.RemoveAll(ice => rect.Contains(new Vector2(ice.cell.x + 0.5f, ice.cell.y + 0.5f)));
         }
 
         partitions.RemoveAt(index);
@@ -551,6 +641,22 @@ public sealed class LabLevelData
                 int cx1 = Mathf.CeilToInt(rope.center.x + 0.5f);
                 int cy0 = Mathf.FloorToInt(rope.Bottom);
                 int cy1 = Mathf.CeilToInt(rope.Top);
+                if (!any) { x0 = cx0; y0 = cy0; x1 = cx1; y1 = cy1; any = true; }
+                else
+                {
+                    x0 = Mathf.Min(x0, cx0); y0 = Mathf.Min(y0, cy0);
+                    x1 = Mathf.Max(x1, cx1); y1 = Mathf.Max(y1, cy1);
+                }
+            }
+        }
+
+        if (ices != null)
+        {
+            for (int i = 0; i < ices.Count; i++)
+            {
+                var ice = ices[i];
+                int cx0 = ice.cell.x, cx1 = ice.cell.x + 1;
+                int cy0 = ice.cell.y, cy1 = ice.cell.y + 1;
                 if (!any) { x0 = cx0; y0 = cy0; x1 = cx1; y1 = cy1; any = true; }
                 else
                 {
@@ -690,6 +796,29 @@ public struct LabSpikeSpec
     /// <summary>底座踩在哪一格——那一格必须是实心，否则刺悬空。</summary>
     public Vector2Int BaseCell
         => cell - new Vector2Int(Mathf.RoundToInt(Facing.x), Mathf.RoundToInt(Facing.y));
+}
+
+/// <summary>
+/// 一块冰：1×1 格，实体碰撞，可以站立/滑行。
+/// groupId 沿用绳子的整数编组模式；0 也是普通组，不是“未编组”。
+/// </summary>
+[System.Serializable]
+public struct LabIceSpec
+{
+    public Vector2Int cell;
+    public int groupId;
+
+    public LabIceSpec(Vector2Int cell, int groupId)
+    {
+        this.cell = cell;
+        this.groupId = groupId;
+    }
+
+    /// <summary>物件落点（格中心）。</summary>
+    public Vector2 Center => new Vector2(cell.x + 0.5f, cell.y + 0.5f);
+
+    /// <summary>冰块盖住的格子（1×1）。</summary>
+    public RectInt Cells() => new RectInt(cell.x, cell.y, 1, 1);
 }
 
 /// <summary>
