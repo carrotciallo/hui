@@ -133,6 +133,7 @@ public class TuningLab : MonoBehaviour
     Vector2 teleportSelectionVelocityA;
     Vector2 teleportSelectionVelocityB;
     const float TeleportCameraMoveSeconds = 0.25f;
+    readonly List<LabRespawnPoint> respawnPoints = new List<LabRespawnPoint>();
 
     // ---- 派生量：所有"速度"都由格算出来，改重力自动跟着走 ----
     public float FixedDt => Time.fixedDeltaTime;
@@ -383,14 +384,39 @@ public class TuningLab : MonoBehaviour
 
     public void RegisterRespawnPoint(LabRespawnPoint point)
     {
-        if (point != null) ActiveRespawnPoint = point;
+        if (point != null && !respawnPoints.Contains(point))
+            respawnPoints.Add(point);
+    }
+
+    public void ActivateRespawnPoint(LabRespawnPoint point)
+    {
+        if (point == null) return;
+        for (int i = respawnPoints.Count - 1; i >= 0; i--)
+        {
+            if (respawnPoints[i] == null)
+            {
+                respawnPoints.RemoveAt(i);
+                continue;
+            }
+
+            respawnPoints[i].SetActive(respawnPoints[i] == point);
+        }
+
+        if (!respawnPoints.Contains(point))
+            respawnPoints.Add(point);
+        ActiveRespawnPoint = point;
     }
 
     public bool TryRespawn(LabPlayer deadPlayer)
     {
         if (ActiveRespawnPoint != null)
         {
-            ActiveRespawnPoint.RespawnPlayers(this);
+            ActiveRespawnPoint.RespawnAfterDeath(this, deadPlayer);
+            return true;
+        }
+        if (respawnPoints.Count == 1 && respawnPoints[0] != null)
+        {
+            respawnPoints[0].RespawnPlayers(this);
             return true;
         }
         return false;
@@ -398,8 +424,6 @@ public class TuningLab : MonoBehaviour
 
     public void ResetMap()
     {
-        if (ActiveRespawnPoint != null) ActiveRespawnPoint.ResetPoint();
-        ActiveRespawnPoint = null;
         MapReset?.Invoke();
     }
 

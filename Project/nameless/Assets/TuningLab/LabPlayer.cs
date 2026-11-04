@@ -21,6 +21,8 @@ public class LabPlayer : MonoBehaviour
 
     // ---- 对外读数 ----
     public bool Grounded => grounded;
+    public bool IsDead { get; private set; }
+    public bool IsAlive => !IsDead;
     public bool Dashing => dashLock > 0f;
     /// <summary>充能接触：站在地形上，或碰到另一名玩家。贴墙、顶天花板不算。</summary>
     public bool Touching => grounded || playerContactTimer > 0f;
@@ -751,6 +753,7 @@ public class LabPlayer : MonoBehaviour
     {
         if (dying) return;
         dying = true;
+        IsDead = true;
 
         Eject();
         if (lab == null) { Destroy(gameObject); return; }
@@ -1008,6 +1011,13 @@ public class LabPlayer : MonoBehaviour
         LandedApexDescent = 0f;
         LaunchFootY = FootY;
         ApexFootY = FootY;
+    }
+
+    public void ReviveAt(Vector2 position)
+    {
+        Teleport(position);
+        IsDead = false;
+        dying = false;
     }
 
     public void TeleportPreservingState(Vector2 position, Vector2 velocity)
