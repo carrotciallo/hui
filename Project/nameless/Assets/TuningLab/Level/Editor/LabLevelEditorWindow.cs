@@ -21,13 +21,14 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Erase = 1,
         Rect = 2,
         Rope = 3,
-        SpawnA = 4,
-        SpawnB = 5,
-        Partition = 6,
-        Key = 7,
-        Door = 8,
-        Spike = 9,
-        Ice = 10
+        HorizontalRope = 4,
+        SpawnA = 5,
+        SpawnB = 6,
+        Partition = 7,
+        Key = 8,
+        Door = 9,
+        Spike = 10,
+        Ice = 11
     }
 
     const int EditMargin = 8;                 // 相机范围外还能画多少格
@@ -36,7 +37,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     static readonly string[] ToolLabels =
     {
-        "铺地形", "擦地形", "矩形", "竖绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺", "冰块"
+        "铺地形", "擦地形", "矩形", "竖绳", "横绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺", "冰块"
     };
 
     static readonly string[] SpikeDirLabels = { "朝上", "朝下", "朝左", "朝右" };
@@ -331,6 +332,9 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Rope:
                 EditorGUILayout.HelpBox("左键在格子底部放一根竖绳，向上长。", MessageType.None);
                 break;
+            case Tool.HorizontalRope:
+                EditorGUILayout.HelpBox("左键沿格子顶部放一根横绳，向右长。", MessageType.None);
+                break;
             case Tool.SpawnA:
                 EditorGUILayout.HelpBox("左键设置 A 的落点（脚底）。必须在相机范围内。", MessageType.None);
                 break;
@@ -533,7 +537,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     void DrawRopes()
     {
-        EditorGUILayout.LabelField("竖绳", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("绳", EditorStyles.boldLabel);
         ropeLength = Mathf.Clamp(EditorGUILayout.IntField("新绳长度（格）", ropeLength), 1, MaxRopeLength);
         ropeChainId = EditorGUILayout.IntField("chainId", ropeChainId);
 
@@ -551,7 +555,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     EditorGUILayout.LabelField(
-                        string.Format("({0:0.##}, {1:0.##})  长 {2}  链 {3}",
+                        string.Format("{0} ({1:0.##}, {2:0.##})  长 {3}  链 {4}",
+                            rope.orientation == LabRopeOrientation.Horizontal ? "横" : "竖",
                             rope.center.x, rope.center.y, rope.cells, rope.chainId),
                         EditorStyles.miniLabel);
                     if (GUILayout.Button("×", GUILayout.Width(24f)))
@@ -566,10 +571,10 @@ public sealed class LabLevelEditorWindow : EditorWindow
             EditorGUILayout.EndScrollView();
         }
 
-        if (GUILayout.Button("清空竖绳"))
+        if (GUILayout.Button("清空绳"))
         {
-            if (!EditorUtility.DisplayDialog("清空竖绳", "删掉所有绳？", "清空", "取消")) return;
-            Record("清空竖绳");
+            if (!EditorUtility.DisplayDialog("清空绳", "删掉所有绳？", "清空", "取消")) return;
+            Record("清空绳");
             level.Data.ClearRopes();
             AfterStructuralEdit();
         }
@@ -1353,20 +1358,39 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 break;
 
             case Tool.Rope:
+            case Tool.HorizontalRope:
                 if (!inBounds)
                 {
                     Notify(view, "绳必须放在相机范围里。");
                     return;
                 }
-                if (cell.y + ropeLength > level.Data.bounds.yMax)
+                LabRopeOrientation orientation = tool == Tool.HorizontalRope
+                    ? LabRopeOrientation.Horizontal
+                    : LabRopeOrientation.Vertical;
+                if (orientation == LabRopeOrientation.Vertical &&
+                    cell.y + ropeLength > level.Data.bounds.yMax)
                 {
                     Notify(view, "绳太长，超出相机范围上沿。");
                     return;
                 }
-                Record("放竖绳");
+                if (orientation == LabRopeOrientation.Horizontal &&
+                    cell.x + ropeLength > level.Data.bounds.xMax)
+                {
+                    Notify(view, "绳太长，超出相机范围右沿。");
+                    return;
+                }
+                if (orientation == LabRopeOrientation.Horizontal &&
+                    cell.y + 1 > level.Data.bounds.yMax)
+                {
+                    Notify(view, "横绳超出相机范围上沿。");
+                    return;
+                }
+                Record(orientation == LabRopeOrientation.Horizontal ? "放横绳" : "放竖绳");
+                Vector2 center = orientation == LabRopeOrientation.Horizontal
+                    ? new Vector2(cell.x + ropeLength * 0.5f, cell.y + 1.125f)
+                    : new Vector2(cell.x + 0.5f, cell.y + ropeLength * 0.5f);
                 level.Data.ropes.Add(new LabRopeSpec(
-                    new Vector2(cell.x + 0.5f, cell.y + ropeLength * 0.5f),
-                    ropeLength, ropeChainId));
+                    center, ropeLength, ropeChainId, orientation));
                 AfterStructuralEdit();
                 break;
 
@@ -1696,13 +1720,14 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case KeyCode.Alpha2: tool = Tool.Erase; break;
             case KeyCode.Alpha3: tool = Tool.Rect; break;
             case KeyCode.Alpha4: tool = Tool.Rope; break;
-            case KeyCode.Alpha5: tool = Tool.SpawnA; break;
-            case KeyCode.Alpha6: tool = Tool.SpawnB; break;
-            case KeyCode.Alpha7: tool = Tool.Partition; break;
-            case KeyCode.Alpha8: tool = Tool.Key; break;
-            case KeyCode.Alpha9: tool = Tool.Door; break;
-            case KeyCode.Alpha0: tool = Tool.Spike; break;
-            case KeyCode.Minus: tool = Tool.Ice; break;
+            case KeyCode.Alpha5: tool = Tool.HorizontalRope; break;
+            case KeyCode.Alpha6: tool = Tool.SpawnA; break;
+            case KeyCode.Alpha7: tool = Tool.SpawnB; break;
+            case KeyCode.Alpha8: tool = Tool.Partition; break;
+            case KeyCode.Alpha9: tool = Tool.Key; break;
+            case KeyCode.Alpha0: tool = Tool.Door; break;
+            case KeyCode.Minus: tool = Tool.Spike; break;
+            case KeyCode.Equals: tool = Tool.Ice; break;
             case KeyCode.Delete:
                 if (tool != Tool.Partition || partitionIndex < 0) return false;
                 DeleteSelectedPartition();
@@ -1774,9 +1799,10 @@ public sealed class LabLevelEditorWindow : EditorWindow
         for (int i = 0; i < data.ropes.Count; i++)
         {
             var rope = data.ropes[i];
-            Handles.DrawWireCube(
-                new Vector3(rope.center.x, rope.center.y, 0f),
-                new Vector3(RopeStripWidth, rope.cells, 0.01f));
+            Vector3 size = rope.orientation == LabRopeOrientation.Horizontal
+                ? new Vector3(rope.cells, 0.25f, 0.01f)
+                : new Vector3(RopeStripWidth, rope.cells, 0.01f);
+            Handles.DrawWireCube(new Vector3(rope.center.x, rope.center.y, 0f), size);
         }
     }
 
@@ -1967,7 +1993,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             return;
         }
 
-        if (tool == Tool.Rope)
+        if (tool == Tool.Rope || tool == Tool.HorizontalRope)
         {
             if (!inBounds)
             {
@@ -1976,10 +2002,16 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 return;
             }
 
-            float top = cell.y + ropeLength;
-            var center = new Vector3(cell.x + 0.5f, cell.y + ropeLength * 0.5f, 0f);
-            Handles.DrawWireCube(center, new Vector3(RopeStripWidth, ropeLength, 0.01f));
-            Handles.Label(new Vector3(cell.x + 0.5f, top + 0.3f, 0f), "绳 " + ropeLength + " 格");
+            bool horizontal = tool == Tool.HorizontalRope;
+            var center = horizontal
+                ? new Vector3(cell.x + ropeLength * 0.5f, cell.y + 1.125f, 0f)
+                : new Vector3(cell.x + 0.5f, cell.y + ropeLength * 0.5f, 0f);
+            var size = horizontal
+                ? new Vector3(ropeLength, 0.25f, 0.01f)
+                : new Vector3(RopeStripWidth, ropeLength, 0.01f);
+            Handles.DrawWireCube(center, size);
+            Handles.Label(center + (horizontal ? Vector3.up * 0.3f : Vector3.up * (ropeLength * 0.5f + 0.3f)),
+                (horizontal ? "横绳 " : "竖绳 ") + ropeLength + " 格");
             return;
         }
 
@@ -2082,7 +2114,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         {
             case Tool.Erase: return new Color(1f, 0.35f, 0.3f, 0.95f);
             case Tool.Rect: return new Color(1f, 0.85f, 0.3f, 0.95f);
-            case Tool.Rope: return new Color(0.85f, 0.65f, 0.35f, 0.95f);
+            case Tool.Rope:
+            case Tool.HorizontalRope: return new Color(0.85f, 0.65f, 0.35f, 0.95f);
             case Tool.SpawnA: return TuningLab.ColorA;
             case Tool.SpawnB: return TuningLab.ColorB;
             case Tool.Partition: return new Color(1f, 0.85f, 0.3f, 0.95f);

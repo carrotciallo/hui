@@ -125,6 +125,14 @@ public class TuningLab : MonoBehaviour
     public LabHud Hud { get; private set; }
     public LabRespawnPoint ActiveRespawnPoint { get; private set; }
     public event System.Action MapReset;
+    public bool TeleportSelecting => teleportSelection != null;
+
+    readonly List<LabTeleportPoint> markedTeleports = new List<LabTeleportPoint>();
+    LabTeleportPoint teleportSelection;
+    int teleportSelectionIndex;
+    Vector2 teleportSelectionVelocityA;
+    Vector2 teleportSelectionVelocityB;
+    const float TeleportCameraMoveSeconds = 0.25f;
 
     // ---- 派生量：所有"速度"都由格算出来，改重力自动跟着走 ----
     public float FixedDt => Time.fixedDeltaTime;
@@ -192,6 +200,13 @@ public class TuningLab : MonoBehaviour
     public float SpeedForCells(float cells) => TierMath.SpeedForCells(cells, gravity);
     public float CellsForSpeed(float speed) => TierMath.CellsForSpeed(speed, gravity);
     public int TierOfSpeed(float speed) => TierMath.TierForCells(CellsForSpeed(speed), Bounds);
+
+    /// <summary>绳子三级以上反弹：保留入射速度，并增加一个等级间距。</summary>
+    public float RopeBounceSpeed(float incomingSpeed)
+    {
+        float incomingCells = CellsForSpeed(Mathf.Abs(incomingSpeed));
+        return SpeedForCells(incomingCells + tierSpacingCells);
+    }
     public int TierOfCells(float cells) => TierMath.TierForCells(cells, Bounds);
 
     // ---- 双人碰撞事件：其它机制挂这里 ----
@@ -331,6 +346,8 @@ public class TuningLab : MonoBehaviour
     {
         var kb = UnityEngine.InputSystem.Keyboard.current;
         if (kb == null) return;
+        UpdateTeleportSelection(kb);
+        if (TeleportSelecting) return;
         if (kb.rKey.wasPressedThisFrame) ResetPlayers();
         if (kb.pKey.wasPressedThisFrame) showPixelGrid = !showPixelGrid;
         if (kb.tabKey.wasPressedThisFrame) showGrid = !showGrid;
@@ -381,7 +398,71 @@ public class TuningLab : MonoBehaviour
 
     public void ResetMap()
     {
+        if (ActiveRespawnPoint != null) ActiveRespawnPoint.ResetPoint();
+        ActiveRespawnPoint = null;
         MapReset?.Invoke();
+    }
+
+    public void EnterTeleportSelection(LabTeleportPoint point)
+    {
+        if (point == null || point.destination == null) return;
+        if (!markedTeleports.Contains(point))
+        {
+            markedTeleports.Add(point);
+            point.SetMarked(true);
+        }
+
+        teleportSelection = point;
+        teleportSelectionIndex = markedTeleports.IndexOf(point);
+        teleportSelectionVelocityA = PlayerA != null ? PlayerA.Velocity : Vector2.zero;
+        teleportSelectionVelocityB = PlayerB != null ? PlayerB.Velocity : Vector2.zero;
+        PlayerA?.FreezeForTeleportSelection();
+        PlayerB?.FreezeForTeleportSelection();
+        if (Cam != null) Cam.GetComponent<LabCamera>()?.FocusOn(point.transform.position, TeleportCameraMoveSeconds);
+    }
+
+    void UpdateTeleportSelection(UnityEngine.InputSystem.Keyboard kb)
+    {
+        if (teleportSelection == null) return;
+
+        if (kb.aKey.wasPressedThisFrame)
+            SelectTeleport(-1);
+        else if (kb.dKey.wasPressedThisFrame)
+            SelectTeleport(1);
+        else if (kb.enterKey.wasPressedThisFrame)
+            ConfirmTeleport();
+    }
+
+    void SelectTeleport(int delta)
+    {
+        if (markedTeleports.Count == 0) return;
+        teleportSelectionIndex = (teleportSelectionIndex + delta + markedTeleports.Count) % markedTeleports.Count;
+        teleportSelection = markedTeleports[teleportSelectionIndex];
+        if (Cam != null) Cam.GetComponent<LabCamera>()?.FocusOn(
+            teleportSelection.transform.position, TeleportCameraMoveSeconds);
+    }
+
+    void ConfirmTeleport()
+    {
+        LabTeleportPoint point = teleportSelection;
+        if (point == null || point.destination == null) return;
+
+        point.TeleportPlayers(this, teleportSelectionVelocityA, teleportSelectionVelocityB);
+        teleportSelection = null;
+        if (Cam != null) Cam.GetComponent<LabCamera>()?.ResumeFollowing();
+    }
+
+    void OnGUI()
+    {
+        if (!TeleportSelecting) return;
+        Color previous = GUI.color;
+        GUI.color = new Color(0f, 0f, 0f, 0.22f);
+        GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.color = Color.white;
+        string label = string.Format("传送门 {0}/{1}   A/D 选择   Enter 确认",
+            teleportSelectionIndex + 1, markedTeleports.Count);
+        GUI.Label(new Rect(24f, 24f, 500f, 32f), label);
+        GUI.color = previous;
     }
 
     // ------------------------------------------------------------------
