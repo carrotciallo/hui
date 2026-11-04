@@ -488,7 +488,7 @@ public class LabPlayer : MonoBehaviour
             }
 
             float relativeSpeed = lastFixedVelocity.magnitude;
-            if (lab.TierOfSpeed(relativeSpeed) >= lab.iceBreakTierIndex)
+            if (lab.TierOfSpeed(relativeSpeed) >= lab.IceBreakTier)
             {
                 ice.BreakGroup();
                 return;

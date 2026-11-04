@@ -225,7 +225,7 @@ public class LabHud : MonoBehaviour
         GUILayout.Label(string.Format("锻造      撞场景沿轴 v ≥ {0:0}（v{1} 门槛）→ 常态①→热②→遇冷砸碎◇→遇热塌框",
             lab.ForgeSpeed, Mathf.Min(lab.forgeTierIndex, lab.redHotTierIndex)), small);
         GUILayout.Label(string.Format("冰块      相对速度 ≥ {0:0}（v{1} 门槛）→ 整组碎；红热边接触 → 只融一块并回普通",
-            lab.IceBreakSpeed, lab.iceBreakTierIndex), small);
+            lab.IceBreakSpeed, lab.IceBreakTier), small);
         if (collapseCount > 0)
             GUILayout.Label(string.Format("  塌框 {0} 次   最近 {1}（热二遇红热 = 死亡）", collapseCount, lastCollapse), WarnStyle());
         GUILayout.Label(string.Format("大炮      v' = √(Vb² + {0:0})   一个等级间距 = {1:0.0} 格   方向 = 进入方向的反向",
