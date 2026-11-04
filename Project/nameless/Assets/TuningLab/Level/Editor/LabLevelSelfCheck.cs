@@ -506,7 +506,7 @@ public static class LabLevelSelfCheck
             "A 里的重生点被删，B 的留下");
 
         sb.AppendLine();
-        sb.AppendLine("=== 12. 选区：平移 / 删除 / 减法 ===");
+        sb.AppendLine("=== 12. 选区：并集 / 平移 / 删除 / 减法 ===");
         var marqueeLevel = new LabLevelData();
         marqueeLevel.AddCell(new Vector2Int(1, 1));
         marqueeLevel.AddCell(new Vector2Int(2, 1));
@@ -560,6 +560,39 @@ public static class LabLevelSelfCheck
         }
         Expect(sb, ref failures, subtractArea == 100 - 4, "挖掉 2×2 后面积 = 96，实际 " + subtractArea);
         Expect(sb, ref failures, !coversCut, "被挖掉的格子不再属于任何选区");
+
+        var union = new List<RectInt> { new RectInt(0, 0, 2, 2) };
+        LabLevelEditorWindow.UnionRect(union, new RectInt(1, 1, 2, 2));
+        int unionArea = 0;
+        bool unionOverlaps = false;
+        for (int i = 0; i < union.Count; i++)
+        {
+            unionArea += union[i].width * union[i].height;
+            for (int j = i + 1; j < union.Count; j++)
+                if (union[i].Overlaps(union[j])) unionOverlaps = true;
+        }
+        Expect(sb, ref failures, unionArea == 7 && !unionOverlaps,
+            "增加选区按并集合并：重叠 1 格的 2×2 + 2×2 = 7 格且不重叠，实际 " + unionArea);
+        Expect(sb, ref failures,
+            union.Exists(rect => rect.Contains(new Vector2Int(0, 0))) &&
+            union.Exists(rect => rect.Contains(new Vector2Int(1, 1))) &&
+            union.Exists(rect => rect.Contains(new Vector2Int(2, 2))) &&
+            !union.Exists(rect => rect.Contains(new Vector2Int(3, 3))),
+            "并集覆盖两块矩形，且没有多选到外面");
+
+        var disjoint = new List<RectInt> { new RectInt(0, 0, 2, 2) };
+        LabLevelEditorWindow.UnionRect(disjoint, new RectInt(10, 10, 1, 1));
+        int disjointArea = 0;
+        foreach (var rect in disjoint) disjointArea += rect.width * rect.height;
+        Expect(sb, ref failures, disjoint.Count == 2 && disjointArea == 5,
+            "不相邻的矩形并进同一个选区，5 格；实际 " + disjointArea);
+
+        var contained = new List<RectInt> { new RectInt(1, 1, 1, 1) };
+        LabLevelEditorWindow.UnionRect(contained, new RectInt(0, 0, 4, 4));
+        int containedArea = 0;
+        foreach (var rect in contained) containedArea += rect.width * rect.height;
+        Expect(sb, ref failures, contained.Count == 1 && containedArea == 16,
+            "大矩形盖住已有选区时并成一块，实际 " + containedArea);
 
         sb.AppendLine();
         sb.AppendLine("=== 13. 传送点：全互联数据 / 去重 / 随分区移动与删除 ===");
