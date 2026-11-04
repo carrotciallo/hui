@@ -748,6 +748,9 @@ public class LabPlayer : MonoBehaviour
     {
         if (!CanLoad || b == null || b.host != null) return false;
         if (!b.InDashState) return false;
+        // 接触炮口本身不足以装填：冲刺必须朝炮膛内部，否则站在炮口上
+        // 横向或反向冲刺时，持续接触回调也会把 B 错误吸入。
+        if (Vector2.Dot(b.DashDirection, -MouthNormal) <= 0.5f) return false;
 
         Vector2 to = (Vector2)b.transform.position - (Vector2)transform.position;
         Edge struck = EdgeFor(Mathf.Abs(to.x) >= Mathf.Abs(to.y)

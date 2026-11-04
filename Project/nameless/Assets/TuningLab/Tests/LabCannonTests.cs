@@ -148,6 +148,32 @@ public sealed class LabCannonTests
         Assert.Greater(hits, 0, "朝向不对的冲刺撞击退回常规对撞结算");
     }
 
+    [UnityTest]
+    public IEnumerator DashAcrossOrAwayFromMouthDoesNotLoad()
+    {
+        MakeFloor();
+        var a = MakeFrame();
+        var b = MakeChunk();
+        Link(a, b);
+
+        Shatter(a, LabPlayer.Edge.Top);
+        b.Teleport(new Vector2(a.transform.position.x,
+            a.transform.position.y + AHalf + BHalf + 0.01f));
+        b.ApplyDash(new LabPlayer.DashState
+        {
+            active = true,
+            dir = Vector2.right,
+            speed = EntrySpeed,
+            exitSpeed = EntrySpeed,
+            timer = 2f / EntrySpeed
+        });
+
+        yield return WaitUntil(() => !b.InDashState || a.Loaded, 3f);
+
+        Assert.IsFalse(a.Loaded, "站在炮口上方横向冲刺不应装填");
+        Assert.IsFalse(b.Suspended, "非入膛方向不应吸入 B");
+    }
+
     // 装填态 -----------------------------------------------------------
 
     [UnityTest]
