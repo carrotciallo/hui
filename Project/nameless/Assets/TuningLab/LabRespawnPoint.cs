@@ -16,17 +16,31 @@ public sealed class LabRespawnPoint : MonoBehaviour
     Vector2 savedB;
     readonly HashSet<LabPlayer> touching = new HashSet<LabPlayer>();
     bool contactResolved;
+    static Sprite cachedSprite;
 
-    void Awake()
+    void Awake() => ApplyShape();
+
+    /// <summary>
+    /// 把 3×3 触发区和贴图应用到碰撞箱和渲染器。关卡的编辑器预览也会直接调它，
+    /// 所以不依赖 Awake；重复调用复用同一张贴图。
+    /// </summary>
+    public void ApplyShape()
     {
-        trigger = GetComponent<BoxCollider2D>();
-        trigger.isTrigger = true;
-        trigger.size = new Vector2(3f, 3f);
+        if (trigger == null) trigger = GetComponent<BoxCollider2D>();
+        if (trigger != null)
+        {
+            trigger.isTrigger = true;
+            trigger.size = new Vector2(3f, 3f);
+        }
 
-        renderer = GetComponent<SpriteRenderer>();
-        renderer.sprite = MakeSprite();
-        renderer.color = inactiveColor;
-        renderer.sortingOrder = -1;
+        if (renderer == null) renderer = GetComponent<SpriteRenderer>();
+        if (renderer != null)
+        {
+            if (cachedSprite == null) cachedSprite = MakeSprite();
+            renderer.sprite = cachedSprite;
+            renderer.color = IsActive ? activeColor : inactiveColor;
+            renderer.sortingOrder = -1;
+        }
     }
 
     void Start()
