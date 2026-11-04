@@ -269,6 +269,142 @@ public static class LabLevelSelfCheck
         Object.DestroyImmediate(probeGo);
 
         sb.AppendLine();
+        sb.AppendLine("=== 8. 钥匙 / 门：随分区移动、随分区删除 ===");
+        var keyDoor = new LabLevelData();
+        keyDoor.partitions.Add(new LabLevelPartition { name = "A", bounds = new RectInt(0, 0, 10, 10) });
+        keyDoor.partitions.Add(new LabLevelPartition { name = "B", bounds = new RectInt(20, 0, 10, 10) });
+        keyDoor.keys.Add(new LabKeySpec(new Vector2(4.5f, 1.5f)));
+        keyDoor.keys.Add(new LabKeySpec(new Vector2(24.5f, 1.5f)));
+        keyDoor.doors.Add(new LabDoorSpec(new Vector2(6.5f, 1.5f), Color.red));
+        keyDoor.doors.Add(new LabDoorSpec(new Vector2(26.5f, 1.5f), Color.blue));
+        keyDoor.Normalize();
+
+        Expect(sb, ref failures, keyDoor.MovePartition(0, new Vector2Int(2, 3), true), "移动分区 A");
+        Expect(sb, ref failures, SamePoint(keyDoor.keys[0].position, new Vector2(6.5f, 4.5f)),
+            "A 里的钥匙跟着移动");
+        Expect(sb, ref failures, SamePoint(keyDoor.keys[1].position, new Vector2(24.5f, 1.5f)),
+            "分区 B 的钥匙不动");
+        Expect(sb, ref failures, SamePoint(keyDoor.doors[0].position, new Vector2(8.5f, 4.5f)),
+            "A 里的门跟着移动");
+        Expect(sb, ref failures, SamePoint(keyDoor.doors[1].position, new Vector2(26.5f, 1.5f)),
+            "分区 B 的门不动");
+
+        RectInt doorCells = keyDoor.doors[1].Cells();
+        Expect(sb, ref failures,
+            doorCells.x == 26 && doorCells.y == 0 && doorCells.width == 1 && doorCells.height == 3,
+            "门盖住 1×3 格：" + doorCells);
+
+        var keyCell = keyDoor.keys[0].Cells();
+        Expect(sb, ref failures, keyCell.x == 6 && keyCell.y == 4 && keyCell.width == 1 && keyCell.height == 1,
+            "钥匙盖住 1×1 格：" + keyCell);
+
+        var invisibleDoor = new LabLevelData();
+        invisibleDoor.doors.Add(new LabDoorSpec(new Vector2(0.5f, 1.5f), new Color(1f, 1f, 1f, 0f)));
+        invisibleDoor.Normalize();
+        Expect(sb, ref failures, invisibleDoor.doors[0].color.a > 0.5f, "透明门色回落到默认色");
+
+        var cloned = keyDoor.Clone();
+        Expect(sb, ref failures,
+            cloned.keys.Count == keyDoor.keys.Count && cloned.doors.Count == keyDoor.doors.Count,
+            "Clone 带上钥匙和门");
+        cloned.keys[0] = new LabKeySpec(new Vector2(0f, 0f));
+        Expect(sb, ref failures, !SamePoint(keyDoor.keys[0].position, new Vector2(0f, 0f)), "Clone 是深拷贝");
+
+        Expect(sb, ref failures, keyDoor.DeletePartition(0, true), "删除分区 A（带内容）");
+        Expect(sb, ref failures,
+            keyDoor.keys.Count == 1 && SamePoint(keyDoor.keys[0].position, new Vector2(24.5f, 1.5f)),
+            "A 里的钥匙被删，B 的留下");
+        Expect(sb, ref failures,
+            keyDoor.doors.Count == 1 && SamePoint(keyDoor.doors[0].position, new Vector2(26.5f, 1.5f)),
+            "A 里的门被删，B 的留下");
+
+        sb.AppendLine();
+        sb.AppendLine("=== 9. 地刺：几何 / 去重 / 随分区移动与删除 ===");
+        Expect(sb, ref failures, data.spikes.Count == 0,
+            "基准房间没有地刺，实际 " + data.spikes.Count);
+
+        Expect(sb, ref failures,
+            Mathf.Abs(LabSpikeSpec.Thickness - 6f / TuningLab.CellPixels) < 0.0001f,
+            "刺厚 = 6 美术像素 = " + LabSpikeSpec.Thickness);
+
+        var spikeUp = new LabSpikeSpec(new Vector2Int(5, 3), LabSpikeDir.Up);
+        Expect(sb, ref failures,
+            SamePoint(spikeUp.StripCenter, new Vector2(5.5f, 3.1875f))
+            && spikeUp.StripSize == new Vector2(1f, 0.375f)
+            && spikeUp.BaseCell == new Vector2Int(5, 2),
+            "朝上：贴格底边 1×0.375，底座在下一格");
+        var spikeDown = new LabSpikeSpec(new Vector2Int(5, 3), LabSpikeDir.Down);
+        Expect(sb, ref failures,
+            SamePoint(spikeDown.StripCenter, new Vector2(5.5f, 3.8125f))
+            && spikeDown.BaseCell == new Vector2Int(5, 4),
+            "朝下：贴格顶边，底座在上一格");
+        var spikeLeft = new LabSpikeSpec(new Vector2Int(5, 3), LabSpikeDir.Left);
+        Expect(sb, ref failures,
+            SamePoint(spikeLeft.StripCenter, new Vector2(5.8125f, 3.5f))
+            && spikeLeft.StripSize == new Vector2(0.375f, 1f)
+            && spikeLeft.BaseCell == new Vector2Int(6, 3),
+            "朝左：贴格右边 0.375×1，底座在右一格");
+        var spikeRight = new LabSpikeSpec(new Vector2Int(5, 3), LabSpikeDir.Right);
+        Expect(sb, ref failures,
+            SamePoint(spikeRight.StripCenter, new Vector2(5.1875f, 3.5f))
+            && spikeRight.BaseCell == new Vector2Int(4, 3),
+            "朝右：贴格左边，底座在左一格");
+
+        foreach (LabSpikeDir dir in System.Enum.GetValues(typeof(LabSpikeDir)))
+        {
+            var stripSpec = new LabSpikeSpec(new Vector2Int(5, 3), dir);
+            var strip = new Rect(
+                stripSpec.StripCenter.x - stripSpec.StripSize.x * 0.5f,
+                stripSpec.StripCenter.y - stripSpec.StripSize.y * 0.5f,
+                stripSpec.StripSize.x, stripSpec.StripSize.y);
+            Expect(sb, ref failures,
+                strip.xMin >= 5f - 0.0001f && strip.xMax <= 6f + 0.0001f &&
+                strip.yMin >= 3f - 0.0001f && strip.yMax <= 4f + 0.0001f,
+                dir + " 的刺带完全在本格内，不伸进底座格");
+        }
+
+        var spikeLevel = new LabLevelData();
+        spikeLevel.partitions.Add(new LabLevelPartition { name = "A", bounds = new RectInt(0, 0, 10, 10) });
+        spikeLevel.partitions.Add(new LabLevelPartition { name = "B", bounds = new RectInt(20, 0, 10, 10) });
+        spikeLevel.PlaceSpike(new Vector2Int(2, 1), LabSpikeDir.Up);
+        spikeLevel.PlaceSpike(new Vector2Int(22, 1), LabSpikeDir.Left);
+        Expect(sb, ref failures, spikeLevel.spikes.Count == 2, "两格各一根刺");
+        Expect(sb, ref failures, !spikeLevel.PlaceSpike(new Vector2Int(2, 1), LabSpikeDir.Up),
+            "同格同方向重复放 = 无变化");
+        Expect(sb, ref failures, spikeLevel.PlaceSpike(new Vector2Int(2, 1), LabSpikeDir.Right),
+            "同格换方向 = 有变化");
+        Expect(sb, ref failures,
+            spikeLevel.spikes.Count == 2 &&
+            spikeLevel.FindSpike(new Vector2Int(2, 1)).Value.dir == LabSpikeDir.Right,
+            "改方向只有一根刺，方向已更新");
+        Expect(sb, ref failures, !spikeLevel.HasSpike(new Vector2Int(7, 7)), "没放过的格没有刺");
+
+        spikeLevel.spikes.Add(new LabSpikeSpec(new Vector2Int(2, 1), LabSpikeDir.Down));
+        spikeLevel.Normalize();
+        Expect(sb, ref failures, spikeLevel.spikes.Count == 2,
+            "Normalize 同格去重，实际 " + spikeLevel.spikes.Count);
+
+        Expect(sb, ref failures, spikeLevel.RemoveSpike(new Vector2Int(2, 1)), "删掉 A 的刺");
+        Expect(sb, ref failures, !spikeLevel.RemoveSpike(new Vector2Int(2, 1)), "再删同一格返回 false");
+        spikeLevel.PlaceSpike(new Vector2Int(2, 1), LabSpikeDir.Up);
+
+        var spikeClone = spikeLevel.Clone();
+        Expect(sb, ref failures, spikeClone.spikes.Count == 2, "Clone 带上地刺");
+        spikeClone.spikes[0] = new LabSpikeSpec(new Vector2Int(99, 99), LabSpikeDir.Down);
+        Expect(sb, ref failures, spikeLevel.HasSpike(new Vector2Int(2, 1)), "Clone 是深拷贝");
+
+        Expect(sb, ref failures, spikeLevel.MovePartition(0, new Vector2Int(3, 4), true),
+            "移动分区 A");
+        Expect(sb, ref failures, spikeLevel.HasSpike(new Vector2Int(5, 5)), "A 里的刺跟着移动");
+        Expect(sb, ref failures, !spikeLevel.HasSpike(new Vector2Int(2, 1)), "旧位置的刺没有留下");
+        Expect(sb, ref failures, spikeLevel.HasSpike(new Vector2Int(22, 1)), "分区 B 的刺不动");
+
+        Expect(sb, ref failures, spikeLevel.DeletePartition(0, true), "删除分区 A（带内容）");
+        Expect(sb, ref failures,
+            spikeLevel.spikes.Count == 1 && spikeLevel.HasSpike(new Vector2Int(22, 1)),
+            "A 里的刺被删，B 的留下");
+
+        sb.AppendLine();
         fails = failures;
         sb.AppendLine(failures == 0 ? "全部通过。" : ("失败 " + failures + " 项。"));
         return sb;

@@ -22,6 +22,9 @@ public static class LabLevelPlayCheck
     const double WaitSeconds = 0.8;
     const double TimeoutSeconds = 30.0;
 
+    /// <summary>验证用刺所在格：底座 (-6, -1) 是基准地板，离 x=8/10 的两名玩家很远。</summary>
+    static readonly Vector2Int SpikeCell = new Vector2Int(-6, 0);
+
     const string ActiveKey = "LabLevelPlayCheck.Active";
     const string StartedKey = "LabLevelPlayCheck.Started";
     const string PlayAtKey = "LabLevelPlayCheck.PlayAt";
@@ -83,6 +86,9 @@ public static class LabLevelPlayCheck
             level.Data.cameraMaxSize = 34f;
             level.Data.partitions.Clear();
             level.Data.AddPartition(new RectInt(-20, -5, 60, 40), "PlayCheckZone");
+            // 离两名玩家很远的地板上一根朝上的刺：只验证"数据 → 物件"这条管子，不验证死亡。
+            level.Data.ClearSpikes();
+            level.Data.PlaceSpike(SpikeCell, LabSpikeDir.Up);
 
             var lab = Object.FindAnyObjectByType<TuningLab>();
             if (lab != null)
@@ -235,12 +241,13 @@ public static class LabLevelPlayCheck
             Check(sb, ref fails, level.MergedRectCount == 8,
                 "合并矩形 = 8，实际 " + level.MergedRectCount);
             Check(sb, ref fails, level.RopeCount == 1, "绳 = 1");
+            Check(sb, ref fails, level.SpikeCount == 1, "地刺 = 1，实际 " + level.SpikeCount);
 
             Transform generated = lab.transform.Find(LabLevel.GeneratedRootName);
             Check(sb, ref fails, generated != null, "生成根 " + LabLevel.GeneratedRootName + " 存在");
             if (generated != null)
-                Check(sb, ref fails, generated.childCount == 9,
-                    "生成物 = 8 块地形 + 1 根绳，实际 " + generated.childCount);
+                Check(sb, ref fails, generated.childCount == 10,
+                    "生成物 = 8 块地形 + 1 根绳 + 1 根刺，实际 " + generated.childCount);
 
             Check(sb, ref fails,
                 Mathf.Abs(level.Data.spawnA.x - TuningLab.SpawnAFeet.x) < 0.0001f &&
@@ -283,6 +290,31 @@ public static class LabLevelPlayCheck
         if (ropes.Length == 1)
             Check(sb, ref fails, ropes[0].cells == TuningLab.RopeCells,
                 "竖绳长度 = " + TuningLab.RopeCells);
+
+        var spikes = Object.FindObjectsByType<LabSpike>();
+        Check(sb, ref fails, spikes.Length == 1, "地刺组件 = 1，实际 " + spikes.Length);
+        if (spikes.Length == 1)
+        {
+            LabSpike spike = spikes[0];
+            var strip = new LabSpikeSpec(SpikeCell, LabSpikeDir.Up);
+            Check(sb, ref fails,
+                Mathf.Abs(spike.transform.position.x - strip.StripCenter.x) < 0.0001f &&
+                Mathf.Abs(spike.transform.position.y - strip.StripCenter.y) < 0.0001f,
+                "地刺生成在 " + strip.StripCenter + "，实际 " + spike.transform.position);
+
+            var spikeBody = spike.GetComponent<BoxCollider2D>();
+            Check(sb, ref fails, spikeBody != null && spikeBody.isTrigger
+                && Mathf.Abs(spikeBody.size.x - strip.StripSize.x) < 0.0001f
+                && Mathf.Abs(spikeBody.size.y - strip.StripSize.y) < 0.0001f,
+                "地刺碰撞 = 触发式 " + strip.StripSize);
+            Check(sb, ref fails, Physics2D.OverlapPoint(strip.StripCenter) != null,
+                "刺带中心查得到碰撞");
+            Check(sb, ref fails,
+                Physics2D.OverlapPoint(new Vector2(strip.StripCenter.x, strip.StripCenter.y + 0.5f)) == null,
+                "刺上方半格没有碰撞（只有那 6 像素 lethal）");
+        }
+        Check(sb, ref fails, lab.PlayerA != null && lab.PlayerB != null,
+            "离刺很远的两名玩家没有被误杀");
 
         if (lab.Cam != null)
         {
