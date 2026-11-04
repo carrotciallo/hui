@@ -27,6 +27,8 @@ public sealed class LabLevelData
     public List<LabKeySpec> keys = new List<LabKeySpec>();
     /// <summary>门（1×3，任意一把钥匙开任意一扇门）。</summary>
     public List<LabDoorSpec> doors = new List<LabDoorSpec>();
+    /// <summary>地刺（16×6 像素，贴格边，一格一根，碰到即死）。</summary>
+    public List<LabSpikeSpec> spikes = new List<LabSpikeSpec>();
     /// <summary>连续关卡分区。每个分区的 bounds 同时是它的相机范围；B 进入哪个分区就用哪个分区。</summary>
     public List<LabLevelPartition> partitions = new List<LabLevelPartition>();
 
@@ -66,6 +68,47 @@ public sealed class LabLevelData
         else doors.Clear();
     }
 
+    public void ClearSpikes()
+    {
+        if (spikes == null) spikes = new List<LabSpikeSpec>();
+        else spikes.Clear();
+    }
+
+    /// <summary>这一格的刺；没有返回 null。</summary>
+    public LabSpikeSpec? FindSpike(Vector2Int cell)
+    {
+        if (spikes == null) return null;
+        for (int i = 0; i < spikes.Count; i++)
+            if (spikes[i].cell == cell) return spikes[i];
+        return null;
+    }
+
+    public bool HasSpike(Vector2Int cell) => FindSpike(cell).HasValue;
+
+    /// <summary>放一根刺，或把这一格已有刺改成新方向。方向也相同则什么都不做。</summary>
+    public bool PlaceSpike(Vector2Int cell, LabSpikeDir dir)
+    {
+        if (spikes == null) spikes = new List<LabSpikeSpec>();
+        for (int i = 0; i < spikes.Count; i++)
+        {
+            var spike = spikes[i];
+            if (spike.cell != cell) continue;
+            if (spike.dir == dir) return false;
+            spike.dir = dir;
+            spikes[i] = spike;
+            return true;
+        }
+
+        spikes.Add(new LabSpikeSpec(cell, dir));
+        return true;
+    }
+
+    public bool RemoveSpike(Vector2Int cell)
+    {
+        if (spikes == null) return false;
+        return spikes.RemoveAll(spike => spike.cell == cell) > 0;
+    }
+
     public bool ContainsCell(Vector2Int cell)
     {
         return cell.x >= bounds.x && cell.x < bounds.x + bounds.width
@@ -85,6 +128,7 @@ public sealed class LabLevelData
         if (ropes == null) ropes = new List<LabRopeSpec>();
         if (keys == null) keys = new List<LabKeySpec>();
         if (doors == null) doors = new List<LabDoorSpec>();
+        if (spikes == null) spikes = new List<LabSpikeSpec>();
         if (partitions == null) partitions = new List<LabLevelPartition>();
 
         // 门色漏写/手填成透明时回落到默认色，否则门在场景里完全看不见。
@@ -138,6 +182,16 @@ public sealed class LabLevelData
             rope.cells = Mathf.Min(rope.cells, 256);
             ropes[i] = rope;
         }
+
+        // 一格只留一根刺：按格排序后丢掉同格重复项。
+        spikes.Sort((a, b) => CompareCells(a.cell, b.cell));
+        int spikeWrite = 0;
+        for (int read = 0; read < spikes.Count; read++)
+        {
+            if (spikeWrite > 0 && spikes[read].cell == spikes[spikeWrite - 1].cell) continue;
+            spikes[spikeWrite++] = spikes[read];
+        }
+        if (spikeWrite < spikes.Count) spikes.RemoveRange(spikeWrite, spikes.Count - spikeWrite);
     }
 
     public void CopyFrom(LabLevelData other)
@@ -153,6 +207,7 @@ public sealed class LabLevelData
             ropes = new List<LabRopeSpec>();
             keys = new List<LabKeySpec>();
             doors = new List<LabDoorSpec>();
+            spikes = new List<LabSpikeSpec>();
             partitions = new List<LabLevelPartition>();
             return;
         }
@@ -166,6 +221,7 @@ public sealed class LabLevelData
         ropes = new List<LabRopeSpec>(other.ropes ?? new List<LabRopeSpec>());
         keys = new List<LabKeySpec>(other.keys ?? new List<LabKeySpec>());
         doors = new List<LabDoorSpec>(other.doors ?? new List<LabDoorSpec>());
+        spikes = new List<LabSpikeSpec>(other.spikes ?? new List<LabSpikeSpec>());
         partitions = new List<LabLevelPartition>();
         if (other.partitions != null)
         {
@@ -318,6 +374,17 @@ public sealed class LabLevelData
             }
         }
 
+        if (spikes != null)
+        {
+            for (int i = 0; i < spikes.Count; i++)
+            {
+                var spike = spikes[i];
+                if (!oldRect.Contains(new Vector2(spike.cell.x + 0.5f, spike.cell.y + 0.5f))) continue;
+                spike.cell += delta;
+                spikes[i] = spike;
+            }
+        }
+
         if (oldRect.Contains(spawnA)) spawnA += shift;
         if (oldRect.Contains(spawnB)) spawnB += shift;
     }
@@ -371,6 +438,8 @@ public sealed class LabLevelData
                 keys.RemoveAll(key => rect.Contains(key.position));
             if (doors != null)
                 doors.RemoveAll(door => rect.Contains(door.position));
+            if (spikes != null)
+                spikes.RemoveAll(spike => rect.Contains(new Vector2(spike.cell.x + 0.5f, spike.cell.y + 0.5f)));
         }
 
         partitions.RemoveAt(index);
@@ -565,6 +634,62 @@ public struct LabDoorSpec
         Mathf.FloorToInt(position.x),
         Mathf.FloorToInt(position.y - CellHeight * 0.5f),
         1, CellHeight);
+}
+
+/// <summary>地刺的朝向：尖刺指向这个方向，底座贴在方向反面的那条格边上。
+/// 地刺（朝上、立在地板顶上那格）= <see cref="Up"/>。</summary>
+public enum LabSpikeDir
+{
+    Up = 0,
+    Down = 1,
+    Left = 2,
+    Right = 3
+}
+
+/// <summary>
+/// 一格一根地刺。外形 16×6 像素 = 1 × 0.375 世界单位，长边紧贴格边。
+/// 碰撞箱 = 视觉外接矩形，一点不让：齿之间的凹陷也算碰到。
+/// </summary>
+[System.Serializable]
+public struct LabSpikeSpec
+{
+    /// <summary>刺的厚度（世界单位）= 6 美术像素 / 16。</summary>
+    public const float Thickness = 6f / TuningLab.CellPixels;
+
+    public Vector2Int cell;
+    public LabSpikeDir dir;
+
+    public LabSpikeSpec(Vector2Int cell, LabSpikeDir dir)
+    {
+        this.cell = cell;
+        this.dir = dir;
+    }
+
+    /// <summary>尖刺指向的单位轴。</summary>
+    public Vector2 Facing
+    {
+        get
+        {
+            if (dir == LabSpikeDir.Up) return Vector2.up;
+            if (dir == LabSpikeDir.Down) return Vector2.down;
+            if (dir == LabSpikeDir.Left) return Vector2.left;
+            return Vector2.right;
+        }
+    }
+
+    /// <summary>刺自己那条 1×0.375 带的中心，也是生成物件的落点。</summary>
+    public Vector2 StripCenter
+        => new Vector2(cell.x + 0.5f, cell.y + 0.5f) - Facing * (0.5f - Thickness * 0.5f);
+
+    /// <summary>碰撞尺寸：横着的刺宽 1 高 0.375，竖着的反之。</summary>
+    public Vector2 StripSize
+        => dir == LabSpikeDir.Up || dir == LabSpikeDir.Down
+            ? new Vector2(1f, Thickness)
+            : new Vector2(Thickness, 1f);
+
+    /// <summary>底座踩在哪一格——那一格必须是实心，否则刺悬空。</summary>
+    public Vector2Int BaseCell
+        => cell - new Vector2Int(Mathf.RoundToInt(Facing.x), Mathf.RoundToInt(Facing.y));
 }
 
 /// <summary>

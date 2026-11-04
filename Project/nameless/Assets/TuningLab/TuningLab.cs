@@ -64,6 +64,20 @@ public class TuningLab : MonoBehaviour
     [Range(0, 4)] public int forgeTierIndex = 0;
     public bool verticalHitEnabled = true;
 
+    /// <summary>没有检查点时的死亡后果。</summary>
+    public enum DeathFallback
+    {
+        /// <summary>沿用实验台行为：直接把死掉的人销毁，只剩队友。</summary>
+        DestroyPlayer = 0,
+        /// <summary>重开本关：两人回出生点，门重新关上、被捡走的钥匙长回来。</summary>
+        RespawnAtSpawn = 1
+    }
+
+    [Header("死亡")]
+    [Tooltip("地刺/塌框致死时，本关没有已激活的检查点：销毁本人（原实验台行为）还是重开本关回出生点。\n" +
+             "带地刺的正式关卡要用 RespawnAtSpawn，否则第一脚踩空就把人删了。")]
+    public DeathFallback deathWhenNoCheckpoint = DeathFallback.DestroyPlayer;
+
     [Header("等级（等距）")]
     [Tooltip("第一道门槛的落差（格）= 零级的最大速度。必须大于跳高，否则站跳就越级。")]
     public float tierFirstCells = 4f;

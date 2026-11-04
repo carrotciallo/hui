@@ -147,6 +147,7 @@ public class LabPlayer : MonoBehaviour
     DashPhase dashPhase;
     bool refillArmed;
     Vector2 lastFixedVelocity;
+    bool dying;                       // 一次死亡只结算一遍：接触和扫掠会在同一帧各报一次
 
     int spiritMask;
     LabForm form = LabForm.Normal;
@@ -682,8 +683,7 @@ public class LabPlayer : MonoBehaviour
                 {
                     Eject();                       // 膛里的人不能跟着宿主一起没
                     EdgeCollapsed?.Invoke(this, e);
-                    if (lab != null && lab.TryRespawn(this)) return;
-                    Destroy(gameObject);             // 没有重生点时沿用原实验台行为
+                    Kill();                        // 检查点/出生点/销毁走同一个死亡入口
                 }
                 else
                 {
@@ -692,6 +692,32 @@ public class LabPlayer : MonoBehaviour
                 }
                 break;
         }
+    }
+
+    /// <summary>
+    /// 即死：踩到地刺，或热二的边再吃一记红热。
+    /// 膛里的人先退膛，不能跟着宿主一起没。有检查点回检查点；
+    /// 没有则按 <see cref="TuningLab.deathWhenNoCheckpoint"/> 决定重开本关还是把人销毁。
+    /// </summary>
+    public void Kill()
+    {
+        if (dying) return;
+        dying = true;
+
+        Eject();
+        if (lab == null) { Destroy(gameObject); return; }
+
+        if (lab.TryRespawn(this)) { dying = false; return; }
+
+        if (lab.deathWhenNoCheckpoint == TuningLab.DeathFallback.RespawnAtSpawn)
+        {
+            lab.ResetMap();
+            lab.ResetPlayers();
+            dying = false;
+            return;
+        }
+
+        Destroy(gameObject);
     }
 
     /// <summary>四条边全部回到常态（复活时用）。</summary>

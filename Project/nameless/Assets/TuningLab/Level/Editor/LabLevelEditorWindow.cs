@@ -25,7 +25,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         SpawnB = 5,
         Partition = 6,
         Key = 7,
-        Door = 8
+        Door = 8,
+        Spike = 9
     }
 
     const int EditMargin = 8;                 // 相机范围外还能画多少格
@@ -34,7 +35,13 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     static readonly string[] ToolLabels =
     {
-        "铺地形", "擦地形", "矩形", "竖绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门"
+        "铺地形", "擦地形", "矩形", "竖绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺"
+    };
+
+    static readonly string[] SpikeDirLabels = { "朝上", "朝下", "朝左", "朝右" };
+    static readonly LabSpikeDir[] SpikeDirs =
+    {
+        LabSpikeDir.Up, LabSpikeDir.Down, LabSpikeDir.Left, LabSpikeDir.Right
     };
 
     LabLevel level;
@@ -45,12 +52,14 @@ public sealed class LabLevelEditorWindow : EditorWindow
     int ropeLength = 4;
     int ropeChainId;
     Color newDoorColor = LabDoor.DefaultClosedColor;
+    LabSpikeDir newSpikeDir = LabSpikeDir.Up;
     bool showGrid = true;
     bool showSpawns = true;
     bool showCameraFrames = true;
     Vector2 windowScroll;
     Vector2 ropeScroll;
     Vector2 keyDoorScroll;
+    Vector2 spikeScroll;
 
     bool gesture;
     Vector2Int rectStart;
@@ -195,6 +204,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         EditorGUILayout.Space();
         DrawKeyDoors();
         EditorGUILayout.Space();
+        DrawSpikes();
+        EditorGUILayout.Space();
         DrawSpawns();
         EditorGUILayout.Space();
         DrawBounds();
@@ -335,6 +346,17 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     "左键点门最下面那一格，门向上占 3 格（1×3）。任意一把钥匙能开任意一扇门，\n" +
                     "颜色只用于区分，在下面的「钥匙 / 门」面板里调。",
                     MessageType.None);
+                break;
+            case Tool.Spike:
+                EditorGUILayout.HelpBox(
+                    "左键点刺所在的那一格（不能是实心格）；换个方向再点 = 改向，同方向再点 = 删掉这根刺。" +
+                    "「擦地形」把该格的地形和刺一起擦掉。\n" +
+                    "朝上 = 立在地板顶上的地刺；朝下 = 吊在天花板下的倒刺；朝左 / 朝右 = 贴墙的侧刺。" +
+                    "刺的底座必须有实心格，悬空的会在「校验」里列出来。",
+                    MessageType.None);
+                int spikeDirIndex = System.Array.IndexOf(SpikeDirs, newSpikeDir);
+                spikeDirIndex = GUILayout.SelectionGrid(spikeDirIndex, SpikeDirLabels, 4);
+                newSpikeDir = SpikeDirs[Mathf.Clamp(spikeDirIndex, 0, SpikeDirs.Length - 1)];
                 break;
         }
 
@@ -619,6 +641,61 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     level.Data.ClearDoors();
                     AfterStructuralEdit();
                 }
+            }
+        }
+    }
+
+    void DrawSpikes()
+    {
+        EditorGUILayout.LabelField("地刺", EditorStyles.boldLabel);
+        var data = level.Data;
+        EditorGUILayout.LabelField("刺", level.SpikeCount + "（16×6 像素，贴格边，碰到即死）");
+
+        spikeScroll = EditorGUILayout.BeginScrollView(spikeScroll, GUILayout.MaxHeight(120f));
+        if (data.spikes != null)
+        {
+            for (int i = 0; i < data.spikes.Count; i++)
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    var spike = data.spikes[i];
+                    bool floating = !data.HasCell(spike.BaseCell);
+                    EditorGUILayout.LabelField(
+                        string.Format("刺 ({0}, {1}){2}",
+                            spike.cell.x, spike.cell.y, floating ? "  悬空" : ""),
+                        EditorStyles.miniLabel, GUILayout.Width(120f));
+
+                    int dirIndex = Mathf.Clamp(System.Array.IndexOf(SpikeDirs, spike.dir), 0, SpikeDirs.Length - 1);
+                    EditorGUI.BeginChangeCheck();
+                    int next = EditorGUILayout.Popup(dirIndex, SpikeDirLabels, GUILayout.Width(56f));
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        Record("改地刺方向");
+                        spike.dir = SpikeDirs[next];
+                        data.spikes[i] = spike;
+                        MarkDirty(true);
+                    }
+
+                    if (GUILayout.Button("×", GUILayout.Width(24f)))
+                    {
+                        Record("删地刺");
+                        data.spikes.RemoveAt(i);
+                        AfterStructuralEdit();
+                        break;
+                    }
+                }
+            }
+        }
+        EditorGUILayout.EndScrollView();
+
+        using (new EditorGUI.DisabledScope(level.SpikeCount == 0))
+        {
+            if (GUILayout.Button("清空地刺"))
+            {
+                if (!EditorUtility.DisplayDialog("清空地刺", "删掉所有地刺？", "清空", "取消")) return;
+                Record("清空地刺");
+                level.Data.ClearSpikes();
+                AfterStructuralEdit();
             }
         }
     }
@@ -997,12 +1074,42 @@ public sealed class LabLevelEditorWindow : EditorWindow
             }
         }
 
+        if (data.spikes != null)
+        {
+            for (int i = 0; i < data.spikes.Count; i++)
+            {
+                var spike = data.spikes[i];
+                if (!data.ContainsCell(spike.cell))
+                    issues.Add("第 " + i + " 根刺不在编辑范围内：" + spike.cell);
+                if (data.HasCell(spike.cell))
+                    issues.Add("第 " + i + " 根刺和地形重叠：" + spike.cell);
+                if (!data.HasCell(spike.BaseCell))
+                    issues.Add("第 " + i + " 根刺悬空，底座那格不是实心：" + spike.cell + " 需要 " + spike.BaseCell);
+
+                if (SpawnTouchesSpike(data.spawnA, TuningLab.A_Pixels / (float)TuningLab.CellPixels, spike))
+                    issues.Add("第 " + i + " 根刺压在 A 的出生点上：" + spike.cell);
+                if (SpawnTouchesSpike(data.spawnB, TuningLab.B_Pixels / (float)TuningLab.CellPixels, spike))
+                    issues.Add("第 " + i + " 根刺压在 B 的出生点上：" + spike.cell);
+
+                if (data.keys != null)
+                    for (int k = 0; k < data.keys.Count; k++)
+                        if (data.keys[k].Cells().x == spike.cell.x && data.keys[k].Cells().y == spike.cell.y)
+                            issues.Add("第 " + i + " 根刺和第 " + k + " 把钥匙在同一格：" + spike.cell);
+
+                if (data.doors != null)
+                    for (int d = 0; d < data.doors.Count; d++)
+                        if (data.doors[d].Cells().Contains(spike.cell))
+                            issues.Add("第 " + i + " 根刺在第 " + d + " 扇门里：" + spike.cell);
+            }
+        }
+
         validated = true;
 
         if (issues.Count == 0)
         {
-            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 个关卡分区。",
+            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 根刺，{6} 个关卡分区。",
                 level.SolidCellCount, level.MergedRectCount, level.RopeCount, level.KeyCount, level.DoorCount,
+                level.SpikeCount,
                 data.partitions != null ? data.partitions.Count : 0), level);
         }
         else
@@ -1011,6 +1118,15 @@ public sealed class LabLevelEditorWindow : EditorWindow
         }
 
         Repaint();
+    }
+
+    /// <summary>出生点上的玩家方框会不会一开场就蹭到这根刺（按刺带自己的矩形算，留 1 像素不算）。</summary>
+    static bool SpawnTouchesSpike(Vector2 feet, float size, LabSpikeSpec spike)
+    {
+        var player = new Rect(feet.x - size * 0.5f, feet.y, size, size);
+        Vector2 center = spike.StripCenter;
+        Vector2 strip = spike.StripSize;
+        return player.Overlaps(new Rect(center.x - strip.x * 0.5f, center.y - strip.y * 0.5f, strip.x, strip.y));
     }
 
     void CheckSpawn(string name, Vector2 feet, LabLevelData data)
@@ -1069,6 +1185,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawPartitionHandles(data);
         DrawRopeHandles(data);
         DrawKeyDoorHandles(data);
+        DrawSpikeHandles(data);
         if (showSpawns) DrawSpawnHandles(data);
         if (showCameraFrames) DrawCameraFrames(data);
 
@@ -1190,6 +1307,27 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 level.Data.doors.Add(new LabDoorSpec(
                     new Vector2(cell.x + 0.5f, cell.y + LabDoorSpec.CellHeight * 0.5f),
                     newDoorColor));
+                AfterStructuralEdit();
+                break;
+
+            case Tool.Spike:
+                if (level.Data.HasCell(cell))
+                {
+                    Notify(view, "刺不能放在实心格里：" + cell);
+                    return;
+                }
+
+                var existing = level.Data.FindSpike(cell);
+                if (existing.HasValue && existing.Value.dir == newSpikeDir)
+                {
+                    Record("删地刺");
+                    level.Data.RemoveSpike(cell);
+                }
+                else
+                {
+                    Record(existing.HasValue ? "改地刺方向" : "放地刺");
+                    level.Data.PlaceSpike(cell, newSpikeDir);
+                }
                 AfterStructuralEdit();
                 break;
         }
@@ -1367,7 +1505,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
     {
         var data = level.Data;
         if (!InEditArea(cell, data)) return;
-        if (erase) data.RemoveCell(cell);
+        if (erase)
+        {
+            data.RemoveCell(cell);
+            data.RemoveSpike(cell);      // 擦地形 = 这一格的东西一起擦掉
+        }
         else data.AddCell(cell);
     }
 
@@ -1415,6 +1557,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case KeyCode.Alpha7: tool = Tool.Partition; break;
             case KeyCode.Alpha8: tool = Tool.Key; break;
             case KeyCode.Alpha9: tool = Tool.Door; break;
+            case KeyCode.Alpha0: tool = Tool.Spike; break;
             case KeyCode.Delete:
                 if (tool != Tool.Partition || partitionIndex < 0) return false;
                 DeleteSelectedPartition();
@@ -1621,6 +1764,23 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Handles.DrawLine(center, new Vector3(feet.x, feet.y, 0f));
     }
 
+    void DrawSpikeHandles(LabLevelData data)
+    {
+        if (data.spikes == null) return;
+        for (int i = 0; i < data.spikes.Count; i++)
+        {
+            var spike = data.spikes[i];
+            // 底座没有实心支撑的刺画红，有支撑的画钢灰。
+            Handles.color = data.HasCell(spike.BaseCell)
+                ? new Color(0.75f, 0.82f, 0.92f, 0.95f)
+                : new Color(1f, 0.35f, 0.3f, 0.95f);
+            var center = spike.StripCenter;
+            var size = spike.StripSize;
+            Handles.DrawWireCube(new Vector3(center.x, center.y, 0f),
+                new Vector3(size.x, size.y, 0.01f));
+        }
+    }
+
     void DrawHover(Vector2Int cell, bool inArea, bool inBounds, LabLevelData data)
     {
         if (tool == Tool.Partition)
@@ -1698,6 +1858,26 @@ public sealed class LabLevelEditorWindow : EditorWindow
             return;
         }
 
+        if (tool == Tool.Spike)
+        {
+            var spec = new LabSpikeSpec(cell, newSpikeDir);
+            bool blocked = data.HasCell(cell);
+            bool floating = !data.HasCell(spec.BaseCell);
+            Handles.color = blocked
+                ? new Color(1f, 0.3f, 0.25f, 0.9f)
+                : new Color(color.r, color.g, color.b, floating ? 0.45f : 0.9f);
+
+            var center = spec.StripCenter;
+            var size = spec.StripSize;
+            Handles.DrawWireCube(new Vector3(center.x, center.y, 0f),
+                new Vector3(size.x, size.y, 0.01f));
+            // 整格描一圈：点下去的是这一格，刺只占靠边的那 6 像素。
+            Handles.DrawWireCube(CellCenter(cell), Vector3.one);
+            if (blocked) Handles.Label(CellCenter(cell) + Vector3.up * 0.6f, "实心格里放不下");
+            else if (floating) Handles.Label(CellCenter(cell) + Vector3.up * 0.6f, "底座悬空");
+            return;
+        }
+
         Handles.color = new Color(color.r, color.g, color.b, 0.18f);
         Handles.DrawSolidRectangleWithOutline(
             RectVerts(cell.x, cell.y, cell.x + 1, cell.y + 1),
@@ -1733,6 +1913,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Partition: return new Color(1f, 0.85f, 0.3f, 0.95f);
             case Tool.Key: return new Color(1f, 0.85f, 0.1f, 0.95f);
             case Tool.Door: return new Color(newDoorColor.r, newDoorColor.g, newDoorColor.b, 0.95f);
+            case Tool.Spike: return new Color(0.75f, 0.82f, 0.92f, 0.95f);
             default: return new Color(1f, 0.85f, 0.3f, 0.95f);
         }
     }

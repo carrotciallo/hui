@@ -33,6 +33,7 @@ public sealed class LabLevel : MonoBehaviour
     public int RopeCount => Data.ropes != null ? Data.ropes.Count : 0;
     public int KeyCount => Data.keys != null ? Data.keys.Count : 0;
     public int DoorCount => Data.doors != null ? Data.doors.Count : 0;
+    public int SpikeCount => Data.spikes != null ? Data.spikes.Count : 0;
 
     Transform generatedRoot;
     // 运行时生成的钥匙/门；地图重置时要关回去、把捡走的钥匙长回来。
@@ -120,6 +121,7 @@ public sealed class LabLevel : MonoBehaviour
         for (int i = 0; i < data.ropes.Count; i++) AddRope(root.transform, data.ropes[i], material);
         for (int i = 0; i < data.keys.Count; i++) AddKey(root.transform, data.keys[i], preview);
         for (int i = 0; i < data.doors.Count; i++) AddDoor(root.transform, data.doors[i], preview);
+        for (int i = 0; i < data.spikes.Count; i++) AddSpike(root.transform, data.spikes[i]);
     }
 
     void AddSolid(Transform parent, RectInt rect, PhysicsMaterial2D material)
@@ -155,6 +157,19 @@ public sealed class LabLevel : MonoBehaviour
         rope.cells = Mathf.Max(1, spec.cells);
         rope.chainId = spec.chainId;
         rope.ApplyShape();
+    }
+
+    /// <summary>把一格里的刺摆进场景：物件落在 1×0.375 刺带自己的中心，碰撞箱不留余量。</summary>
+    void AddSpike(Transform parent, LabSpikeSpec spec)
+    {
+        var go = new GameObject("Spike");
+        go.transform.SetParent(parent, false);
+        go.transform.position = spec.StripCenter;
+
+        var spike = go.AddComponent<LabSpike>();
+        spike.cell = spec.cell;
+        spike.dir = spec.dir;
+        spike.ApplyShape();
     }
 
     void AddKey(Transform parent, LabKeySpec spec, bool preview)
