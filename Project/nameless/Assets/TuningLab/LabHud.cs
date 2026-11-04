@@ -148,6 +148,7 @@ public class LabHud : MonoBehaviour
         lab.tierSpacingCells = Slider("每级间距(格)", lab.tierSpacingCells, 0.5f, 6f, "0.0");
         lab.redHotTierIndex = Mathf.RoundToInt(Slider("红热门槛级", lab.redHotTierIndex, 0f, 4f, "0"));
         lab.forgeTierIndex = Mathf.RoundToInt(Slider("锻造门槛级", lab.forgeTierIndex, 0f, 4f, "0"));
+        lab.iceBreakTierIndex = Mathf.RoundToInt(Slider("冰块破坏级", lab.iceBreakTierIndex, 0f, 4f, "0"));
         lab.redHotDuration = Slider("红热1持续(秒)", lab.redHotDuration, 0.2f, 6f, "0.00");
 
         GUILayout.Space(6f);
@@ -223,6 +224,8 @@ public class LabHud : MonoBehaviour
             lab.RedHotSpeed * lab.RedHotSpeed, lab.redHotTierIndex), small);
         GUILayout.Label(string.Format("锻造      撞场景沿轴 v ≥ {0:0}（v{1} 门槛）→ 常态①→热②→遇冷砸碎◇→遇热塌框",
             lab.ForgeSpeed, Mathf.Min(lab.forgeTierIndex, lab.redHotTierIndex)), small);
+        GUILayout.Label(string.Format("冰块      相对速度 ≥ {0:0}（v{1} 门槛）→ 整组碎；红热边接触 → 只融一块并回普通",
+            lab.IceBreakSpeed, lab.iceBreakTierIndex), small);
         if (collapseCount > 0)
             GUILayout.Label(string.Format("  塌框 {0} 次   最近 {1}（热二遇红热 = 死亡）", collapseCount, lastCollapse), WarnStyle());
         GUILayout.Label(string.Format("大炮      v' = √(Vb² + {0:0})   一个等级间距 = {1:0.0} 格   方向 = 进入方向的反向",
@@ -320,7 +323,8 @@ public class LabHud : MonoBehaviour
         GUI.color = LabPlayer.TintForTier(p.SpeedTier);
         GUILayout.Label("■", label, GUILayout.Width(16f));
         GUI.color = prev;
-        string state = p.Grounded ? "  (地面)"
+        string state = p.OnIce ? "  (冰面)"
+            : p.Grounded ? "  (地面)"
             : p.Hovering ? "  (v1 悬停)"
             : p.RidingOnOther ? "  (驮着)"
             : p.Touching ? "  (空中·碰队友)"

@@ -64,6 +64,10 @@ public class TuningLab : MonoBehaviour
     [Range(0, 4)] public int forgeTierIndex = 0;
     public bool verticalHitEnabled = true;
 
+    [Header("冰块")]
+    [Tooltip("冰块整组破坏的碰撞等级（2 = v2）。用碰撞前相对速度的合速度套现有等级函数判定。")]
+    [Range(0, 4)] public int iceBreakTierIndex = 2;
+
     /// <summary>没有检查点时的死亡后果。</summary>
     public enum DeathFallback
     {
@@ -136,6 +140,10 @@ public class TuningLab : MonoBehaviour
     public float RedHotSpeed => SpeedForCells(Boundary(redHotTierIndex));
     /// <summary>锻造门槛（速度）：场景撞击的下限，永不高于红热门槛。</summary>
     public float ForgeSpeed => SpeedForCells(Boundary(Mathf.Min(forgeTierIndex, redHotTierIndex)));
+    /// <summary>冰块整组破坏的碰撞门槛（速度）。</summary>
+    public float IceBreakSpeed => SpeedForCells(Boundary(iceBreakTierIndex));
+    /// <summary>冰面加速的上限：最高等级的名义顶端（默认 v4 ≈ 44.72）。</summary>
+    public float IceMaxSpeed => SpeedForCells(Boundary(MaxTier - 1) + Mathf.Max(0.01f, tierSpacingCells));
     /// <summary>大炮发射的增量 = 一个等级间距的 v²（= 2·g·间距格数）。v' = √(Vb² + 这个数)。</summary>
     public float CannonBoostV2 => 2f * gravity * Mathf.Max(0.01f, tierSpacingCells);
 

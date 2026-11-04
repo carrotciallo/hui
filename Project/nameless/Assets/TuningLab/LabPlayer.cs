@@ -24,6 +24,9 @@ public class LabPlayer : MonoBehaviour
     public bool Dashing => dashLock > 0f;
     /// <summary>充能接触：站在地形上，或碰到另一名玩家。贴墙、顶天花板不算。</summary>
     public bool Touching => grounded || playerContactTimer > 0f;
+    /// <summary>正踩在冰块上（脚下 support 是 LabIce）。</summary>
+    public bool OnIce => grounded && support != null
+        && support.GetComponentInParent<LabIce>() != null;
     /// <summary>水平冲刺后速度仍处于 v1 区间、重力被关掉的状态。</summary>
     public bool Hovering => dashPhase == DashPhase.Dash;
     /// <summary>冲刺态：位移恒定、不受外力。大炮只吃这个状态撞进来的 B。</summary>
@@ -335,12 +338,22 @@ public class LabPlayer : MonoBehaviour
             if (!grounded && lab.horizontalAirDrag)
                 v.x = Mathf.MoveTowards(v.x, 0f, lab.gravity * dt);
 
+            // 冰面只认"受重力的行走态"：冲刺态会早退，这里再挡一次无重力状态。
+            bool onIce = OnIce && !InDashState && rb.gravityScale > 0.01f;
+
             if (Mathf.Abs(moveX) > 0.01f)
             {
                 facing = Mathf.Sign(moveX);
                 float target = moveX * lab.walkSpeed;
 
-                if (grounded)
+                if (onIce)
+                {
+                    // a = g：v² 每 4 格增加一个等级间距；已经超速时不反向减速。
+                    float cap = lab.IceMaxSpeed;
+                    if (moveX * v.x < cap)
+                        v.x = Mathf.MoveTowards(v.x, moveX * cap, lab.gravity * dt);
+                }
+                else if (grounded)
                 {
                     // 地面永远有摩擦：按住同方向也照样把超出走路速度的部分拉回来。
                     // 否则"按住右"就能把冲刺速度永久锁死 = 无限滑行。
@@ -354,8 +367,9 @@ public class LabPlayer : MonoBehaviour
                         v.x = Mathf.MoveTowards(v.x, target, lab.walkAccel * dt);
                 }
             }
-            else
+            else if (!onIce)
             {
+                // 冰面松手只停止加速，不施加地面制动，保留滑行。
                 float brake = grounded ? lab.groundBrake : lab.airBrake;
                 if (brake > 0f) v.x = Mathf.MoveTowards(v.x, 0f, brake * dt);
             }
@@ -452,6 +466,36 @@ public class LabPlayer : MonoBehaviour
         LastImpactSpeed = impact;
         LastImpactTier = lab.TierOfSpeed(impact);
         LastImpactTime = Time.time;
+
+        // 冰块不参与普通地形的锻造状态机，单独结算：
+        //   红热边（Hot1/Hot2）→ 只融这一块，边强制回普通；
+        //   否则按相对速度合速度到 v2 → 整组破坏；
+        //   普通边接触 → 什么都不发生。
+        var ice = c.collider != null ? c.collider.GetComponentInParent<LabIce>() : null;
+        if (ice != null)
+        {
+            Edge edge = EdgeFor(-n);
+
+            if (canBeRedHot)
+            {
+                var state = GetEdge(edge);
+                if (state == EdgeState.Hot1 || state == EdgeState.Hot2)
+                {
+                    ice.BreakOne();
+                    SetEdge(edge, EdgeState.Normal);
+                    return;
+                }
+            }
+
+            float relativeSpeed = lastFixedVelocity.magnitude;
+            if (lab.TierOfSpeed(relativeSpeed) >= lab.iceBreakTierIndex)
+            {
+                ice.BreakGroup();
+                return;
+            }
+
+            return;
+        }
 
         if (impact < lab.ForgeSpeed) return;
         StrikeEdge(EdgeFor(-n), impact >= lab.RedHotSpeed);
