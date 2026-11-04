@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>3×3 重生点：唯一玩家接触时记录两名玩家的位置。</summary>
+/// <summary>3×3 重生点：任一玩家接触时激活，并让两人以全新状态固定在左右重生。</summary>
 [RequireComponent(typeof(BoxCollider2D), typeof(SpriteRenderer))]
 public sealed class LabRespawnPoint : MonoBehaviour
 {
@@ -12,8 +12,6 @@ public sealed class LabRespawnPoint : MonoBehaviour
     TuningLab lab;
     BoxCollider2D trigger;
     SpriteRenderer renderer;
-    Vector2 savedA;
-    Vector2 savedB;
     readonly HashSet<LabPlayer> touching = new HashSet<LabPlayer>();
     bool contactResolved;
     static Sprite cachedSprite;
@@ -74,43 +72,9 @@ public sealed class LabRespawnPoint : MonoBehaviour
     {
         if (lab == null || contactResolved || touching.Count == 0) return;
 
-        var player = lab.PlayerA != null && touching.Contains(lab.PlayerA)
-            ? lab.PlayerA
-            : lab.PlayerB != null && touching.Contains(lab.PlayerB) ? lab.PlayerB : null;
-        if (player == null) return;
-
-        var otherPlayer = player == lab.PlayerA ? lab.PlayerB : lab.PlayerA;
-        bool bothTouching = otherPlayer != null && touching.Contains(otherPlayer);
-        if (bothTouching)
-        {
-            contactResolved = true;
-            return;
-        }
-
-        contactResolved = true;
-
-        if (!player.IsAlive)
-        {
-            RespawnDeadPlayer(lab, player);
-            return;
-        }
-
-        if (otherPlayer != null && !otherPlayer.IsAlive)
-        {
-            RespawnDeadPlayer(lab, otherPlayer);
-            return;
-        }
-
+        if (!touching.Contains(lab.PlayerA) && !touching.Contains(lab.PlayerB)) return;
         lab.ActivateRespawnPoint(this);
-        if (otherPlayer != null)
-            otherPlayer.Teleport(transform.position);
-        RecordState(lab);
-    }
-
-    void RecordState(TuningLab owner)
-    {
-        savedA = owner.PlayerA != null ? owner.PlayerA.transform.position : transform.position;
-        savedB = owner.PlayerB != null ? owner.PlayerB.transform.position : transform.position;
+        RespawnPlayers(lab);
     }
 
     internal void SetActive(bool active)
@@ -121,47 +85,33 @@ public sealed class LabRespawnPoint : MonoBehaviour
 
     public bool IsTouching(LabPlayer player) => player != null && touching.Contains(player);
 
-    public void RespawnAfterDeath(TuningLab owner, LabPlayer deadPlayer)
+    public void RespawnAfterDeath(TuningLab owner, LabPlayer _)
     {
-        var survivor = deadPlayer == owner.PlayerA ? owner.PlayerB : owner.PlayerA;
-        if (deadPlayer != null && survivor != null && survivor.IsAlive && touching.Contains(survivor))
-        {
-            deadPlayer.ReviveAt(transform.position);
-            RecordState(owner);
-            return;
-        }
-
         RespawnPlayers(owner);
-    }
-
-    void RespawnDeadPlayer(TuningLab owner, LabPlayer deadPlayer)
-    {
-        if (deadPlayer == null || deadPlayer.IsAlive) return;
-        deadPlayer.ReviveAt(transform.position);
-        RecordState(owner);
     }
 
     public void RespawnPlayers(TuningLab owner)
     {
+        if (owner == null) return;
+        contactResolved = true;
         owner.ResetMap();
         if (owner.PlayerA != null)
         {
             owner.PlayerA.ClearKeys();
-            owner.PlayerA.ReviveAt(savedA);
+            owner.PlayerA.ReviveAt((Vector2)transform.position + Vector2.left);
         }
         if (owner.PlayerB != null)
         {
             owner.PlayerB.ClearKeys();
-            owner.PlayerB.ReviveAt(savedB);
+            owner.PlayerB.ReviveAt((Vector2)transform.position + Vector2.right);
         }
-        contactResolved = false;
     }
 
     public void ResetPoint()
     {
         IsActive = false;
-        savedA = Vector2.zero;
-        savedB = Vector2.zero;
+        contactResolved = false;
+        touching.Clear();
         if (renderer != null) renderer.color = inactiveColor;
     }
 
