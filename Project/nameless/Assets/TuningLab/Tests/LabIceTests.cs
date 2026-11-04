@@ -284,7 +284,7 @@ public sealed class LabIceTests
         yield return WaitUntil(() => a.Grounded, 2f);
         Assert.IsTrue(a.OnIce);
 
-        a.StrikeEdge(LabPlayer.Edge.Bottom, true);   // 底边 Hot1
+        a.StrikeEdge(LabPlayer.Edge.Bottom, true);   // 底边 Hot2
         a.SetVelocity(new Vector2(10f, 0f));          // 低速滑过多个接缝
         for (int i = 0; i < 20; i++) yield return new WaitForFixedUpdate();
 

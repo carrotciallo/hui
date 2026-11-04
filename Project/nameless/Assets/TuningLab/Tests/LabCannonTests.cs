@@ -600,7 +600,6 @@ public sealed class LabCannonTests
     static void Heat(LabPlayer p, LabPlayer.Edge edge)
     {
         p.StrikeEdge(edge, true);
-        p.StrikeEdge(edge, true);
     }
 
     static void Shatter(LabPlayer p, LabPlayer.Edge edge)
