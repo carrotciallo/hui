@@ -30,8 +30,9 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Spike = 10,
         Ice = 11,
         RespawnPoint = 12,
-        Marquee = 13,
-        Move = 14
+        TeleportPoint = 13,
+        Marquee = 14,
+        Move = 15
     }
 
     /// <summary>下一次拉选区时怎么处理已有的选区。</summary>
@@ -52,7 +53,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Door = 4,
         Spike = 5,
         Ice = 6,
-        RespawnPoint = 7
+        RespawnPoint = 7,
+        TeleportPoint = 8
     }
 
     struct Pick
@@ -67,7 +69,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     static readonly string[] ToolLabels =
     {
-        "铺地形", "擦地形", "矩形", "竖绳", "横绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺", "冰块", "重生点",
+        "铺地形", "擦地形", "矩形", "竖绳", "横绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺", "冰块", "重生点", "传送点",
         "选区", "选择"
     };
 
@@ -98,6 +100,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     Vector2 spikeScroll;
     Vector2 iceScroll;
     Vector2 respawnScroll;
+    Vector2 teleportScroll;
 
     bool gesture;
     Vector2Int rectStart;
@@ -265,6 +268,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawIces();
         EditorGUILayout.Space();
         DrawRespawnPoints();
+        EditorGUILayout.Space();
+        DrawTeleports();
         EditorGUILayout.Space();
         DrawSpawns();
         EditorGUILayout.Space();
@@ -440,6 +445,12 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     "不直接编辑场景生成物。",
                     MessageType.None);
                 break;
+            case Tool.TeleportPoint:
+                EditorGUILayout.HelpBox(
+                    "左键放置 3×3 传送点；同一格再次点击删除。所有传送点互为终点：\n" +
+                    "Play 中两人同时进入后按冲刺键，A/D 选终点、Enter 确认。",
+                    MessageType.None);
+                break;
 
             case Tool.Marquee:
                 EditorGUILayout.HelpBox(
@@ -452,13 +463,16 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Move:
                 EditorGUILayout.HelpBox(
                     "左键点中物件后拖动 = 移动那个物件；场景里有选区时，改成拖动选区里的所有内容。\n" +
-                    "Del：有选区删选区内容，没选区删点中的物件。移动和删除都能撤销。",
+                    "删除用下面「选区 / 选择」面板里的按钮。移动和删除都能撤销。",
                     MessageType.None);
                 break;
 
         }
 
         if (GUILayout.Button("跳到关卡")) FrameLevel();
+        showGrid = EditorGUILayout.ToggleLeft("显示网格", showGrid);
+        EditorGUILayout.LabelField("快捷键：1 铺地形 / 3 擦地形 / 4 选区 / 5 选择（禁止新增）",
+            EditorStyles.miniLabel);
     }
 
     void DrawSelection()
@@ -506,7 +520,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
         EditorGUILayout.HelpBox(
             "选区只是编辑器的状态，不存进关卡数据；拖动和删除作用在选区覆盖的物件上。\n" +
-            "地形格、绳、钥匙、门、地刺、冰块、重生点都算物件；出生点和关卡分区不算。",
+            "地形格、绳、钥匙、门、地刺、冰块、重生点、传送点都算物件；出生点和关卡分区不算。",
             MessageType.None);
     }
 
@@ -972,6 +986,52 @@ public sealed class LabLevelEditorWindow : EditorWindow
         }
     }
 
+    void DrawTeleports()
+    {
+        EditorGUILayout.LabelField("传送点", EditorStyles.boldLabel);
+        var data = level.Data;
+        EditorGUILayout.LabelField("传送点", level.TeleportCount + "（3×3，所有传送点互为终点）");
+        if (data.teleports == null) data.teleports = new List<LabTeleportSpec>();
+
+        if (data.teleports.Count == 1)
+        {
+            EditorGUILayout.HelpBox(
+                "只有一个传送点：进入后没有可选终点，不会打开选择界面。至少放两个。",
+                MessageType.Warning);
+        }
+
+        teleportScroll = EditorGUILayout.BeginScrollView(teleportScroll, GUILayout.MaxHeight(100f));
+        for (int i = 0; i < data.teleports.Count; i++)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                var point = data.teleports[i];
+                EditorGUILayout.LabelField(
+                    string.Format("传送点 ({0:0.##}, {1:0.##})", point.position.x, point.position.y),
+                    EditorStyles.miniLabel);
+                if (GUILayout.Button("×", GUILayout.Width(24f)))
+                {
+                    Record("删传送点");
+                    data.teleports.RemoveAt(i);
+                    AfterStructuralEdit();
+                    break;
+                }
+            }
+        }
+        EditorGUILayout.EndScrollView();
+
+        using (new EditorGUI.DisabledScope(level.TeleportCount == 0))
+        {
+            if (GUILayout.Button("清空传送点"))
+            {
+                if (!EditorUtility.DisplayDialog("清空传送点", "删掉所有传送点？", "清空", "取消")) return;
+                Record("清空传送点");
+                data.teleports.Clear();
+                AfterStructuralEdit();
+            }
+        }
+    }
+
     void DrawBounds()
     {
         EditorGUILayout.LabelField("编辑范围 / 单关相机范围（clamp）", EditorStyles.boldLabel);
@@ -1395,13 +1455,43 @@ public sealed class LabLevelEditorWindow : EditorWindow
             }
         }
 
+        if (data.teleports != null)
+        {
+            var seenTeleports = new HashSet<Vector2>();
+            for (int i = 0; i < data.teleports.Count; i++)
+            {
+                var point = data.teleports[i];
+                if (!data.ContainsPoint(point.position))
+                    issues.Add("第 " + i + " 个传送点不在编辑范围内：" + point.position);
+
+                var cell = new Vector2Int(
+                    Mathf.FloorToInt(point.position.x), Mathf.FloorToInt(point.position.y));
+                if (data.HasCell(cell))
+                    issues.Add("第 " + i + " 个传送点在地形里：" + cell);
+
+                if (!seenTeleports.Add(point.position))
+                    issues.Add("第 " + i + " 个传送点和前面的传送点重合：" + point.position);
+
+                Rect rect = RespawnPointRect(point.position);
+                for (int j = 0; j < i; j++)
+                {
+                    if (data.teleports[j].position == point.position) continue;
+                    if (rect.Overlaps(RespawnPointRect(data.teleports[j].position)))
+                        issues.Add("第 " + i + " 个传送点和第 " + j + " 个触发区重叠，玩家会同时踩进两个点。");
+                }
+            }
+        }
+
+        if (data.teleports != null && data.teleports.Count == 1)
+            issues.Add("只有一个传送点：进入后没有可选终点，无法打开选择界面。");
+
         validated = true;
 
         if (issues.Count == 0)
         {
-            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 根刺，{6} 块冰，{7} 个重生点，{8} 个关卡分区。",
+            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 根刺，{6} 块冰，{7} 个重生点，{8} 个传送点，{9} 个关卡分区。",
                 level.SolidCellCount, level.MergedRectCount, level.RopeCount, level.KeyCount, level.DoorCount,
-                level.SpikeCount, level.IceCount, level.RespawnPointCount,
+                level.SpikeCount, level.IceCount, level.RespawnPointCount, level.TeleportCount,
                 data.partitions != null ? data.partitions.Count : 0), level);
         }
         else
@@ -1491,6 +1581,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawSpikeHandles(data);
         DrawIceHandles(data);
         DrawRespawnPointHandles(data);
+        DrawTeleportHandles(data);
         DrawMarquees();
         DrawPickedHighlight();
         if (showSpawns) DrawSpawnHandles(data);
@@ -1700,6 +1791,25 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 {
                     Record("放重生点");
                     level.Data.PlaceRespawnPoint(cell);
+                }
+                AfterStructuralEdit();
+                break;
+
+            case Tool.TeleportPoint:
+                if (!inBounds)
+                {
+                    Notify(view, "传送点必须在相机范围里。");
+                    return;
+                }
+                if (level.Data.HasTeleport(cell))
+                {
+                    Record("删传送点");
+                    level.Data.RemoveTeleport(cell);
+                }
+                else
+                {
+                    Record("放传送点");
+                    level.Data.PlaceTeleport(cell);
                 }
                 AfterStructuralEdit();
                 break;
@@ -1994,6 +2104,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         if (data.ices != null) data.ices.RemoveAll(ice => ice.cell == cell);
         if (data.respawnPoints != null)
             data.respawnPoints.RemoveAll(point => point.Cells().Contains(cell));
+        if (data.teleports != null)
+            data.teleports.RemoveAll(point => point.Cells().Contains(cell));
         if (data.ropes != null) data.ropes.RemoveAll(rope => RopeCoversCell(rope, cell));
     }
 
@@ -2057,6 +2169,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Spike:
             case Tool.Ice:
             case Tool.RespawnPoint:
+            case Tool.TeleportPoint:
                 return true;
             default:
                 return false;
@@ -2081,6 +2194,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
             }
             case Tool.RespawnPoint:
                 return !data.HasRespawnPoint(cell);
+            case Tool.TeleportPoint:
+                return !data.HasTeleport(cell);
             default:
                 return true;
         }
@@ -2141,6 +2256,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 if (!add) return data.RemoveRespawnPoint(cell);
                 if (!data.ContainsCell(cell)) return false;
                 return data.PlaceRespawnPoint(cell);
+
+            case Tool.TeleportPoint:
+                if (!add) return data.RemoveTeleport(cell);
+                if (!data.ContainsCell(cell)) return false;
+                return data.PlaceTeleport(cell);
         }
         return false;
     }
@@ -2181,10 +2301,15 @@ public sealed class LabLevelEditorWindow : EditorWindow
     static RectInt CellRect(Vector2 point)
         => new RectInt(Mathf.FloorToInt(point.x), Mathf.FloorToInt(point.y), 1, 1);
 
-    /// <summary>这一格上最上层的物件。优先级：重生点 &gt; 钥匙 &gt; 冰块 &gt; 地刺 &gt; 门 &gt; 绳 &gt; 地形。</summary>
+    /// <summary>这一格上最上层的物件。优先级：传送点 &gt; 重生点 &gt; 钥匙 &gt; 冰块 &gt; 地刺 &gt; 门 &gt; 绳 &gt; 地形。</summary>
     Pick PickAt(Vector2Int cell)
     {
         var data = level.Data;
+
+        if (data.teleports != null)
+            for (int i = 0; i < data.teleports.Count; i++)
+                if (data.teleports[i].Cells().Contains(cell))
+                    return new Pick { kind = PickKind.TeleportPoint, index = i };
 
         if (data.respawnPoints != null)
             for (int i = 0; i < data.respawnPoints.Count; i++)
@@ -2237,6 +2362,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Spike: return pick.index >= 0 && pick.index < data.spikes.Count;
             case PickKind.Ice: return pick.index >= 0 && pick.index < data.ices.Count;
             case PickKind.RespawnPoint: return pick.index >= 0 && pick.index < data.respawnPoints.Count;
+            case PickKind.TeleportPoint: return pick.index >= 0 && pick.index < data.teleports.Count;
             default: return false;
         }
     }
@@ -2253,6 +2379,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Spike: return new RectInt(data.spikes[pick.index].cell, Vector2Int.one);
             case PickKind.Ice: return new RectInt(data.ices[pick.index].cell, Vector2Int.one);
             case PickKind.RespawnPoint: return CellRect(data.respawnPoints[pick.index].position);
+            case PickKind.TeleportPoint: return CellRect(data.teleports[pick.index].position);
             default: return new RectInt(0, 0, 0, 0);
         }
     }
@@ -2268,6 +2395,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Spike: return "地刺 #" + pick.index;
             case PickKind.Ice: return "冰块 #" + pick.index;
             case PickKind.RespawnPoint: return "重生点 #" + pick.index;
+            case PickKind.TeleportPoint: return "传送点 #" + pick.index;
             default: return "（无）";
         }
     }
@@ -2365,55 +2493,22 @@ public sealed class LabLevelEditorWindow : EditorWindow
         }
     }
 
+    /// <summary>
+    /// 只保留四个快捷键：1 铺地形 / 3 擦地形 / 4 选区 / 5 选择。
+    /// 不要新增或恢复其它快捷键；其它工具一律从工具面板选择。
+    /// </summary>
     bool HandleKey(Event e)
     {
         // 拖动过程中不让工具键改工具，否则一个手势会跨到别的工具上。
-        if (gesture && e.keyCode != KeyCode.Escape) return false;
+        if (gesture) return false;
+
         switch (e.keyCode)
         {
             case KeyCode.Alpha1: tool = Tool.Paint; break;
-            case KeyCode.Alpha2: tool = Tool.Erase; break;
-            case KeyCode.Alpha3: tool = Tool.Rect; break;
-            case KeyCode.Alpha4: tool = Tool.Rope; break;
-            case KeyCode.Alpha5: tool = Tool.HorizontalRope; break;
-            case KeyCode.Alpha6: tool = Tool.SpawnA; break;
-            case KeyCode.Alpha7: tool = Tool.SpawnB; break;
-            case KeyCode.Alpha8: tool = Tool.Partition; break;
-            case KeyCode.Alpha9: tool = Tool.Key; break;
-            case KeyCode.Alpha0: tool = Tool.Door; break;
-            case KeyCode.Minus: tool = Tool.Spike; break;
-            case KeyCode.Equals: tool = Tool.Ice; break;
-            case KeyCode.R: tool = Tool.RespawnPoint; break;
-            case KeyCode.S: tool = Tool.Marquee; break;
-            case KeyCode.V: tool = Tool.Move; break;
-            case KeyCode.Delete:
-                if (tool == Tool.Marquee)
-                {
-                    marquees.Clear();
-                    break;
-                }
-                if (tool == Tool.Move)
-                {
-                    DeleteSelection();
-                    break;
-                }
-                if (tool != Tool.Partition || partitionIndex < 0) return false;
-                DeleteSelectedPartition();
-                break;
-            case KeyCode.G: showGrid = !showGrid; break;
-            case KeyCode.Home: FrameLevel(); break;
-            case KeyCode.LeftBracket: ropeLength = Mathf.Max(1, ropeLength - 1); break;
-            case KeyCode.RightBracket: ropeLength = Mathf.Min(MaxRopeLength, ropeLength + 1); break;
-            case KeyCode.Escape:
-                if (!gesture) return false;
-                gesture = false;
-                marqueeDragging = false;
-                movingContent = false;
-                partitionCreating = false;
-                partitionDragIndex = -1;
-                break;
-            default:
-                return false;
+            case KeyCode.Alpha3: tool = Tool.Erase; break;
+            case KeyCode.Alpha4: tool = Tool.Marquee; break;
+            case KeyCode.Alpha5: tool = Tool.Move; break;
+            default: return false;
         }
 
         Repaint();
@@ -2676,6 +2771,28 @@ public sealed class LabLevelEditorWindow : EditorWindow
         }
     }
 
+    void DrawTeleportHandles(LabLevelData data)
+    {
+        if (data.teleports == null || data.teleports.Count == 0) return;
+
+        // 全互联：每两个点之间连一条线，说明进入任意一个都能选其它点作终点。
+        Handles.color = new Color(0.75f, 0.55f, 1f, 0.28f);
+        for (int i = 0; i < data.teleports.Count; i++)
+            for (int j = i + 1; j < data.teleports.Count; j++)
+                Handles.DrawLine(
+                    new Vector3(data.teleports[i].position.x, data.teleports[i].position.y, 0f),
+                    new Vector3(data.teleports[j].position.x, data.teleports[j].position.y, 0f));
+
+        Handles.color = new Color(0.8f, 0.5f, 1f, 0.95f);
+        for (int i = 0; i < data.teleports.Count; i++)
+        {
+            var point = data.teleports[i];
+            Handles.DrawWireCube(new Vector3(point.position.x, point.position.y, 0f),
+                new Vector3(3f, 3f, 0.01f));
+            Handles.Label(new Vector3(point.position.x - 1.4f, point.position.y + 1.6f, 0f), "传送点");
+        }
+    }
+
     static Color IceGroupColor(int groupId)
     {
         float hue = Mathf.Repeat(groupId * 0.37f, 1f);
@@ -2836,6 +2953,19 @@ public sealed class LabLevelEditorWindow : EditorWindow
             return;
         }
 
+        if (tool == Tool.TeleportPoint)
+        {
+            bool blocked = !inBounds;
+            Handles.color = blocked
+                ? new Color(1f, 0.3f, 0.25f, 0.9f)
+                : new Color(color.r, color.g, color.b, 0.8f);
+            Handles.DrawWireCube(new Vector3(cell.x + 0.5f, cell.y + 0.5f, 0f),
+                new Vector3(3f, 3f, 0.01f));
+            Handles.Label(new Vector3(cell.x + 0.5f, cell.y + 2.1f, 0f),
+                data.HasTeleport(cell) ? "传送点（再点删除）" : "传送点");
+            return;
+        }
+
         Handles.color = new Color(color.r, color.g, color.b, 0.18f);
         Handles.DrawSolidRectangleWithOutline(
             RectVerts(cell.x, cell.y, cell.x + 1, cell.y + 1),
@@ -2875,6 +3005,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Spike: return new Color(0.75f, 0.82f, 0.92f, 0.95f);
             case Tool.Ice: return new Color(0.42f, 0.75f, 1f, 0.95f);
             case Tool.RespawnPoint: return new Color(0.35f, 1f, 0.65f, 0.95f);
+            case Tool.TeleportPoint: return new Color(0.8f, 0.5f, 1f, 0.95f);
             case Tool.Marquee: return new Color(0.35f, 0.9f, 1f, 0.95f);
             case Tool.Move: return new Color(1f, 0.55f, 0.2f, 0.95f);
             default: return new Color(1f, 0.85f, 0.3f, 0.95f);

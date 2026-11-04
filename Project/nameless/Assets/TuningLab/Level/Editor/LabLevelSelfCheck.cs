@@ -562,6 +562,66 @@ public static class LabLevelSelfCheck
         Expect(sb, ref failures, !coversCut, "被挖掉的格子不再属于任何选区");
 
         sb.AppendLine();
+        sb.AppendLine("=== 13. 传送点：全互联数据 / 去重 / 随分区移动与删除 ===");
+        Expect(sb, ref failures, data.teleports.Count == 0,
+            "基准房间没有传送点，实际 " + data.teleports.Count);
+
+        var teleportLevel = new LabLevelData();
+        teleportLevel.partitions.Add(new LabLevelPartition { name = "A", bounds = new RectInt(0, 0, 10, 10) });
+        teleportLevel.partitions.Add(new LabLevelPartition { name = "B", bounds = new RectInt(20, 0, 10, 10) });
+
+        Expect(sb, ref failures, teleportLevel.PlaceTeleport(new Vector2Int(2, 1)), "A 里放一个传送点");
+        Expect(sb, ref failures, teleportLevel.PlaceTeleport(new Vector2Int(22, 1)), "B 里放一个传送点");
+        Expect(sb, ref failures, !teleportLevel.PlaceTeleport(new Vector2Int(2, 1)),
+            "同一格重复放 = 无变化");
+        Expect(sb, ref failures, teleportLevel.HasTeleport(new Vector2Int(2, 1)), "查得到 A 的传送点");
+        Expect(sb, ref failures, !teleportLevel.HasTeleport(new Vector2Int(7, 7)), "没放过的格没有传送点");
+        Expect(sb, ref failures,
+            SamePoint(teleportLevel.teleports[0].position, new Vector2(2.5f, 1.5f)),
+            "传送点落在格中心");
+        Expect(sb, ref failures,
+            teleportLevel.teleports[0].Cells() == new RectInt(1, 0, 3, 3),
+            "触发区是 3×3：" + teleportLevel.teleports[0].Cells());
+
+        teleportLevel.teleports.Add(new LabTeleportSpec(new Vector2(2.5f, 1.5f)));
+        teleportLevel.Normalize();
+        Expect(sb, ref failures, teleportLevel.teleports.Count == 2,
+            "Normalize 同位置去重，实际 " + teleportLevel.teleports.Count);
+
+        var teleportClone = teleportLevel.Clone();
+        Expect(sb, ref failures, teleportClone.teleports.Count == 2, "Clone 带上传送点");
+        teleportClone.teleports[0] = new LabTeleportSpec(new Vector2(99f, 99f));
+        Expect(sb, ref failures, teleportLevel.HasTeleport(new Vector2Int(2, 1)), "Clone 是深拷贝");
+
+        Expect(sb, ref failures, teleportLevel.MovePartition(0, new Vector2Int(3, 4), true),
+            "移动分区 A");
+        Expect(sb, ref failures, teleportLevel.HasTeleport(new Vector2Int(5, 5)),
+            "A 里的传送点跟着移动");
+        Expect(sb, ref failures, !teleportLevel.HasTeleport(new Vector2Int(2, 1)),
+            "旧位置的传送点没有留下");
+        Expect(sb, ref failures, teleportLevel.HasTeleport(new Vector2Int(22, 1)),
+            "分区 B 的传送点不动");
+
+        Expect(sb, ref failures, teleportLevel.RemoveTeleport(new Vector2Int(5, 5)),
+            "按格删掉 A 的传送点");
+        Expect(sb, ref failures, !teleportLevel.RemoveTeleport(new Vector2Int(5, 5)),
+            "同一格再删返回 false");
+        teleportLevel.PlaceTeleport(new Vector2Int(5, 5));
+
+        var teleportArea = new List<RectInt> { new RectInt(5, 5, 1, 1) };
+        Expect(sb, ref failures, teleportLevel.CountContents(teleportArea, false) == 1,
+            "选区计数带上传送点");
+        Expect(sb, ref failures, teleportLevel.MoveContents(teleportArea, new Vector2Int(1, 0)) == 1,
+            "选区平移带上传送点");
+        Expect(sb, ref failures, teleportLevel.HasTeleport(new Vector2Int(6, 5)),
+            "传送点跟着选区移动");
+
+        Expect(sb, ref failures, teleportLevel.DeletePartition(0, true), "删除分区 A（带内容）");
+        Expect(sb, ref failures,
+            teleportLevel.teleports.Count == 1 && teleportLevel.HasTeleport(new Vector2Int(22, 1)),
+            "A 里的传送点被删，B 的留下");
+
+        sb.AppendLine();
         fails = failures;
         sb.AppendLine(failures == 0 ? "全部通过。" : ("失败 " + failures + " 项。"));
         return sb;

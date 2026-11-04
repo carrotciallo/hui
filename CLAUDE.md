@@ -50,6 +50,7 @@ git diff Project/nameless/ProjectSettings/EditorBuildSettings.asset
 - 规则、玩家和相机复用 `Assets/TuningLab/`；不要新建第二套速度或碰撞规则。
 - 预览和 Play 共用 `LabLevel.Build`。
 - 新增可摆放关卡组件时，同时考虑数据模型、生成、编辑器操作、撤销、分区移动、校验和文档。
+- 关卡编辑器快捷键只允许 `1` 铺地形、`3` 擦地形、`4` 选区、`5` 选择；禁止新增或恢复其它快捷键。
 - 每个资源文件提交对应 `.meta`；文本资源使用 LF。
 
 ## 变更流程

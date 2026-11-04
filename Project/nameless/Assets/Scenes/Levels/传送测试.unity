@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &1901325367
+--- !u!1 &129094122
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,9 +127,9 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1901325369}
-  - component: {fileID: 1901325368}
-  - component: {fileID: 1901325370}
+  - component: {fileID: 129094124}
+  - component: {fileID: 129094123}
+  - component: {fileID: 129094125}
   m_Layer: 0
   m_Name: TuningLab
   m_TagString: Untagged
@@ -137,19 +137,19 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1901325368
+--- !u!114 &129094123
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1901325367}
+  m_GameObject: {fileID: 129094122}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 94a56449bed4e0343a7e8ea109dbc0f9, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TuningLab
-  timeScale: 1
+  m_EditorClassIdentifier: GameJam.Lab::TuningLab
+  timeScale: 0.7
   roomScale: 1
   freeCamera: 1
   gravity: 50
@@ -169,7 +169,10 @@ MonoBehaviour:
   groundOnlyDash: 0
   redHotTierIndex: 1
   redHotDuration: 2.25
+  forgeTierIndex: 0
   verticalHitEnabled: 1
+  iceBreakTierIndex: 2
+  deathWhenNoCheckpoint: 0
   tierFirstCells: 4
   tierSpacingCells: 4
   tierCount: 4
@@ -177,7 +180,7 @@ MonoBehaviour:
   showPixelGrid: 0
   showGrid: 1
   autoBuild: 1
-  level: {fileID: 1901325370}
+  level: {fileID: 129094125}
   defaultCameraMinSize: 6.75
   defaultCameraMaxSize: 27
   defaultCameraBounds:
@@ -187,13 +190,13 @@ MonoBehaviour:
     width: 26
     height: 17
   cameraFrameBlend: 8
---- !u!4 &1901325369
+--- !u!4 &129094124
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1901325367}
+  m_GameObject: {fileID: 129094122}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -202,40 +205,32 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1901325370
+--- !u!114 &129094125
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1901325367}
+  m_GameObject: {fileID: 129094122}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0d6bb75c521c6f348a7e38bd3fb6ceb8, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::LabLevel
+  m_EditorClassIdentifier: GameJam.Lab::LabLevel
   data:
     bounds:
-      x: -15
-      y: -2
-      width: 200
-      height: 227
-    spawnA: {x: 5.5, y: 2}
-    spawnB: {x: 11.5, y: 0}
+      x: -13
+      y: -1
+      width: 26
+      height: 17
+    spawnA: {x: 8, y: 0}
+    spawnB: {x: 10, y: 0}
     cameraMinSize: 6.75
     cameraMaxSize: 27
     solids:
-    - {x: 10, y: -2}
-    - {x: 11, y: -2}
-    - {x: 12, y: -2}
-    - {x: 13, y: -2}
-    - {x: 14, y: -2}
-    - {x: 15, y: -2}
-    - {x: 16, y: -2}
-    - {x: 17, y: -2}
-    - {x: 18, y: -2}
-    - {x: 19, y: -2}
-    - {x: 20, y: -2}
+    - {x: -17, y: -1}
+    - {x: -16, y: -1}
+    - {x: -15, y: -1}
     - {x: -14, y: -1}
     - {x: -13, y: -1}
     - {x: -12, y: -1}
@@ -271,117 +266,22 @@ MonoBehaviour:
     - {x: 18, y: -1}
     - {x: 19, y: -1}
     - {x: 20, y: -1}
-    - {x: 21, y: -1}
-    - {x: 22, y: -1}
-    - {x: 23, y: -1}
-    - {x: 24, y: -1}
-    - {x: 25, y: -1}
-    - {x: 26, y: -1}
-    - {x: 27, y: -1}
-    - {x: 28, y: -1}
-    - {x: 29, y: -1}
-    - {x: 30, y: -1}
-    - {x: 31, y: -1}
-    - {x: 32, y: -1}
-    - {x: 33, y: -1}
-    - {x: 34, y: -1}
-    - {x: 35, y: -1}
-    - {x: 36, y: -1}
-    - {x: 37, y: -1}
-    - {x: 38, y: -1}
-    - {x: 39, y: -1}
-    - {x: 40, y: -1}
-    - {x: 41, y: -1}
-    - {x: 42, y: -1}
-    - {x: 43, y: -1}
-    - {x: 44, y: -1}
-    - {x: 45, y: -1}
-    - {x: 46, y: -1}
-    - {x: 47, y: -1}
-    - {x: 48, y: -1}
-    - {x: 49, y: -1}
-    - {x: 50, y: -1}
-    - {x: 51, y: -1}
-    - {x: 52, y: -1}
-    - {x: 53, y: -1}
-    - {x: 54, y: -1}
-    - {x: 55, y: -1}
-    - {x: 56, y: -1}
-    - {x: 57, y: -1}
-    - {x: 58, y: -1}
-    - {x: 59, y: -1}
-    - {x: 60, y: -1}
-    - {x: 61, y: -1}
-    - {x: 62, y: -1}
-    - {x: 63, y: -1}
-    - {x: 64, y: -1}
-    - {x: 65, y: -1}
-    - {x: -15, y: 0}
-    - {x: -14, y: 0}
-    - {x: 25, y: 0}
-    - {x: 62, y: 0}
-    - {x: 63, y: 0}
-    - {x: 64, y: 0}
-    - {x: 65, y: 0}
-    - {x: 13, y: 5}
-    - {x: 13, y: 6}
-    - {x: 22, y: 6}
-    - {x: 43, y: 6}
-    - {x: 44, y: 6}
-    - {x: 45, y: 6}
-    - {x: 46, y: 6}
-    - {x: 47, y: 6}
-    - {x: 48, y: 6}
-    - {x: 49, y: 6}
-    - {x: 50, y: 6}
-    - {x: 51, y: 6}
-    - {x: 52, y: 6}
-    - {x: 53, y: 6}
-    - {x: 54, y: 6}
-    - {x: 55, y: 6}
-    - {x: 56, y: 6}
-    - {x: 13, y: 7}
-    - {x: 22, y: 7}
-    - {x: 43, y: 7}
-    - {x: 56, y: 7}
-    - {x: 13, y: 8}
-    - {x: 22, y: 8}
-    - {x: 43, y: 8}
-    - {x: 56, y: 8}
-    - {x: 13, y: 9}
-    - {x: 22, y: 9}
-    - {x: 43, y: 9}
-    - {x: 56, y: 9}
-    - {x: 4, y: 10}
-    - {x: 13, y: 10}
-    - {x: 22, y: 10}
-    - {x: 43, y: 10}
-    - {x: 56, y: 10}
-    - {x: 4, y: 11}
-    - {x: 13, y: 11}
-    - {x: 22, y: 11}
-    - {x: 43, y: 11}
-    - {x: 56, y: 11}
-    - {x: 4, y: 12}
-    - {x: 13, y: 12}
-    - {x: 22, y: 12}
-    - {x: 31, y: 12}
-    - {x: 56, y: 12}
-    - {x: 4, y: 13}
-    - {x: 13, y: 13}
-    - {x: 22, y: 13}
-    - {x: 31, y: 13}
-    - {x: 56, y: 13}
-    - {x: 4, y: 14}
-    - {x: 13, y: 14}
-    - {x: 22, y: 14}
-    - {x: 31, y: 14}
-    - {x: 4, y: 15}
-    - {x: 13, y: 15}
-    - {x: 14, y: 15}
-    - {x: 22, y: 15}
-    - {x: 31, y: 15}
+    - {x: -17, y: 0}
+    - {x: -17, y: 1}
+    - {x: -17, y: 2}
+    - {x: -17, y: 3}
+    - {x: -17, y: 4}
+    - {x: -17, y: 5}
     ropes: []
+    keys: []
+    doors: []
+    spikes: []
+    ices: []
+    respawnPoints:
+    - position: {x: -0.5, y: 1.5}
+    teleports:
+    - position: {x: -11.5, y: 1.5}
+    - position: {x: -5.5, y: 1.5}
     partitions:
     - name: Level 1
       bounds:
@@ -389,20 +289,8 @@ MonoBehaviour:
         y: -1
         width: 26
         height: 17
-    - name: Level 2
-      bounds:
-        x: 23
-        y: 0
-        width: 20
-        height: 16
-    - name: Level 3
-      bounds:
-        x: 57
-        y: -1
-        width: 16
-        height: 12
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 1901325369}
+  - {fileID: 129094124}
