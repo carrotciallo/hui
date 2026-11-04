@@ -35,7 +35,7 @@
 | `Assets/TuningLab/LabVerticalRope.cs` | 竖绳；`ApplyShape` 同时服务预览和 Play |
 | `Assets/TuningLab/LabHorizontalRope.cs` | 横绳平台；零/一级挡住、二级向下穿过、三级以上反弹并提升一级 |
 | `Assets/TuningLab/LabIce.cs` | 冰块：`groupId` 编组、单块融化、整组破坏和地图重置恢复 |
-| `Assets/TuningLab/LabRespawnPoint.cs` | 重生点：3×3 触发区，唯一玩家接触才记录；`ApplyShape` 同时服务预览和 Play |
+| `Assets/TuningLab/LabRespawnPoint.cs` | 重生点：3×3 触发区，任一玩家接触即双人固定重生并刷新地图；`ApplyShape` 同时服务预览和 Play |
 | `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据：实心格、绳、钥匙/门、地刺、冰块、重生点、出生点、相机尺寸、**关卡分区** |
 | `Assets/TuningLab/Level/LabLevel.cs` | 数据 → 合并 `BoxCollider2D` / 绳 / 地刺 / 冰块 / 重生点；编辑器预览和 Play 共用 |
 | `Assets/TuningLab/Level/Editor/LabLevelScene.cs` | 从 `TuningLab.unity` 派生关卡场景；默认 `Level 1` 分区 |
@@ -351,11 +351,11 @@
 
 | 条件 | 行为 |
 | --- | --- |
-| 有激活检查点 | 两人回检查点，清钥匙并重置地图 |
+| 有激活检查点 | 两人以全新状态回检查点的 A 左 / B 右固定位置，清钥匙并重置地图 |
 | 无检查点，`DestroyPlayer` | 保留旧实验台行为，销毁死亡玩家 |
 | 无检查点，`RespawnAtSpawn` | 两人回出生点并重置地图 |
 
-重生点由单名存活玩家的接触强制激活，不再要求钥匙；多个重生点按实际接触切换且同时只有一个激活。两人同时接触同一点时不会记录或激活。传送门调用地图重置时不会清除已激活重生点及其记录。
+重生点由任一玩家接触强制激活，不再要求钥匙；多个重生点按实际接触切换且同时只有一个激活。触发时地图只重置一次，两人清空钥匙和运动状态，并分别回到以重生点为中心、左右各 1 格的固定位置。玩家全部离开后再次进入会再次触发；持续站在区域内不会重复重置。后续从已激活点死亡回归也复用同一位置和重置规则。
 
 关卡编辑器的“重生点”工具（快捷键 `R`）会把点写入 `LabLevelData`，预览和 Play 都由 `LabLevel.Build` 生成 3×3 触发器。点击同一格可删除，编辑器面板也支持逐个删除和清空；分区移动、删除和撤销会同步处理这些点。
 
