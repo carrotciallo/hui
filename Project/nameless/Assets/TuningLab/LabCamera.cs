@@ -29,6 +29,11 @@ public sealed class LabCamera : MonoBehaviour
     float activeMinSize;
     float activeMaxSize;
     bool frameReady;
+    bool focusActive;
+    Vector3 focusFrom;
+    Vector3 focusTo;
+    float focusStarted;
+    float focusDuration;
 
     void Awake() => cam = GetComponent<Camera>();
 
@@ -67,6 +72,18 @@ public sealed class LabCamera : MonoBehaviour
     {
         if (cam == null) return;
 
+        if (focusActive)
+        {
+            float progress = focusDuration <= 0f
+                ? 1f
+                : Mathf.Clamp01((Time.unscaledTime - focusStarted) / focusDuration);
+            Vector3 focused = Vector3.Lerp(focusFrom, focusTo, progress);
+            focused.z = transform.position.z;
+            transform.position = Clamp(focused, cam.orthographicSize);
+            if (progress >= 1f) focusActive = false;
+            return;
+        }
+
         // 一方死亡（GameObject 被销毁）后，相机绑在活着的这个人身上，spread 归零 = 不再伸缩。
         bool hasA = a != null;
         bool hasB = b != null;
@@ -90,6 +107,20 @@ public sealed class LabCamera : MonoBehaviour
 
         Vector3 next = Vector3.Lerp(transform.position, focus + offset, t);
         transform.position = Clamp(next, cam.orthographicSize);
+    }
+
+    public void FocusOn(Vector2 worldPosition, float duration)
+    {
+        focusActive = true;
+        focusFrom = transform.position;
+        focusTo = new Vector3(worldPosition.x, worldPosition.y, transform.position.z);
+        focusStarted = Time.unscaledTime;
+        focusDuration = Mathf.Max(0f, duration);
+    }
+
+    public void ResumeFollowing()
+    {
+        focusActive = false;
     }
 
     /// <summary>

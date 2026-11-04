@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-/// <summary>双人传送点：两人同时进入后由冲刺确认，传送保留速度和形态。</summary>
+/// <summary>双人传送点：两人同时进入后标记，进入全局传送选择并保留速度和形态。</summary>
 [RequireComponent(typeof(BoxCollider2D), typeof(SpriteRenderer))]
 public sealed class LabTeleportPoint : MonoBehaviour
 {
@@ -14,7 +14,7 @@ public sealed class LabTeleportPoint : MonoBehaviour
     TuningLab lab;
     bool aInside;
     bool bInside;
-    bool activating;
+    public bool Marked { get; private set; }
 
     void Awake()
     {
@@ -46,36 +46,31 @@ public sealed class LabTeleportPoint : MonoBehaviour
 
     void Update()
     {
-        if (activating || !aInside || !bInside || destination == null || lab == null) return;
+        if (!aInside || !bInside || destination == null || lab == null || lab.TeleportSelecting) return;
         var kb = Keyboard.current;
         if (kb == null) return;
         if (kb.leftShiftKey.wasPressedThisFrame || kb.periodKey.wasPressedThisFrame)
-            Activate();
+            lab.EnterTeleportSelection(this);
     }
 
-    void FixedUpdate()
+    public void SetMarked(bool marked)
     {
-        if (!activating || lab == null) return;
-        if (lab.PlayerA != null) lab.PlayerA.TeleportPreservingState(lab.PlayerA.transform.position, Vector2.zero);
-        if (lab.PlayerB != null) lab.PlayerB.TeleportPreservingState(lab.PlayerB.transform.position, Vector2.zero);
+        Marked = marked;
+        renderer.color = marked ? activeColor : inactiveColor;
     }
 
-    void Activate()
+    public void TeleportPlayers(TuningLab owner, Vector2 velocityA, Vector2 velocityB)
     {
-        activating = true;
-        renderer.color = activeColor;
-        Vector2 velocityA = lab.PlayerA != null ? lab.PlayerA.Velocity : Vector2.zero;
-        Vector2 velocityB = lab.PlayerB != null ? lab.PlayerB.Velocity : Vector2.zero;
-
-        lab.ResetMap();
-        if (lab.PlayerA != null)
-            lab.PlayerA.TeleportPreservingState(destination.transform.position + Vector3.left * 0.65f, velocityA);
-        if (lab.PlayerB != null)
-            lab.PlayerB.TeleportPreservingState(destination.transform.position + Vector3.right * 0.65f, velocityB);
-        if (lab.PlayerA != null) lab.PlayerA.ClearKeys();
-        if (lab.PlayerB != null) lab.PlayerB.ClearKeys();
-        activating = false;
-        renderer.color = inactiveColor;
+        if (owner == null || destination == null) return;
+        owner.PlayerA?.ResumeFromTeleportSelection();
+        owner.PlayerB?.ResumeFromTeleportSelection();
+        owner.ResetMap();
+        if (owner.PlayerA != null)
+            owner.PlayerA.TeleportPreservingState(destination.transform.position + Vector3.left * 0.65f, velocityA);
+        if (owner.PlayerB != null)
+            owner.PlayerB.TeleportPreservingState(destination.transform.position + Vector3.right * 0.65f, velocityB);
+        if (owner.PlayerA != null) owner.PlayerA.ClearKeys();
+        if (owner.PlayerB != null) owner.PlayerB.ClearKeys();
     }
 
     static Sprite MakeSprite()

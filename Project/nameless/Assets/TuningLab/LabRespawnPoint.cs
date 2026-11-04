@@ -61,6 +61,14 @@ public sealed class LabRespawnPoint : MonoBehaviour
         }
     }
 
+    public void ResetPoint()
+    {
+        IsActive = false;
+        savedA = Vector2.zero;
+        savedB = Vector2.zero;
+        if (renderer != null) renderer.color = inactiveColor;
+    }
+
     static Sprite MakeSprite()
     {
         const int size = TuningLab.CellPixels * 3;

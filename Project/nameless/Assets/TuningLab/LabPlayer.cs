@@ -158,6 +158,9 @@ public class LabPlayer : MonoBehaviour
     Vector2 chamberVelocity;        // B 进入时的速度 V前
     Vector2 chamberDir;             // B 进入时的冲刺轴，射出取它的反向
     bool gliding;                   // 水平射出：速度降到零级之前不受重力
+    RigidbodyType2D teleportPreviousBodyType;
+    float teleportPreviousGravityScale;
+    bool teleportFrozen;
 
     bool loadedConverter;
     Edge converterExitEdge;
@@ -187,6 +190,7 @@ public class LabPlayer : MonoBehaviour
     void Update()
     {
         ReadInput();
+        if (lab != null && lab.TeleportSelecting) return;
 
         // 膛里的 B：移动无效，冲刺键改成给宿主开炮。
         if (host != null)
@@ -970,6 +974,25 @@ public class LabPlayer : MonoBehaviour
         Teleport(position);
         for (int i = 0; i < savedEdges.Length; i++) SetEdge((Edge)i, savedEdges[i]);
         rb.linearVelocity = velocity;
+    }
+
+    public void FreezeForTeleportSelection()
+    {
+        if (teleportFrozen) return;
+        teleportPreviousBodyType = rb.bodyType;
+        teleportPreviousGravityScale = rb.gravityScale;
+        teleportFrozen = true;
+        rb.bodyType = RigidbodyType2D.Kinematic;
+        rb.gravityScale = 0f;
+        rb.linearVelocity = Vector2.zero;
+    }
+
+    public void ResumeFromTeleportSelection()
+    {
+        if (!teleportFrozen) return;
+        rb.bodyType = teleportPreviousBodyType;
+        rb.gravityScale = teleportPreviousGravityScale;
+        teleportFrozen = false;
     }
 
     // ------------------------------------------------------------------
