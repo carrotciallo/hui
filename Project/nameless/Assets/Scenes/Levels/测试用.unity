@@ -1,0 +1,537 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!29 &1
+OcclusionCullingSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_OcclusionBakeSettings:
+    smallestOccluder: 5
+    smallestHole: 0.25
+    backfaceThreshold: 100
+  m_SceneGUID: 00000000000000000000000000000000
+  m_OcclusionCullingData: {fileID: 0}
+--- !u!104 &2
+RenderSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 10
+  m_Fog: 0
+  m_FogColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  m_FogMode: 3
+  m_FogDensity: 0.01
+  m_LinearFogStart: 0
+  m_LinearFogEnd: 300
+  m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
+  m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
+  m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
+  m_AmbientIntensity: 1
+  m_AmbientMode: 3
+  m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
+  m_SkyboxMaterial: {fileID: 0}
+  m_HaloStrength: 0.5
+  m_FlareStrength: 1
+  m_FlareFadeSpeed: 3
+  m_HaloTexture: {fileID: 0}
+  m_SpotCookie: {fileID: 10001, guid: 0000000000000000e000000000000000, type: 0}
+  m_DefaultReflectionMode: 0
+  m_DefaultReflectionResolution: 128
+  m_ReflectionBounces: 1
+  m_ReflectionIntensity: 1
+  m_CustomReflection: {fileID: 0}
+  m_Sun: {fileID: 0}
+  m_UseRadianceAmbientProbe: 0
+--- !u!157 &3
+LightmapSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 13
+  m_BakeOnSceneLoad: 0
+  m_GISettings:
+    serializedVersion: 2
+    m_BounceScale: 1
+    m_IndirectOutputScale: 1
+    m_AlbedoBoost: 1
+    m_EnvironmentLightingMode: 0
+    m_EnableBakedLightmaps: 0
+    m_EnableRealtimeLightmaps: 0
+  m_LightmapEditorSettings:
+    serializedVersion: 12
+    m_Resolution: 2
+    m_BakeResolution: 40
+    m_AtlasSize: 1024
+    m_AO: 0
+    m_AOMaxDistance: 1
+    m_CompAOExponent: 1
+    m_CompAOExponentDirect: 0
+    m_ExtractAmbientOcclusion: 0
+    m_Padding: 2
+    m_LightmapParameters: {fileID: 0}
+    m_LightmapsBakeMode: 1
+    m_TextureCompression: 1
+    m_ReflectionCompression: 2
+    m_MixedBakeMode: 2
+    m_BakeBackend: 2
+    m_PVRSampling: 1
+    m_PVRDirectSampleCount: 32
+    m_PVRSampleCount: 512
+    m_PVRBounces: 2
+    m_PVREnvironmentSampleCount: 256
+    m_PVREnvironmentReferencePointCount: 2048
+    m_PVRFilteringMode: 1
+    m_PVRDenoiserTypeDirect: 2
+    m_PVRDenoiserTypeIndirect: 2
+    m_PVRDenoiserTypeAO: 2
+    m_PVRFilterTypeDirect: 0
+    m_PVRFilterTypeIndirect: 0
+    m_PVRFilterTypeAO: 0
+    m_PVREnvironmentMIS: 1
+    m_PVRCulling: 1
+    m_PVRFilteringGaussRadiusDirect: 1
+    m_PVRFilteringGaussRadiusIndirect: 1
+    m_PVRFilteringGaussRadiusAO: 1
+    m_PVRFilteringAtrousPositionSigmaDirect: 0.5
+    m_PVRFilteringAtrousPositionSigmaIndirect: 2
+    m_PVRFilteringAtrousPositionSigmaAO: 1
+    m_ExportTrainingData: 0
+    m_TrainingDataDestination: TrainingData
+    m_LightProbeSampleCountMultiplier: 4
+  m_LightingDataAsset: {fileID: 20201, guid: 0000000000000000f000000000000000, type: 0}
+  m_LightingSettings: {fileID: 0}
+--- !u!196 &4
+NavMeshSettings:
+  serializedVersion: 2
+  m_ObjectHideFlags: 0
+  m_BuildSettings:
+    serializedVersion: 3
+    agentTypeID: 0
+    agentRadius: 0.5
+    agentHeight: 2
+    agentSlope: 45
+    agentClimb: 0.4
+    ledgeDropHeight: 0
+    maxJumpAcrossDistance: 0
+    minRegionArea: 2
+    manualCellSize: 0
+    cellSize: 0.16666667
+    manualTileSize: 0
+    tileSize: 256
+    buildHeightMesh: 0
+    maxJobWorkers: 0
+    preserveTilesOutsideBounds: 0
+    debug:
+      m_Flags: 0
+  m_NavMeshData: {fileID: 0}
+--- !u!1 &1055498865
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1055498867}
+  - component: {fileID: 1055498866}
+  - component: {fileID: 1055498868}
+  m_Layer: 0
+  m_Name: TuningLab
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1055498866
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1055498865}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94a56449bed4e0343a7e8ea109dbc0f9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: GameJam.Lab::TuningLab
+  timeScale: 0.6
+  roomScale: 1
+  freeCamera: 1
+  gravity: 50
+  jumpCells: 2.2
+  holdToJump: 0
+  coyoteTime: 0.08
+  jumpBufferTime: 0.08
+  walkSpeed: 8
+  walkAccel: 140
+  groundBrake: 30
+  airBrake: 0
+  horizontalAirDrag: 1
+  dashDistanceCells: 4
+  dashOverV0Cells: 0.05
+  dashLockTime: 0
+  dashCooldown: 0.8
+  groundOnlyDash: 0
+  redHotTierIndex: 1
+  redHotDuration: 1.5
+  forgeTierIndex: 0
+  verticalHitEnabled: 1
+  iceBreakTierIndex: 2
+  deathWhenNoCheckpoint: 0
+  tierFirstCells: 4
+  tierSpacingCells: 4
+  tierCount: 6
+  maxFallSpeed: 42
+  showPixelGrid: 0
+  showGrid: 1
+  autoBuild: 1
+  level: {fileID: 1055498868}
+  defaultCameraMinSize: 6.75
+  defaultCameraMaxSize: 27
+  defaultCameraBounds:
+    serializedVersion: 2
+    x: -13
+    y: -1
+    width: 26
+    height: 17
+  cameraFrameBlend: 8
+--- !u!4 &1055498867
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1055498865}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1055498868
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1055498865}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0d6bb75c521c6f348a7e38bd3fb6ceb8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: GameJam.Lab::LabLevel
+  data:
+    bounds:
+      x: -18
+      y: -1
+      width: 103
+      height: 109
+    spawnA: {x: 5.5, y: 17}
+    spawnB: {x: 5.5, y: 18}
+    cameraMinSize: 11.1
+    cameraMaxSize: 27
+    solids:
+    - {x: -6, y: 16}
+    - {x: -5, y: 16}
+    - {x: -4, y: 16}
+    - {x: -3, y: 16}
+    - {x: -2, y: 16}
+    - {x: -1, y: 16}
+    - {x: 0, y: 16}
+    - {x: 1, y: 16}
+    - {x: 2, y: 16}
+    - {x: 3, y: 16}
+    - {x: 4, y: 16}
+    - {x: 5, y: 16}
+    - {x: 6, y: 16}
+    - {x: 7, y: 16}
+    - {x: 8, y: 16}
+    - {x: 9, y: 16}
+    - {x: 10, y: 16}
+    - {x: 11, y: 16}
+    - {x: 12, y: 16}
+    - {x: 13, y: 16}
+    - {x: -19, y: 17}
+    - {x: -18, y: 17}
+    - {x: -17, y: 17}
+    - {x: -16, y: 17}
+    - {x: -15, y: 17}
+    - {x: -14, y: 17}
+    - {x: -13, y: 17}
+    - {x: -12, y: 17}
+    - {x: -11, y: 17}
+    - {x: -10, y: 17}
+    - {x: -9, y: 17}
+    - {x: -8, y: 17}
+    - {x: -7, y: 17}
+    - {x: -6, y: 17}
+    - {x: -5, y: 17}
+    - {x: -4, y: 17}
+    - {x: -3, y: 17}
+    - {x: -2, y: 17}
+    - {x: -1, y: 17}
+    - {x: 0, y: 17}
+    - {x: 1, y: 17}
+    - {x: 2, y: 17}
+    - {x: 3, y: 17}
+    - {x: -26, y: 18}
+    - {x: -25, y: 18}
+    - {x: -24, y: 18}
+    - {x: -23, y: 18}
+    - {x: -22, y: 18}
+    - {x: -21, y: 18}
+    - {x: -20, y: 18}
+    - {x: -18, y: 18}
+    - {x: -18, y: 19}
+    - {x: -18, y: 20}
+    - {x: -4, y: 20}
+    - {x: -18, y: 21}
+    - {x: -4, y: 21}
+    - {x: -18, y: 22}
+    - {x: -4, y: 22}
+    - {x: -4, y: 23}
+    - {x: 1, y: 23}
+    - {x: 2, y: 23}
+    - {x: 3, y: 23}
+    - {x: -4, y: 24}
+    - {x: 0, y: 24}
+    - {x: -4, y: 25}
+    - {x: 0, y: 25}
+    - {x: -5, y: 26}
+    - {x: -5, y: 27}
+    - {x: -5, y: 28}
+    - {x: -5, y: 29}
+    - {x: -5, y: 30}
+    - {x: -4, y: 31}
+    - {x: -4, y: 32}
+    - {x: -4, y: 33}
+    - {x: -1, y: 39}
+    - {x: -4, y: 40}
+    - {x: -3, y: 40}
+    - {x: -2, y: 40}
+    - {x: -4, y: 41}
+    - {x: -4, y: 42}
+    - {x: -4, y: 43}
+    ropes: []
+    keys: []
+    doors: []
+    spikes: []
+    ices:
+    - cell: {x: 21, y: 15}
+      groupId: 1
+    - cell: {x: 22, y: 15}
+      groupId: 1
+    - cell: {x: 23, y: 15}
+      groupId: 1
+    - cell: {x: 24, y: 15}
+      groupId: 1
+    - cell: {x: 25, y: 15}
+      groupId: 1
+    - cell: {x: 26, y: 15}
+      groupId: 1
+    - cell: {x: 27, y: 15}
+      groupId: 1
+    - cell: {x: 28, y: 15}
+      groupId: 1
+    - cell: {x: 29, y: 15}
+      groupId: 1
+    - cell: {x: 30, y: 15}
+      groupId: 1
+    - cell: {x: 31, y: 15}
+      groupId: 1
+    - cell: {x: 32, y: 15}
+      groupId: 1
+    - cell: {x: 33, y: 15}
+      groupId: 1
+    - cell: {x: 34, y: 15}
+      groupId: 1
+    - cell: {x: 35, y: 15}
+      groupId: 1
+    - cell: {x: 36, y: 15}
+      groupId: 1
+    - cell: {x: 37, y: 15}
+      groupId: 1
+    - cell: {x: 38, y: 15}
+      groupId: 1
+    - cell: {x: 39, y: 15}
+      groupId: 1
+    - cell: {x: 40, y: 15}
+      groupId: 1
+    - cell: {x: 41, y: 15}
+      groupId: 1
+    - cell: {x: 42, y: 15}
+      groupId: 1
+    - cell: {x: 43, y: 15}
+      groupId: 1
+    - cell: {x: 44, y: 15}
+      groupId: 1
+    - cell: {x: 45, y: 15}
+      groupId: 1
+    - cell: {x: 46, y: 15}
+      groupId: 1
+    - cell: {x: 47, y: 15}
+      groupId: 1
+    - cell: {x: 48, y: 15}
+      groupId: 1
+    - cell: {x: 71, y: 15}
+      groupId: 1
+    - cell: {x: 72, y: 15}
+      groupId: 1
+    - cell: {x: 73, y: 15}
+      groupId: 1
+    - cell: {x: 74, y: 15}
+      groupId: 1
+    - cell: {x: 75, y: 15}
+      groupId: 1
+    - cell: {x: 14, y: 16}
+      groupId: 1
+    - cell: {x: 15, y: 16}
+      groupId: 1
+    - cell: {x: 16, y: 16}
+      groupId: 1
+    - cell: {x: 17, y: 16}
+      groupId: 1
+    - cell: {x: 18, y: 16}
+      groupId: 1
+    - cell: {x: 19, y: 16}
+      groupId: 1
+    - cell: {x: 20, y: 16}
+      groupId: 1
+    - cell: {x: 21, y: 16}
+      groupId: 1
+    - cell: {x: 22, y: 16}
+      groupId: 1
+    - cell: {x: 23, y: 16}
+      groupId: 1
+    - cell: {x: 24, y: 16}
+      groupId: 1
+    - cell: {x: 25, y: 16}
+      groupId: 1
+    - cell: {x: 26, y: 16}
+      groupId: 1
+    - cell: {x: 27, y: 16}
+      groupId: 1
+    - cell: {x: 28, y: 16}
+      groupId: 1
+    - cell: {x: 29, y: 16}
+      groupId: 1
+    - cell: {x: 30, y: 16}
+      groupId: 1
+    - cell: {x: 31, y: 16}
+      groupId: 1
+    - cell: {x: 32, y: 16}
+      groupId: 1
+    - cell: {x: 33, y: 16}
+      groupId: 1
+    - cell: {x: 34, y: 16}
+      groupId: 1
+    - cell: {x: 35, y: 16}
+      groupId: 1
+    - cell: {x: 36, y: 16}
+      groupId: 1
+    - cell: {x: 37, y: 16}
+      groupId: 1
+    - cell: {x: 38, y: 16}
+      groupId: 1
+    - cell: {x: 39, y: 16}
+      groupId: 1
+    - cell: {x: 40, y: 16}
+      groupId: 1
+    - cell: {x: 41, y: 16}
+      groupId: 1
+    - cell: {x: 42, y: 16}
+      groupId: 1
+    - cell: {x: 43, y: 16}
+      groupId: 1
+    - cell: {x: 44, y: 16}
+      groupId: 1
+    - cell: {x: 45, y: 16}
+      groupId: 1
+    - cell: {x: 46, y: 16}
+      groupId: 1
+    - cell: {x: 47, y: 16}
+      groupId: 1
+    - cell: {x: 48, y: 16}
+      groupId: 1
+    - cell: {x: 49, y: 16}
+      groupId: 1
+    - cell: {x: 50, y: 16}
+      groupId: 1
+    - cell: {x: 51, y: 16}
+      groupId: 1
+    - cell: {x: 52, y: 16}
+      groupId: 1
+    - cell: {x: 53, y: 16}
+      groupId: 1
+    - cell: {x: 54, y: 16}
+      groupId: 1
+    - cell: {x: 55, y: 16}
+      groupId: 1
+    - cell: {x: 56, y: 16}
+      groupId: 1
+    - cell: {x: 57, y: 16}
+      groupId: 1
+    - cell: {x: 58, y: 16}
+      groupId: 1
+    - cell: {x: 59, y: 16}
+      groupId: 1
+    - cell: {x: 60, y: 16}
+      groupId: 1
+    - cell: {x: 61, y: 16}
+      groupId: 1
+    - cell: {x: 62, y: 16}
+      groupId: 1
+    - cell: {x: 63, y: 16}
+      groupId: 1
+    - cell: {x: 64, y: 16}
+      groupId: 1
+    - cell: {x: 65, y: 16}
+      groupId: 1
+    - cell: {x: 66, y: 16}
+      groupId: 1
+    - cell: {x: 67, y: 16}
+      groupId: 1
+    - cell: {x: 68, y: 16}
+      groupId: 1
+    - cell: {x: 69, y: 16}
+      groupId: 1
+    - cell: {x: 70, y: 16}
+      groupId: 1
+    - cell: {x: 71, y: 16}
+      groupId: 1
+    - cell: {x: 72, y: 16}
+      groupId: 1
+    - cell: {x: 73, y: 16}
+      groupId: 1
+    - cell: {x: 74, y: 16}
+      groupId: 1
+    - cell: {x: 75, y: 16}
+      groupId: 1
+    - cell: {x: 76, y: 16}
+      groupId: 1
+    - cell: {x: 77, y: 16}
+      groupId: 1
+    - cell: {x: 78, y: 16}
+      groupId: 1
+    - cell: {x: 79, y: 16}
+      groupId: 1
+    - cell: {x: 80, y: 16}
+      groupId: 1
+    - cell: {x: 81, y: 16}
+      groupId: 1
+    - cell: {x: 82, y: 16}
+      groupId: 1
+    - cell: {x: 83, y: 16}
+      groupId: 1
+    - cell: {x: 84, y: 16}
+      groupId: 1
+    respawnPoints: []
+    partitions:
+    - name: Level 1
+      bounds:
+        x: -20
+        y: -9
+        width: 45
+        height: 40
+--- !u!1660057539 &9223372036854775807
+SceneRoots:
+  m_ObjectHideFlags: 0
+  m_Roots:
+  - {fileID: 1055498867}
