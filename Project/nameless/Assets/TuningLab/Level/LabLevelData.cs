@@ -35,7 +35,7 @@ public sealed class LabLevelData
     public List<LabMagmaSpec> magmas = new List<LabMagmaSpec>();
     /// <summary>重生点（3×3 触发区，中心坐标）。</summary>
     public List<LabRespawnPointSpec> respawnPoints = new List<LabRespawnPointSpec>();
-    /// <summary>传送点（3×3 触发区，中心坐标）。所有传送点互为终点，进入后由玩家选择。</summary>
+    /// <summary>传送点（3×3 触发区，中心坐标）。双人进入后运行时标记，已标记点可互为终点。</summary>
     public List<LabTeleportSpec> teleports = new List<LabTeleportSpec>();
     /// <summary>连续关卡分区。每个分区的 bounds 同时是它的相机范围；B 进入哪个分区就用哪个分区。</summary>
     public List<LabLevelPartition> partitions = new List<LabLevelPartition>();
@@ -231,7 +231,7 @@ public sealed class LabLevelData
         return false;
     }
 
-    /// <summary>放一个传送点。所有传送点互为终点，数据里不保存配对关系。</summary>
+    /// <summary>放一个传送点。运行时双人进入后标记，已标记点互为终点，数据里不保存配对关系。</summary>
     public bool PlaceTeleport(Vector2Int cell)
     {
         if (teleports == null) teleports = new List<LabTeleportSpec>();
@@ -1387,7 +1387,7 @@ public struct LabRespawnPointSpec
 }
 
 /// <summary>
-/// 一个传送点：3×3 触发区，位置是中心。数据不记录配对——所有传送点互为终点，
+/// 一个传送点：3×3 触发区，位置是中心。数据不记录配对——已标记传送点互为终点，
 /// 运行时进入其中一个后从其余传送点里选择出口。
 /// </summary>
 [System.Serializable]

@@ -36,6 +36,9 @@ public sealed class LabTeleportTests
         var b = MakeTeleport(new Vector2(0f, 6f));
         var c = MakeTeleport(new Vector2(4f, 6f));
         yield return null;
+        lab.MarkTeleportPoint(a);
+        lab.MarkTeleportPoint(b);
+        lab.MarkTeleportPoint(c);
 
         Assert.IsTrue(MakeKey().TryCollect(lab.PlayerA), "A 应能带一把钥匙进入传送");
         Assert.IsTrue(MakeKey().TryCollect(lab.PlayerB));
@@ -68,6 +71,88 @@ public sealed class LabTeleportTests
             lab.PlayerB.transform.position.x, 0.001f, "B 应落在终点右侧");
         Assert.AreEqual(secondTarget.transform.position.y,
             lab.PlayerA.transform.position.y, 0.001f);
+    }
+
+    [UnityTest]
+    public IEnumerator SelectionFreezesPlayersAndTeleportStopsTheirVelocity()
+    {
+        var source = MakeTeleport(new Vector2(-4f, 6f));
+        var target = MakeTeleport(new Vector2(4f, 6f));
+        yield return null;
+        lab.MarkTeleportPoint(source);
+        lab.MarkTeleportPoint(target);
+
+        lab.PlayerA.SetVelocity(new Vector2(7f, -9f));
+        lab.PlayerB.SetVelocity(new Vector2(-6f, 8f));
+        lab.EnterTeleportSelection(source);
+
+        Assert.AreEqual(RigidbodyType2D.Kinematic,
+            lab.PlayerA.GetComponent<Rigidbody2D>().bodyType);
+        Assert.AreEqual(RigidbodyType2D.Kinematic,
+            lab.PlayerB.GetComponent<Rigidbody2D>().bodyType);
+        Assert.AreEqual(Vector2.zero, lab.PlayerA.Velocity);
+        Assert.AreEqual(Vector2.zero, lab.PlayerB.Velocity);
+
+        lab.ConfirmTeleport();
+
+        Assert.AreEqual(Vector2.zero, lab.PlayerA.Velocity,
+            "传送落点不应恢复传送前速度");
+        Assert.AreEqual(Vector2.zero, lab.PlayerB.Velocity,
+            "传送落点不应恢复传送前速度");
+    }
+
+    [UnityTest]
+    public IEnumerator OneMarkedTeleportCannotOpenSelection()
+    {
+        var source = MakeTeleport(new Vector2(-4f, 6f));
+        var unmarked = MakeTeleport(new Vector2(4f, 6f));
+        yield return null;
+
+        lab.MarkTeleportPoint(source);
+        lab.EnterTeleportSelection(source);
+
+        Assert.IsFalse(lab.TeleportSelecting, "只有一个已标记传送点时不应进入选择");
+        Assert.AreEqual(0, lab.TeleportTargetCount);
+        Assert.IsFalse(unmarked.IsMarked, "未访问的传送点不应自动标记");
+    }
+
+    [UnityTest]
+    public IEnumerator OnlyMarkedTeleportsAreSelectable()
+    {
+        var source = MakeTeleport(new Vector2(-6f, 6f));
+        var target = MakeTeleport(new Vector2(0f, 6f));
+        var unmarked = MakeTeleport(new Vector2(6f, 6f));
+        yield return null;
+
+        lab.MarkTeleportPoint(source);
+        lab.MarkTeleportPoint(target);
+        lab.EnterTeleportSelection(source);
+
+        Assert.IsTrue(lab.TeleportSelecting);
+        Assert.AreEqual(1, lab.TeleportTargetCount);
+        Assert.AreSame(target, lab.TeleportTarget);
+        Assert.AreNotSame(unmarked, lab.TeleportTarget);
+        lab.CancelTeleport();
+    }
+
+    [UnityTest]
+    public IEnumerator CancellingSelectionRestoresPlayersAndCamera()
+    {
+        var source = MakeTeleport(new Vector2(-4f, 6f));
+        var target = MakeTeleport(new Vector2(4f, 6f));
+        yield return null;
+        lab.MarkTeleportPoint(source);
+        lab.MarkTeleportPoint(target);
+
+        lab.EnterTeleportSelection(source);
+        lab.CancelTeleport();
+
+        Assert.IsFalse(lab.TeleportSelecting);
+        Assert.AreEqual(RigidbodyType2D.Dynamic,
+            lab.PlayerA.GetComponent<Rigidbody2D>().bodyType);
+        Assert.AreEqual(RigidbodyType2D.Dynamic,
+            lab.PlayerB.GetComponent<Rigidbody2D>().bodyType);
+        Assert.AreEqual(0, lab.TeleportTargetCount);
     }
 
     [UnityTest]
@@ -108,6 +193,8 @@ public sealed class LabTeleportTests
             Assert.AreEqual(3f, body.size.y, 0.001f);
         }
 
+        lab.MarkTeleportPoint(points[0]);
+        lab.MarkTeleportPoint(points[1]);
         lab.EnterTeleportSelection(points[0]);
         Assert.IsTrue(lab.TeleportSelecting, "生成后的传送点应注册到 TuningLab");
         Assert.AreEqual(1, lab.TeleportTargetCount);
@@ -142,12 +229,48 @@ public sealed class LabTeleportTests
         Assert.AreEqual(2, points.Length, "Awake 时按关卡数据生成两个传送点");
         Assert.AreEqual(2, awakeLab.TeleportPointCount, "Awake 时生成的传送点也要注册");
 
+        awakeLab.MarkTeleportPoint(points[0]);
+        awakeLab.MarkTeleportPoint(points[1]);
         awakeLab.EnterTeleportSelection(points[0]);
         Assert.IsTrue(awakeLab.TeleportSelecting, "构建完成后能进入终点选择");
         Assert.AreEqual(1, awakeLab.TeleportTargetCount);
 
         Object.Destroy(awakeGo);
         yield return null;
+    }
+
+    [UnityTest]
+    public IEnumerator CameraFocusCanCrossCurrentBoundsDuringTeleportSelection()
+    {
+        var cameraGo = new GameObject("TeleportCamera");
+        cameraGo.AddComponent<Camera>().orthographic = true;
+        var camera = cameraGo.AddComponent<LabCamera>();
+        camera.Configure(null, null, null, new Rect(-5f, -5f, 10f, 10f), 1f, 5f, 0f);
+        cameraGo.transform.position = Vector3.zero;
+
+        camera.FocusOn(new Vector2(20f, 0f), 0.25f);
+        yield return new WaitForSecondsRealtime(0.3f);
+
+        Assert.Greater(cameraGo.transform.position.x, 5f,
+            "选择跨分区传送点时，相机不应被当前分区 bounds 截回去");
+
+        Object.Destroy(cameraGo);
+    }
+
+    [UnityTest]
+    public IEnumerator CameraStaysOnSelectedTeleportWhileSelectionRemainsOpen()
+    {
+        var source = MakeTeleport(new Vector2(-4f, 6f));
+        var target = MakeTeleport(new Vector2(20f, 6f));
+        yield return null;
+        lab.MarkTeleportPoint(source);
+        lab.MarkTeleportPoint(target);
+
+        lab.EnterTeleportSelection(source);
+        yield return new WaitForSecondsRealtime(0.4f);
+
+        Assert.AreEqual(target.transform.position.x, lab.Cam.transform.position.x, 1f,
+            "选择态持续时，相机应停在当前候选传送点");
     }
 
     LabTeleportPoint MakeTeleport(Vector2 position)
