@@ -360,7 +360,7 @@ public class LabHud : MonoBehaviour
         else if (p.PhantomHost != null)
         {
             GUILayout.Label(
-                "　幻影膛内  跟着幻影，移动无效，句号开炮（大炮 / L 转向器）。",
+                "　幻影膛内  跟着幻影，移动无效；大炮按句号开炮，L 约 1 秒自动射出。",
                 small);
         }
         else if (p.Suspended)
