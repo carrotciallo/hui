@@ -32,7 +32,7 @@
 | `Assets/TuningLab/TuningLab.cs` | 参数、内置房间描述 `DescribeRoom`、`CaptureBaseline`、相机 `GetCameraFrame`、HUD/网格 |
 | `Assets/TuningLab/LabPlayer.cs` | 方块玩家：移动、跳、四向冲刺、撞击、驮带 |
 | `Assets/TuningLab/LabCamera.cs` | 跟随 A/B 中点；按 B 查当前分区的 bounds/min-max，并做混合 |
-| `Assets/TuningLab/LabVerticalRope.cs` | 竖绳；`ApplyShape` 同时服务预览和 Play |
+| `Assets/TuningLab/LabVerticalRope.cs` | 竖绳；零/一级挡住、二级沿接触法线穿过、三级以上沿法线反弹并提升一级；`ApplyShape` 同时服务预览和 Play |
 | `Assets/TuningLab/LabHorizontalRope.cs` | 横绳平台；零/一级挡住、二级向下穿过、三级以上反弹并提升一级 |
 | `Assets/TuningLab/LabIce.cs` | 冰块：`groupId` 编组、单块融化、整组破坏和地图重置恢复 |
 | `Assets/TuningLab/LabMagma.cs` | 岩浆块：任意面接触强制红热、v3 整组破坏和地图重置恢复 |
@@ -280,7 +280,7 @@
 - 相机跟随 A/B 中点，但只用 **B 的中心**判断当前分区。
 - 分区不能重叠，贴边相邻允许。
 - 钥匙和门是共享的：任意钥匙可以打开任意门，门的颜色只用于区分。
-- 绳按 `{ center, cells, chainId, orientation }` 保存；`orientation = Vertical/Horizontal`，旧数据缺省为竖绳。横绳是平台：零/一级挡住、二级向下穿过、三级以上反弹并提升一级。
+- 绳按 `{ center, cells, chainId, orientation }` 保存；`orientation = Vertical/Horizontal`，旧数据缺省为竖绳。横绳是平台：零/一级挡住、二级向下穿过、三级以上反弹并提升一级。竖绳的挡位按碰撞前沿接触法线撞进去的分量算：零/一级和普通墙一样挡死，二级沿法线穿过（只判一次，保留入射速度，忽略碰撞直到离开绳体），三级以上沿法线弹回，弹回速度 = 入射速度 + 一个等级间距（和横绳同一条公式）。
 - 地刺按 `{ cell, dir }` 保存；每格最多一根，碰到即死。
 - 冰块按 `{ cell, groupId }` 保存；1×1 实体，可站立/滑行。组内任意一块沿接触法线被 v2 撞击则整组碎，且优先于红热；红热边只在非承重接触时融一块并把边回普通，冰格落在玩家脚下 footprint 内（含不同分组交界处的侧向接触）不会融掉脚下。站在冰面上横向滑行不算撞击。冰面按住方向按 `a = g` 加速，4 格升一级，封顶 v4；松手保留滑行。
 - 岩浆块按 `{ cell, groupId }` 保存；1×1 实体，可站立，走动按普通地面（不是冰面）。接触任意方向的表面都把 A 对应的边强制点到热二：这是设定，不经过 `StrikeEdge` 的状态机，所以热二不会塌框、灵体边不会被修好。红热边接触不会融掉岩浆块；只有沿接触法线撞进去的分量到 v3 才整组破坏。地图重置时恢复。
