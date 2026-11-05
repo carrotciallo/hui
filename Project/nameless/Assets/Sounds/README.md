@@ -2,6 +2,7 @@
 
 来源：Freesound，全部 **CC0**（publicdomain/zero/1.0），免署名、可商用。
 投票结果见 issue #60 正文，每人不限勾选次数；102 个候选中入选 19 个，弃选的 83 个文件连同 `.meta` 已删除。
+投票后按体感返工过一次：跳跃槽入选的 2 条（386647 / 386636）大家都不满意，已连同 `.meta` 删除，换成下表这一条——所以当前库内共 18 个文件。
 
 文件名格式：`用途slug_FreesoundID_原始名.mp3`。导入器保持 Unity 默认（`loadType: 0` 压缩入内存、`preloadAudioData: 0`）。
 
@@ -15,8 +16,9 @@
 
 | 文件 | 时长 | 来源 | 试听 |
 | --- | --- | --- | --- |
-| `jump_386647_SFX_Jump_15.mp3` | 0.15s | [Freesound 386647](https://freesound.org/people/jalastram/sounds/386647/) | [386647](https://cdn.freesound.org/previews/386/386647_3905081-hq.mp3) |
-| `jump_386636_SFX_Jump_25.mp3` | 0.25s | [Freesound 386636](https://freesound.org/people/jalastram/sounds/386636/) | [386636](https://cdn.freesound.org/previews/386/386636_3905081-hq.mp3) |
+| `jump_399095_8bit_Jump.mp3` | 0.11s | [Freesound 399095](https://freesound.org/people/plasterbrain/sounds/399095/) | [399095](https://cdn.freesound.org/previews/399/399095_4284968-hq.mp3) |
+
+原始文件是 FLAC，已按库内统一规格转成 44.1kHz 单声道 mp3；0.11s 短于其它音效，起跳要的是干脆，不再拉长。
 
 ## `02_Collision_Light` — 碰撞·轻（低挡位）
 
