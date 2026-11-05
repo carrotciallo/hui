@@ -115,8 +115,17 @@ public sealed class LabLevel : MonoBehaviour
     /// <summary>地图重置（复活 / 传送）时把所有被破坏的冰块恢复。</summary>
     void ResetIces()
     {
+        LabIce any = null;
         for (int i = 0; i < runtimeIces.Count; i++)
-            if (runtimeIces[i] != null) runtimeIces[i].ResetIce();
+        {
+            var ice = runtimeIces[i];
+            if (ice == null) continue;
+            ice.ResetIce(false);
+            if (any == null) any = ice;
+        }
+
+        // 恢复整组后只重建一次地形合并几何。
+        if (any != null) any.RebuildCollision();
     }
 
     /// <summary>地图重置（复活 / 传送）时把所有被破坏的岩浆块恢复。</summary>
@@ -147,8 +156,9 @@ public sealed class LabLevel : MonoBehaviour
 
         data.Normalize();
 
-        // 地形和岩浆共用一个合并碰撞体：相邻 1×1 方块（岩浆—岩浆、岩浆—地形）的
-        // 内侧竖面会在接缝处卡住横走的玩家，也会把上表面行走误判成侧面接触。
+        // 地形、冰和岩浆共用一个合并碰撞体：相邻 1×1 方块（冰—冰、冰—地形、
+        // 岩浆—岩浆、岩浆—地形）的内侧竖面会在接缝处卡住横走的玩家，也会把
+        // 上表面滑行误判成侧面接触。
         var fieldGo = new GameObject("TerrainField");
         fieldGo.transform.SetParent(root.transform, false);
         var fieldBody = fieldGo.AddComponent<Rigidbody2D>();
@@ -168,7 +178,7 @@ public sealed class LabLevel : MonoBehaviour
         for (int i = 0; i < data.keys.Count; i++) AddKey(root.transform, data.keys[i], preview);
         for (int i = 0; i < data.doors.Count; i++) AddDoor(root.transform, data.doors[i], preview);
         for (int i = 0; i < data.spikes.Count; i++) AddSpike(root.transform, data.spikes[i]);
-        for (int i = 0; i < data.ices.Count; i++) AddIce(root.transform, data.ices[i], material, preview);
+        for (int i = 0; i < data.ices.Count; i++) AddIce(terrain, data.ices[i], material, preview);
         for (int i = 0; i < data.magmas.Count; i++) AddMagma(terrain, data.magmas[i], material, preview);
         for (int i = 0; i < data.respawnPoints.Count; i++)
             AddRespawnPoint(root.transform, data.respawnPoints[i]);

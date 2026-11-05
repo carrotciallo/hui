@@ -28,9 +28,17 @@ public class LabPlayer : MonoBehaviour
     public bool Dashing => dashLock > 0f;
     /// <summary>充能接触：站在地形上，或碰到另一名玩家。贴墙、顶天花板不算。</summary>
     public bool Touching => grounded || playerContactTimer > 0f;
-    /// <summary>正踩在冰块上（脚下 support 是 LabIce）。</summary>
-    public bool OnIce => grounded && support != null
-        && support.GetComponentInParent<LabIce>() != null;
+    /// <summary>正踩在冰块上：独立冰块直接看 support；合并地形按脚下格找冰。</summary>
+    public bool OnIce
+    {
+        get
+        {
+            if (!grounded) return false;
+            if (support != null && support.GetComponentInParent<LabIce>() != null) return true;
+            if (support != null && support.GetComponent<LabTerrainField>() == null) return false;
+            return IceUnderFeet();
+        }
+    }
     /// <summary>水平冲刺后速度仍处于 v1 区间、重力被关掉的状态。</summary>
     public bool Hovering => dashPhase == DashPhase.Dash;
     /// <summary>冲刺态：位移恒定、不受外力。大炮只吃这个状态撞进来的 B。</summary>
@@ -474,7 +482,13 @@ public class LabPlayer : MonoBehaviour
         if (host != null) return;
         bool isPlayer = c.collider != null && c.collider.GetComponent<LabPlayer>() != null;
         if (isPlayer) playerContactTimer = 0.12f;
-        else ResolveMagmaContact(c);      // 新贴上的岩浆面在这里结算第一次接触
+        else
+        {
+            ResolveMagmaContact(c);      // 新贴上的岩浆面在这里结算第一次接触
+            // 独立冰块每块有自己的 Enter 回调；合并地形不会，所以 Stay 里补扫冰格。
+            if (c.collider != null && c.collider.GetComponent<LabTerrainField>() != null)
+                ResolveIceContact(c);
+        }
 
         TryResolveHit(c);
     }
@@ -551,6 +565,9 @@ public class LabPlayer : MonoBehaviour
     {
         if (lab == null || c.contactCount == 0) return;
 
+        // 冰不参与普通地形的锻造状态机；合并地形里要先按接触点找到冰格。
+        if (ResolveIceContact(c)) return;
+
         Vector2 n = ContactNormal(c);
 
         // 用上一帧 FixedUpdate 写进去的速度：碰撞回调里速度已经被解算改掉了
@@ -561,44 +578,77 @@ public class LabPlayer : MonoBehaviour
         LastImpactTier = lab.TierOfSpeed(impact);
         LastImpactTime = Time.time;
 
-        // 冰块不参与普通地形的锻造状态机，单独结算：
-        //   沿接触法线撞进去的分量到 v2 → 整组破坏（优先于红热）；
-        //   非承重的红热边（Hot2）→ 只融这一块，边强制回普通；
-        //   普通边接触 / 红热边踩在冰面上 → 什么都不发生。
-        // 只算法线分量：站在冰面上横向滑行时法线是竖直的，水平速度再快也不算撞击。
-        // 冰格落在玩家脚下 footprint 内时一律不结算：交界处侧向接触也可能碰到承重块，
-        // 融掉它会让玩家落下去并被地面制动停住。
-        var ice = c.collider != null ? c.collider.GetComponentInParent<LabIce>() : null;
-        if (ice != null)
-        {
-            if (grounded && IsIceUnderPlayer(ice)) return;
-
-            if (lab.TierOfSpeed(impact) >= lab.IceBreakTier)
-            {
-                ice.BreakGroup();
-                return;
-            }
-
-            if (canBeRedHot)
-            {
-                Edge edge = EdgeFor(-n);
-                var state = GetEdge(edge);
-                if (state == EdgeState.Hot2)
-                {
-                    ice.BreakOne();
-                    SetEdge(edge, EdgeState.Normal);
-                    return;
-                }
-            }
-
-            return;
-        }
-
         // 绳不是锻造面：接触 / 下落 / 穿过都不动边态。
         // 唯一的例外是绳自己判定反弹（三级以上），由绳组件调 ApplyTerrainImpact 结算。
         if (IsRope(c.collider)) return;
 
         ApplyTerrainImpact(n, impact);
+    }
+
+    /// <summary>
+    /// 冰块接触：只在承重豁免之外结算。合并地形没有单块身份，用接触点找回冰格。
+    /// 玩家在冰面上滑行时 grounded + footprint 豁免，所以 v2/v3 滑行不会碎冰。
+    /// 返回 false 表示这次碰撞没有冰接触，交给普通地形或绳。
+    /// </summary>
+    bool ResolveIceContact(Collision2D c)
+    {
+        if (lab == null || c.contactCount == 0) return false;
+
+        var direct = c.collider != null ? c.collider.GetComponentInParent<LabIce>() : null;
+        var field = c.collider != null ? c.collider.GetComponent<LabTerrainField>() : null;
+        if (direct == null && field == null) return false;
+
+        Vector2 n = ContactNormal(c);
+        float impact = Mathf.Abs(Vector2.Dot(lastFixedVelocity, n));
+        LabIce ice = direct;
+
+        if (ice == null)
+        {
+            // 合并地形没有单块身份：找第一个落在冰块上的接触点。
+            for (int i = 0; i < c.contactCount; i++)
+            {
+                ContactPoint2D contact = c.GetContact(i);
+                Vector2 cn = AxisNormal(contact.normal);
+                var candidate = LabIce.AtCell(contact.point - cn * 0.02f);
+                if (candidate == null) continue;
+                ice = candidate;
+                n = cn;
+                impact = Mathf.Abs(Vector2.Dot(lastFixedVelocity, cn));
+                break;
+            }
+
+            if (ice == null) return false;
+        }
+
+        LastImpactNormal = n;
+        LastImpactSpeed = impact;
+        LastImpactTier = lab.TierOfSpeed(impact);
+        LastImpactTime = Time.time;
+
+        // 冰格落在玩家脚下 footprint 内时一律不结算：交界处侧向接触也可能碰到承重块，
+        // 融掉它会让玩家落下去并被地面制动停住。合并地形没有接缝侧面，滑行只产生
+        // 顶面接触，所以 v2/v3 滑行不会碎冰。
+        if (grounded && IsIceUnderPlayer(ice)) return true;
+
+        // 沿接触法线撞进去的分量到 v2 → 整组破坏（优先于红热）。
+        if (lab.TierOfSpeed(impact) >= lab.IceBreakTier)
+        {
+            ice.BreakGroup();
+            return true;
+        }
+
+        // 非承重的红热边（Hot2）→ 只融这一块，边强制回普通。
+        if (canBeRedHot)
+        {
+            Edge edge = EdgeFor(-n);
+            if (GetEdge(edge) == EdgeState.Hot2)
+            {
+                ice.BreakOne();
+                SetEdge(edge, EdgeState.Normal);
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -635,6 +685,18 @@ public class LabPlayer : MonoBehaviour
         bool horizontal = player.max.x > cell.min.x + 0.01f && player.min.x < cell.max.x - 0.01f;
         bool atFeet = cell.max.y >= player.min.y - 0.12f && cell.max.y <= player.min.y + 0.12f;
         return horizontal && atFeet;
+    }
+
+    /// <summary>合并地形里，脚下 footprint 是否有一块是冰。独立冰块由 support 直接判定。</summary>
+    bool IceUnderFeet()
+    {
+        if (col == null) return false;
+        Bounds b = col.bounds;
+        float y = b.min.y - 0.02f;
+        float quarter = b.size.x * 0.25f;
+        return LabIce.AtCell(new Vector2(b.center.x, y)) != null
+            || LabIce.AtCell(new Vector2(b.min.x + quarter, y)) != null
+            || LabIce.AtCell(new Vector2(b.max.x - quarter, y)) != null;
     }
 
     void TryResolveHit(Collision2D c)
