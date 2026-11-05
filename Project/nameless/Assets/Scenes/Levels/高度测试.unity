@@ -168,7 +168,6 @@ MonoBehaviour:
   dashCooldown: 0.8
   groundOnlyDash: 0
   redHotTierIndex: 1
-  redHotDuration: 2.25
   forgeTierIndex: 0
   verticalHitEnabled: 1
   iceBreakTierIndex: 2
@@ -221,13 +220,37 @@ MonoBehaviour:
     bounds:
       x: -13
       y: -1
-      width: 26
-      height: 17
-    spawnA: {x: 8, y: 0}
-    spawnB: {x: 10, y: 0}
-    cameraMinSize: 6.75
+      width: 86
+      height: 75
+    spawnA: {x: 27.5, y: 0}
+    spawnB: {x: 48.5, y: -1}
+    cameraMinSize: 13.35
     cameraMaxSize: 27
     solids:
+    - {x: 27, y: -2}
+    - {x: 28, y: -2}
+    - {x: 29, y: -2}
+    - {x: 30, y: -2}
+    - {x: 31, y: -2}
+    - {x: 32, y: -2}
+    - {x: 33, y: -2}
+    - {x: 34, y: -2}
+    - {x: 35, y: -2}
+    - {x: 36, y: -2}
+    - {x: 37, y: -2}
+    - {x: 38, y: -2}
+    - {x: 39, y: -2}
+    - {x: 40, y: -2}
+    - {x: 41, y: -2}
+    - {x: 42, y: -2}
+    - {x: 43, y: -2}
+    - {x: 44, y: -2}
+    - {x: 45, y: -2}
+    - {x: 46, y: -2}
+    - {x: 47, y: -2}
+    - {x: 48, y: -2}
+    - {x: 49, y: -2}
+    - {x: -14, y: -1}
     - {x: -13, y: -1}
     - {x: -12, y: -1}
     - {x: -11, y: -1}
@@ -254,71 +277,105 @@ MonoBehaviour:
     - {x: 10, y: -1}
     - {x: 11, y: -1}
     - {x: 12, y: -1}
-    - {x: -14, y: 0}
-    - {x: 13, y: 0}
-    - {x: -14, y: 1}
-    - {x: 3, y: 1}
-    - {x: 4, y: 1}
-    - {x: 5, y: 1}
-    - {x: 13, y: 1}
-    - {x: -14, y: 2}
-    - {x: 13, y: 2}
-    - {x: -14, y: 3}
-    - {x: 0, y: 3}
-    - {x: 1, y: 3}
-    - {x: 2, y: 3}
-    - {x: 13, y: 3}
-    - {x: -14, y: 4}
-    - {x: 13, y: 4}
-    - {x: -14, y: 5}
-    - {x: -3, y: 5}
-    - {x: -2, y: 5}
-    - {x: -1, y: 5}
-    - {x: 13, y: 5}
-    - {x: -14, y: 6}
-    - {x: 13, y: 6}
-    - {x: -14, y: 7}
-    - {x: -6, y: 7}
-    - {x: -5, y: 7}
-    - {x: -4, y: 7}
-    - {x: 13, y: 7}
-    - {x: -14, y: 8}
-    - {x: 13, y: 8}
-    - {x: -14, y: 9}
-    - {x: -9, y: 9}
-    - {x: -8, y: 9}
-    - {x: -7, y: 9}
-    - {x: 13, y: 9}
-    - {x: -14, y: 10}
-    - {x: 13, y: 10}
-    - {x: -14, y: 11}
-    - {x: 13, y: 11}
-    - {x: -14, y: 12}
-    - {x: 13, y: 12}
-    - {x: -14, y: 13}
-    - {x: 13, y: 13}
-    - {x: -14, y: 14}
-    - {x: 13, y: 14}
-    - {x: -14, y: 15}
-    - {x: 13, y: 15}
+    - {x: 13, y: -1}
+    - {x: 14, y: -1}
+    - {x: 15, y: -1}
+    - {x: 16, y: -1}
+    - {x: 17, y: -1}
+    - {x: 18, y: -1}
+    - {x: 19, y: -1}
+    - {x: 20, y: -1}
+    - {x: 21, y: -1}
+    - {x: 22, y: -1}
+    - {x: 23, y: -1}
+    - {x: 24, y: -1}
+    - {x: 25, y: -1}
+    - {x: 26, y: -1}
+    - {x: 27, y: -1}
+    - {x: 46, y: -1}
+    - {x: 46, y: 0}
+    - {x: 46, y: 1}
+    - {x: -8, y: 4}
+    - {x: -7, y: 4}
+    - {x: -6, y: 4}
+    - {x: -5, y: 4}
+    - {x: -4, y: 8}
+    - {x: -3, y: 8}
+    - {x: -2, y: 8}
+    - {x: -1, y: 8}
+    - {x: 58, y: 11}
+    - {x: 59, y: 11}
+    - {x: 60, y: 11}
+    - {x: 61, y: 11}
+    - {x: 62, y: 11}
+    - {x: 63, y: 11}
+    - {x: 64, y: 11}
+    - {x: 65, y: 11}
     ropes:
-    - center: {x: 9, y: 2}
+    - center: {x: 6, y: 1.125}
+      cells: 6
+      chainId: 0
+      orientation: 1
+    - center: {x: 13.5, y: 4}
+      cells: 4
+      chainId: 0
+      orientation: 0
+    - center: {x: 23.5, y: 2}
       cells: 4
       chainId: 0
       orientation: 0
     keys: []
     doors: []
-    spikes: []
-    ices: []
-    respawnPoints: []
+    spikes:
+    - cell: {x: 48, y: -1}
+      dir: 0
+    ices:
+    - cell: {x: 28, y: -1}
+      groupId: 1
+    - cell: {x: 29, y: -1}
+      groupId: 1
+    - cell: {x: 30, y: -1}
+      groupId: 1
+    - cell: {x: 31, y: -1}
+      groupId: 1
+    - cell: {x: 32, y: -1}
+      groupId: 1
+    - cell: {x: 33, y: -1}
+      groupId: 1
+    - cell: {x: 34, y: -1}
+      groupId: 1
+    - cell: {x: 35, y: -1}
+      groupId: 1
+    - cell: {x: 36, y: -1}
+      groupId: 1
+    - cell: {x: 37, y: -1}
+      groupId: 1
+    - cell: {x: 38, y: -1}
+      groupId: 1
+    - cell: {x: 39, y: -1}
+      groupId: 1
+    - cell: {x: 40, y: -1}
+      groupId: 1
+    - cell: {x: 41, y: -1}
+      groupId: 1
+    - cell: {x: 42, y: -1}
+      groupId: 1
+    - cell: {x: 43, y: -1}
+      groupId: 1
+    - cell: {x: 44, y: -1}
+      groupId: 1
+    - cell: {x: 45, y: -1}
+      groupId: 1
+    respawnPoints:
+    - position: {x: 4.5, y: 18.5}
     teleports: []
     partitions:
     - name: Level 1
       bounds:
         x: -13
-        y: -1
-        width: 26
-        height: 17
+        y: -11
+        width: 94
+        height: 120
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
