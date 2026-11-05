@@ -123,6 +123,10 @@ public class TuningLab : MonoBehaviour
     public LabHud Hud { get; private set; }
     public LabRespawnPoint ActiveRespawnPoint { get; private set; }
     public event System.Action MapReset;
+
+    /// <summary>召回能力：任一玩家拾取道具后全队永久解锁，地图重置不清空。</summary>
+    public bool RecallUnlocked { get; private set; }
+    public void UnlockRecall() => RecallUnlocked = true;
     public bool TeleportSelecting => teleportSource != null;
     /// <summary>选择界面里当前选中的终点；没有在选终点时为 null。</summary>
     public LabTeleportPoint TeleportTarget =>

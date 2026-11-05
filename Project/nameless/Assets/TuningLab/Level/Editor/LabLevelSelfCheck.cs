@@ -619,6 +619,7 @@ public static class LabLevelSelfCheck
         captureLevel.AddCell(new Vector2Int(3, 3));
         captureLevel.ropes.Add(new LabRopeSpec(new Vector2(3.5f, 3.5f), 1));
         captureLevel.keys.Add(new LabKeySpec(new Vector2(3.5f, 3.5f)));
+        captureLevel.recalls.Add(new LabRecallSpec(new Vector2Int(3, 3)));
         captureLevel.doors.Add(new LabDoorSpec(new Vector2(3.5f, 3.5f), Color.white));
         captureLevel.spikes.Add(new LabSpikeSpec(new Vector2Int(3, 3), LabSpikeDir.Up));
         captureLevel.ices.Add(new LabIceSpec(new Vector2Int(3, 3), 1));
@@ -627,21 +628,22 @@ public static class LabLevelSelfCheck
         captureLevel.teleports.Add(new LabTeleportSpec(new Vector2(3.5f, 3.5f)));
         var captureArea = new List<RectInt> { new RectInt(3, 3, 1, 1) };
         var allCapture = captureLevel.CaptureContents(captureArea);
-        Expect(sb, ref failures, allCapture.Count == 9,
-            "选区锁定地形 + 8 种摆放物件，实际 " + allCapture.Count);
-        Expect(sb, ref failures, captureLevel.MoveCapturedContents(allCapture, new Vector2Int(1, 0)) == 9,
-            "锁定内容一次平移到 9 条");
+        Expect(sb, ref failures, allCapture.Count == 10,
+            "选区锁定地形 + 9 种摆放物件，实际 " + allCapture.Count);
+        Expect(sb, ref failures, captureLevel.MoveCapturedContents(allCapture, new Vector2Int(1, 0)) == 10,
+            "锁定内容一次平移到 10 条");
         Expect(sb, ref failures,
             captureLevel.HasCell(new Vector2Int(4, 3)) &&
             SamePoint(captureLevel.ropes[0].center, new Vector2(4.5f, 3.5f)) &&
             SamePoint(captureLevel.keys[0].position, new Vector2(4.5f, 3.5f)) &&
+            captureLevel.recalls[0].cell == new Vector2Int(4, 3) &&
             SamePoint(captureLevel.doors[0].position, new Vector2(4.5f, 3.5f)) &&
             captureLevel.spikes[0].cell == new Vector2Int(4, 3) &&
             captureLevel.ices[0].cell == new Vector2Int(4, 3) &&
             captureLevel.magmas[0].cell == new Vector2Int(4, 3) &&
             SamePoint(captureLevel.respawnPoints[0].position, new Vector2(4.5f, 3.5f)) &&
             SamePoint(captureLevel.teleports[0].position, new Vector2(4.5f, 3.5f)),
-            "地形 + 8 种摆放物件都跟着选区框平移");
+            "地形 + 9 种摆放物件都跟着选区框平移");
 
         sb.AppendLine();
         sb.AppendLine("=== 13. 传送点：全互联数据 / 去重 / 随分区移动与删除 ===");
@@ -771,6 +773,62 @@ public static class LabLevelSelfCheck
         Expect(sb, ref failures, tierProbe.TierOfSpeed(tierProbe.MagmaBreakSpeed - 0.01f) == 2,
             "低于岩浆块门槛还是 v2");
         Object.DestroyImmediate(tierProbeGo);
+
+        sb.AppendLine();
+        sb.AppendLine("=== 15. 召回道具：几何 / 去重 / 随分区移动与删除 / 全队解锁 ===");
+        Expect(sb, ref failures, data.recalls.Count == 0,
+            "基准房间没有召回道具，实际 " + data.recalls.Count);
+
+        var recallSpec = new LabRecallSpec(new Vector2Int(5, 3));
+        Expect(sb, ref failures,
+            SamePoint(recallSpec.Center, new Vector2(5.5f, 3.5f))
+            && recallSpec.Cells() == new RectInt(5, 3, 1, 1),
+            "召回道具占 1×1 格，落点是格中心");
+
+        var recallLevel = new LabLevelData();
+        recallLevel.partitions.Add(new LabLevelPartition { name = "A", bounds = new RectInt(0, 0, 10, 10) });
+        recallLevel.partitions.Add(new LabLevelPartition { name = "B", bounds = new RectInt(20, 0, 10, 10) });
+        Expect(sb, ref failures, recallLevel.PlaceRecall(new Vector2Int(2, 1)), "A 里放一个召回道具");
+        Expect(sb, ref failures, recallLevel.PlaceRecall(new Vector2Int(22, 1)), "B 里放一个召回道具");
+        Expect(sb, ref failures, !recallLevel.PlaceRecall(new Vector2Int(2, 1)),
+            "同一格重复放 = 无变化");
+        Expect(sb, ref failures, recallLevel.HasRecall(new Vector2Int(2, 1)), "查得到 A 的召回道具");
+        Expect(sb, ref failures, !recallLevel.HasRecall(new Vector2Int(7, 7)), "没放过的格没有召回道具");
+        Expect(sb, ref failures, recallLevel.RemoveRecall(new Vector2Int(7, 7)) == false,
+            "删不存在的召回道具返回 false");
+        recallLevel.recalls.Add(new LabRecallSpec(new Vector2Int(2, 1)));
+        recallLevel.Normalize();
+        Expect(sb, ref failures, recallLevel.recalls.Count == 2,
+            "Normalize 同格去重，实际 " + recallLevel.recalls.Count);
+
+        var recallClone = recallLevel.Clone();
+        recallClone.recalls[0] = new LabRecallSpec(new Vector2Int(99, 99));
+        Expect(sb, ref failures, recallLevel.HasRecall(new Vector2Int(2, 1)),
+            "Clone 是深拷贝");
+
+        Expect(sb, ref failures, recallLevel.MovePartition(0, new Vector2Int(3, 4), true),
+            "移动分区 A");
+        Expect(sb, ref failures, recallLevel.HasRecall(new Vector2Int(5, 5)),
+            "A 里的召回道具跟着移动");
+        Expect(sb, ref failures, recallLevel.HasRecall(new Vector2Int(22, 1)),
+            "分区 B 的召回道具不动");
+        Expect(sb, ref failures, recallLevel.DeletePartition(0, true), "删除分区 A（带内容）");
+        Expect(sb, ref failures,
+            recallLevel.recalls.Count == 1 && recallLevel.HasRecall(new Vector2Int(22, 1)),
+            "A 里的召回道具被删，B 的留下");
+
+        var recallProbeGo = new GameObject("RecallProbe");
+        recallProbeGo.SetActive(false);
+        var recallProbe = recallProbeGo.AddComponent<TuningLab>();
+        recallProbe.autoBuild = false;
+        recallProbeGo.SetActive(true);
+        Expect(sb, ref failures, !recallProbe.RecallUnlocked, "召回默认未解锁");
+        recallProbe.UnlockRecall();
+        recallProbe.UnlockRecall();
+        Expect(sb, ref failures, recallProbe.RecallUnlocked, "拾取后全队解锁，重复解锁无害");
+        recallProbe.ResetMap();
+        Expect(sb, ref failures, recallProbe.RecallUnlocked, "地图重置不清空召回能力");
+        Object.DestroyImmediate(recallProbeGo);
 
         sb.AppendLine();
         fails = failures;
