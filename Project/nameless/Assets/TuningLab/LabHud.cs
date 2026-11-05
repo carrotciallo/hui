@@ -226,8 +226,9 @@ public class LabHud : MonoBehaviour
             lab.ForgeSpeed, Mathf.Min(lab.forgeTierIndex, lab.redHotTierIndex)), small);
         GUILayout.Label(string.Format("冰块      法线撞击 ≥ {0:0}（v{1} 门槛）→ 整组碎（优先）；红热非承重接触 → 只融一块",
             lab.IceBreakSpeed, lab.IceBreakTier), small);
-        GUILayout.Label(string.Format("岩浆      任意面接触 → 强制热二（不塌框）；法线撞击 ≥ {0:0}（v{1} 门槛）→ 整组碎；红热接触不融",
-            lab.MagmaBreakSpeed, LabMagma.BreakTier), small);
+        GUILayout.Label("岩浆      每个面首次接触 → 强制热二；热二边再接触 → 死亡；v2+ 撞击 → 死亡（撞击热 + 强制热）", small);
+        GUILayout.Label(string.Format("          v{0} 撞击（法线 ≥ {1:0}）→ 整组碎",
+            LabMagma.BreakTier, lab.MagmaBreakSpeed), small);
         if (collapseCount > 0)
             GUILayout.Label(string.Format("  塌框 {0} 次   最近 {1}（热二遇红热 = 死亡）", collapseCount, lastCollapse), WarnStyle());
         GUILayout.Label(string.Format("大炮      v' = √(Vb² + {0:0})   一个等级间距 = {1:0.0} 格   方向 = 进入方向的反向",

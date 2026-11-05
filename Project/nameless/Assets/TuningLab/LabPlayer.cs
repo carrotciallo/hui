@@ -165,6 +165,8 @@ public class LabPlayer : MonoBehaviour
     bool refillArmed;
     Vector2 lastFixedVelocity;
     bool dying;                       // 一次死亡只结算一遍：接触和扫掠会在同一帧各报一次
+    int magmaTouchNow;                // 本物理步接触到的岩浆面（每条边一位）
+    int magmaTouchPrev;               // 上一物理步，用来判定“第一次接触”
 
     int spiritMask;
     LabForm form = LabForm.Normal;
@@ -240,6 +242,7 @@ public class LabPlayer : MonoBehaviour
     void FixedUpdate()
     {
         if (lab == null || IsDead) return;
+
         if (teleportFrozen || lab.TeleportSelecting)
         {
             dashQueued = false;
@@ -247,8 +250,12 @@ public class LabPlayer : MonoBehaviour
             dashTimer = 0f;
             gliding = false;
             rb.linearVelocity = Vector2.zero;
-            return;
+            return;             // 冻结期间保留接触面状态，取消选择后不会把同一面又算成新接触
         }
+
+        // 碰撞回调在 FixedUpdate 之后跑：先把上一步的接触面挪到 prev，再收集这一步的新接触。
+        magmaTouchPrev = magmaTouchNow;
+        magmaTouchNow = 0;
 
         float dt = Time.fixedDeltaTime;
         var v = rb.linearVelocity;
@@ -457,7 +464,7 @@ public class LabPlayer : MonoBehaviour
         if (host != null) return;      // 膛里的人没有碰撞箱，这里的回调只能是进膛那一刻的残留
         bool isPlayer = c.collider != null && c.collider.GetComponent<LabPlayer>() != null;
         if (isPlayer) playerContactTimer = 0.12f;
-        else if (!ResolveMagmaContact(c, true)) ForgeFromTerrain(c);   // 只有进入的那一帧锻造，贴墙摩擦不算
+        else if (!ResolveMagmaContact(c)) ForgeFromTerrain(c);   // 只有进入的那一帧锻造，贴墙摩擦不算
 
         TryResolveHit(c);
     }
@@ -467,55 +474,69 @@ public class LabPlayer : MonoBehaviour
         if (host != null) return;
         bool isPlayer = c.collider != null && c.collider.GetComponent<LabPlayer>() != null;
         if (isPlayer) playerContactTimer = 0.12f;
-        else ResolveMagmaContact(c, false);   // 贴着岩浆块时持续保证接触边是热二
+        else ResolveMagmaContact(c);      // 新贴上的岩浆面在这里结算第一次接触
 
         TryResolveHit(c);
     }
 
     /// <summary>
-    /// 岩浆块接触：任意方向的表面都强制把 A 的接触边点到热二，不经过 StrikeEdge 的
-    /// 状态机——所以热二不会因此塌框，灵体边也不会被修回来。
-    /// 只有碰撞进入那一帧沿法线撞进去的分量到 v3 才整组破坏；红热边不会融掉岩浆块。
-    /// 返回 false 表示这个碰撞体不是岩浆块，交给普通地形锻造。
+    /// 岩浆接触：每一条边只在“第一次接触”时强制红热；持续贴着不再重复触发。
+    /// 强制红热走 StrikeEdge 的死亡逻辑：Normal → Hot2，已经 Hot2 → 塌框死亡。
+    /// 同一帧以 v2 以上撞上来时，撞击本身再点一次红热，两个红热叠加也是死亡。
+    /// v3 撞击仍然整组破坏。返回 false 表示这次碰撞没有岩浆接触，交给普通地形锻造。
     /// </summary>
-    bool ResolveMagmaContact(Collision2D c, bool entering)
+    bool ResolveMagmaContact(Collision2D c)
     {
         if (c.collider == null) return false;
 
         // 关卡里地形和岩浆共用一个 CompositeCollider2D，接触回调拿到的是整块合并体；
         // 测试/手摆的独立岩浆块则直接是自身的 BoxCollider2D。
         var field = c.collider.GetComponent<LabTerrainField>();
-        var magma = field != null ? null : c.collider.GetComponentInParent<LabMagma>();
-        if (field == null && magma == null) return false;
+        var direct = field != null ? null : c.collider.GetComponentInParent<LabMagma>();
+        if (field == null && direct == null) return false;
         if (lab == null || c.contactCount == 0) return true;
 
-        Vector2 n = ContactNormal(c);
-        if (field != null)
-        {
-            // 合并体没有单块身份：接触点沿法线退回一点，落在被撞的那一格。
-            // 落在普通地形上就交回 ForgeFromTerrain，不能把整片地形都当岩浆。
-            magma = LabMagma.AtCell(c.GetContact(0).point - n * 0.02f);
-            if (magma == null) return false;
-        }
+        bool anyMagma = false;
+        LabMagma v3Hit = null;
 
-        if (entering)
+        for (int i = 0; i < c.contactCount; i++)
         {
+            ContactPoint2D contact = c.GetContact(i);
+            Vector2 n = AxisNormal(contact.normal);
+
+            LabMagma magma = direct;
+            if (field != null)
+                magma = LabMagma.AtCell(contact.point - n * 0.02f);
+            if (magma == null) continue;
+
+            anyMagma = true;
+            Edge edge = EdgeFor(-n);
+            int bit = 1 << (int)edge;
+            bool wasTouching = ((magmaTouchPrev | magmaTouchNow) & bit) != 0;
+            magmaTouchNow |= bit;
+            if (wasTouching) continue;
+
             float impact = Mathf.Abs(Vector2.Dot(lastFixedVelocity, n));
-            if (lab.TierOfSpeed(impact) >= LabMagma.BreakTier)
-            {
-                magma.BreakGroup();
-                return true;
-            }
+            if (lab.TierOfSpeed(impact) >= LabMagma.BreakTier) v3Hit = magma;
+
+            if (IsDead) continue;
+
+            // 第一次接触：强制红热。热二再吃热会直接走塌框/死亡。
+            StrikeEdge(edge, true);
+
+            // 二级及以上的撞击本身也是红热；上一步已经把常态边点成热二，这里必然致死。
+            if (impact >= lab.RedHotSpeed) StrikeEdge(edge, true);
         }
 
-        ForceEdgeHot(EdgeFor(-n));
-        return true;
+        if (v3Hit != null) v3Hit.BreakGroup();
+        return anyMagma;
     }
 
     /// <summary>接触法线归到单轴；方块不旋转，永不产生斜向。</summary>
-    static Vector2 ContactNormal(Collision2D c)
+    static Vector2 ContactNormal(Collision2D c) => AxisNormal(c.GetContact(0).normal);
+
+    static Vector2 AxisNormal(Vector2 n)
     {
-        Vector2 n = c.GetContact(0).normal;
         return Mathf.Abs(n.x) >= Mathf.Abs(n.y)
             ? new Vector2(Mathf.Sign(n.x), 0f)
             : new Vector2(0f, Mathf.Sign(n.y));
@@ -862,17 +883,6 @@ public class LabPlayer : MonoBehaviour
     }
 
     /// <summary>
-    /// 把一条边强制点到热二。岩浆块用：这是设定，不经过 StrikeEdge 的状态机，
-    /// 所以已经热二的边不会塌框，灵体边也不会被修好。
-    /// </summary>
-    public void ForceEdgeHot(Edge e)
-    {
-        if (!canBeRedHot) return;
-        if (edgeStates[(int)e] != EdgeState.Normal) return;
-        SetEdge(e, EdgeState.Hot2);
-    }
-
-    /// <summary>
     /// 即死：踩到地刺，或热二的边再吃一记红热。
     /// 膛里的人先退膛，不能跟着宿主一起没；自己进了别人的膛也先出来。
     /// 死亡后先原地隐藏冻结，由 <see cref="TuningLab.NotifyPlayerDied"/> 决定
@@ -915,6 +925,7 @@ public class LabPlayer : MonoBehaviour
         jumpBuffer = 0f;
         gliding = false;
         refillArmed = false;
+        ResetMagmaContacts();
     }
 
     /// <summary>复活前把碰撞箱和动力学交还给玩家；位置由 <see cref="ReviveAt"/> 的 Teleport 决定。</summary>
@@ -933,6 +944,14 @@ public class LabPlayer : MonoBehaviour
     public void ResetEdges()
     {
         for (int i = 0; i < 4; i++) SetEdge((Edge)i, EdgeState.Normal);
+        ResetMagmaContacts();
+    }
+
+    /// <summary>位置/状态切换后，岩浆接触重新按“第一次接触”算。</summary>
+    void ResetMagmaContacts()
+    {
+        magmaTouchPrev = 0;
+        magmaTouchNow = 0;
     }
 
     public static Edge EdgeFor(Vector2 axis)
@@ -1105,6 +1124,7 @@ public class LabPlayer : MonoBehaviour
         dashTimer = 0f;
         dashLock = 0f;
         gliding = false;
+        ResetMagmaContacts();
     }
 
     /// <summary>出膛：碰撞箱和动力学交还给 B，落到炮口外侧，免得和 A 的整块碰撞箱重叠被弹开。</summary>
@@ -1124,6 +1144,7 @@ public class LabPlayer : MonoBehaviour
 
         grounded = false;
         refillArmed = false;
+        ResetMagmaContacts();
     }
 
     /// <summary>调试：把下一条边直接砸成灵体，用来演示碎边组合 → 形态（F1）。</summary>

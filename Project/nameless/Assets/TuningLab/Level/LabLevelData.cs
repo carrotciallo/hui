@@ -31,7 +31,7 @@ public sealed class LabLevelData
     public List<LabSpikeSpec> spikes = new List<LabSpikeSpec>();
     /// <summary>冰块（1×1，可编组；红热边接触融一块，v2 碰撞碎整组）。</summary>
     public List<LabIceSpec> ices = new List<LabIceSpec>();
-    /// <summary>岩浆块（1×1，可编组；任意面接触强制红热，v3 碰撞碎整组，红热接触不融）。</summary>
+    /// <summary>岩浆块（1×1，可编组；每个接触面首次接触强制红热，热二边再接触死亡，v2+ 撞击死亡，v3 碰撞碎整组）。</summary>
     public List<LabMagmaSpec> magmas = new List<LabMagmaSpec>();
     /// <summary>重生点（3×3 触发区，中心坐标）。</summary>
     public List<LabRespawnPointSpec> respawnPoints = new List<LabRespawnPointSpec>();

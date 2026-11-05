@@ -448,8 +448,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 break;
             case Tool.Magma:
                 EditorGUILayout.HelpBox(
-                    "左键放一块 1×1 岩浆块，按住拖可以连续铺。任意方向接触都会把 A 的对应边强制点到热二，\n" +
-                    "但不会塌框；红热边接触不会融掉岩浆块；只有法线撞击到 v3 才整组破坏。\n" +
+                    "左键放一块 1×1 岩浆块，按住拖可以连续铺。每个接触面只在第一次接触时强制 A 的对应边热二；\n" +
+                    "已经热二的边再接触直接死亡。v2 及以上撞上来时，撞击热 + 强制热也会死亡；v3 撞击整组破坏。\n" +
                     "在上面走动和普通地面相同。同格再点 = 删除，换组号再点 = 改组。\n" +
                     "0 也是普通组；「新建组」会给一个当前最大组号 + 1 的新组。",
                     MessageType.None);
@@ -930,7 +930,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         EditorGUILayout.LabelField("岩浆块", EditorStyles.boldLabel);
         var data = level.Data;
         if (data.magmas == null) data.magmas = new List<LabMagmaSpec>();
-        EditorGUILayout.LabelField("岩浆块", level.MagmaCount + "（1×1，任意面接触强制红热，v3 整组破坏）");
+        EditorGUILayout.LabelField("岩浆块", level.MagmaCount + "（1×1，首次接触强制红热 / 热二接触死亡 / v2+ 撞击死亡 / v3 整组破坏）");
 
         magmaScroll = EditorGUILayout.BeginScrollView(magmaScroll, GUILayout.MaxHeight(120f));
         for (int i = 0; i < data.magmas.Count; i++)
