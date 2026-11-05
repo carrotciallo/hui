@@ -149,7 +149,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 94a56449bed4e0343a7e8ea109dbc0f9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: GameJam.Lab::TuningLab
-  timeScale: 0.6
+  timeScale: 0.84
   roomScale: 1
   freeCamera: 1
   gravity: 50
@@ -168,7 +168,6 @@ MonoBehaviour:
   dashCooldown: 0.8
   groundOnlyDash: 0
   redHotTierIndex: 1
-  redHotDuration: 1.5
   forgeTierIndex: 0
   verticalHitEnabled: 1
   iceBreakTierIndex: 2
@@ -223,8 +222,8 @@ MonoBehaviour:
       y: -1
       width: 103
       height: 109
-    spawnA: {x: 5.5, y: 17}
-    spawnB: {x: 5.5, y: 18}
+    spawnA: {x: 7.5, y: 18}
+    spawnB: {x: 9.5, y: 18}
     cameraMinSize: 11.1
     cameraMaxSize: 27
     solids:
@@ -271,6 +270,13 @@ MonoBehaviour:
     - {x: 1, y: 17}
     - {x: 2, y: 17}
     - {x: 3, y: 17}
+    - {x: 4, y: 17}
+    - {x: 5, y: 17}
+    - {x: 6, y: 17}
+    - {x: 7, y: 17}
+    - {x: 8, y: 17}
+    - {x: 12, y: 17}
+    - {x: 16, y: 17}
     - {x: -26, y: 18}
     - {x: -25, y: 18}
     - {x: -24, y: 18}
@@ -278,41 +284,55 @@ MonoBehaviour:
     - {x: -22, y: 18}
     - {x: -21, y: 18}
     - {x: -20, y: 18}
-    - {x: -18, y: 18}
-    - {x: -18, y: 19}
-    - {x: -18, y: 20}
-    - {x: -4, y: 20}
-    - {x: -18, y: 21}
-    - {x: -4, y: 21}
-    - {x: -18, y: 22}
-    - {x: -4, y: 22}
-    - {x: -4, y: 23}
-    - {x: 1, y: 23}
-    - {x: 2, y: 23}
-    - {x: 3, y: 23}
-    - {x: -4, y: 24}
-    - {x: 0, y: 24}
-    - {x: -4, y: 25}
-    - {x: 0, y: 25}
-    - {x: -5, y: 26}
-    - {x: -5, y: 27}
-    - {x: -5, y: 28}
-    - {x: -5, y: 29}
-    - {x: -5, y: 30}
-    - {x: -4, y: 31}
-    - {x: -4, y: 32}
-    - {x: -4, y: 33}
-    - {x: -1, y: 39}
-    - {x: -4, y: 40}
-    - {x: -3, y: 40}
-    - {x: -2, y: 40}
-    - {x: -4, y: 41}
-    - {x: -4, y: 42}
-    - {x: -4, y: 43}
+    - {x: -13, y: 18}
+    - {x: -9, y: 18}
+    - {x: 1, y: 18}
+    - {x: 5, y: 18}
+    - {x: 1, y: 19}
+    - {x: 9, y: 44}
+    - {x: 17, y: 44}
+    - {x: 19, y: 44}
+    - {x: 20, y: 44}
+    - {x: 27, y: 44}
+    - {x: 28, y: 44}
+    - {x: 26, y: 45}
+    - {x: 27, y: 45}
+    - {x: 23, y: 46}
+    - {x: 24, y: 46}
+    - {x: 25, y: 46}
+    - {x: 21, y: 47}
+    - {x: 22, y: 47}
+    - {x: 29, y: 47}
+    - {x: 11, y: 48}
+    - {x: 18, y: 48}
+    - {x: 19, y: 48}
+    - {x: 20, y: 48}
+    - {x: 22, y: 48}
+    - {x: 11, y: 49}
+    - {x: 17, y: 49}
+    - {x: 18, y: 49}
+    - {x: 16, y: 50}
+    - {x: 14, y: 51}
+    - {x: 15, y: 51}
+    - {x: 13, y: 52}
+    - {x: 11, y: 53}
+    - {x: 12, y: 53}
+    - {x: 10, y: 54}
+    - {x: 14, y: 54}
+    - {x: 8, y: 55}
+    - {x: 9, y: 55}
+    - {x: 8, y: 56}
     ropes: []
-    keys: []
-    doors: []
-    spikes: []
+    keys:
+    - position: {x: -5.5, y: 18.5}
+    doors:
+    - position: {x: -3.5, y: 19.5}
+      color: {r: 0.25, g: 0.75, b: 1, a: 1}
+    - position: {x: 19.5, y: 47.5}
+      color: {r: 0.25, g: 0.75, b: 1, a: 1}
+    spikes:
+    - cell: {x: 0, y: 18}
+      dir: 0
     ices:
     - cell: {x: 21, y: 15}
       groupId: 1
@@ -522,14 +542,20 @@ MonoBehaviour:
       groupId: 1
     - cell: {x: 84, y: 16}
       groupId: 1
-    respawnPoints: []
+    magmas: []
+    respawnPoints:
+    - position: {x: -15.5, y: 34.5}
+    - position: {x: 7.5, y: 34.5}
+    teleports:
+    - position: {x: 14.5, y: 18.5}
+    - position: {x: 3.5, y: 19.5}
     partitions:
     - name: Level 1
       bounds:
         x: -20
         y: -9
-        width: 45
-        height: 40
+        width: 171
+        height: 191
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

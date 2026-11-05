@@ -57,27 +57,25 @@ public sealed class LabTeleportPoint : MonoBehaviour
         if (lab != null) lab.UnregisterTeleport(this);
     }
 
-    void OnTriggerEnter2D(Collider2D other) => SetInside(other, true);
-    void OnTriggerExit2D(Collider2D other) => SetInside(other, false);
-
-    void SetInside(Collider2D other, bool inside)
-    {
-        var player = other.GetComponentInParent<LabPlayer>();
-        if (player == null) return;
-        if (player.scheme == LabPlayer.Scheme.P1) aInside = inside;
-        else bInside = inside;
-    }
-
     void Update()
     {
-        if (!aInside || !bInside || lab == null) return;
+        if (lab == null || lab.TeleportSelecting) return;
+
+        // 死亡/进膛会关掉碰撞箱但不会发 OnTriggerExit，所以每帧按真实包围盒重新判定。
+        aInside = IsInside(lab.PlayerA);
+        bInside = IsInside(lab.PlayerB);
+        if (!aInside || !bInside) return;
+
         if (!IsMarked) lab.MarkTeleportPoint(this);
-        if (lab.TeleportSelecting) return;
         var kb = Keyboard.current;
         if (kb == null) return;
         if (kb.leftShiftKey.wasPressedThisFrame || kb.periodKey.wasPressedThisFrame)
             lab.EnterTeleportSelection(this);
     }
+
+    bool IsInside(LabPlayer player)
+        => player != null && player.IsAlive && !player.Suspended
+           && trigger != null && player.BodyBounds.Intersects(trigger.bounds);
 
     /// <summary>选择界面里当前选中的终点会亮起来；离开选择界面时由 TuningLab 熄灭。</summary>
     public void SetHighlighted(bool highlighted)

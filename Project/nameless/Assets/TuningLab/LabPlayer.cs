@@ -23,6 +23,8 @@ public class LabPlayer : MonoBehaviour
     public bool Grounded => grounded;
     public bool IsDead { get; private set; }
     public bool IsAlive => !IsDead;
+    /// <summary>每次 <see cref="Teleport"/> 自增；重生点靠它区分“走进去”和“被传送/复活放进去”。</summary>
+    public int TeleportCount { get; private set; }
     public bool Dashing => dashLock > 0f;
     /// <summary>充能接触：站在地形上，或碰到另一名玩家。贴墙、顶天花板不算。</summary>
     public bool Touching => grounded || playerContactTimer > 0f;
@@ -71,13 +73,23 @@ public class LabPlayer : MonoBehaviour
     public bool RefillArmed => refillArmed;
     public float Charge { get; private set; } = 1f;
     /// <summary>
-    /// 碰撞箱的竖直半径。膛里时碰撞箱是关着的，bounds 会报 0 —— 出膛的间隙全靠这个数，
-    /// 所以进膛时先记下自己的尺寸，不能让人贴着脸放出去
-    /// （那会被"驮着走"当成踩在队友头上，速度直接被覆盖）。
+    /// 碰撞箱的竖直半径。碰撞箱关掉时（进膛、死亡）bounds 会报 0，
+    /// 但 BoxCollider2D.size 还在，按它算才能把尸体/膛里的人放到正确高度。
     /// </summary>
-    public float HalfHeight => col != null && col.enabled
-        ? col.bounds.extents.y
-        : chamberHalf;
+    public float HalfHeight
+    {
+        get
+        {
+            if (col is BoxCollider2D box)
+                return box.size.y * 0.5f * Mathf.Abs(transform.lossyScale.y);
+            return col != null && col.enabled ? col.bounds.extents.y : 0.5f;
+        }
+    }
+
+    /// <summary>当前碰撞箱的世界包围盒；碰撞箱关掉时是零尺寸，调用方要先用 IsAlive / Suspended 过滤。</summary>
+    public Bounds BodyBounds => col != null && col.enabled
+        ? col.bounds
+        : new Bounds(rb != null ? rb.position : (Vector2)transform.position, Vector3.zero);
     public float FootY => rb.position.y - HalfHeight;
     public Vector2 Velocity => rb.linearVelocity;
     public float Speed => rb.linearVelocity.magnitude;
@@ -159,7 +171,6 @@ public class LabPlayer : MonoBehaviour
 
     LabPlayer loaded;               // 膛里的 B（只有 A 有）
     LabPlayer host;                 // 我在谁的膛里（只有 B 有）
-    float chamberHalf = 0.5f;       // 进膛时记下的竖直半径：碰撞箱关掉后 bounds 读不到
     Vector2 chamberVelocity;        // B 进入时的速度 V前
     Vector2 chamberDir;             // B 进入时的冲刺轴，射出取它的反向
     bool gliding;                   // 水平射出：速度降到零级之前不受重力
@@ -194,6 +205,7 @@ public class LabPlayer : MonoBehaviour
 
     void Update()
     {
+        if (IsDead) return;
         ReadInput();
         if (lab != null && lab.TeleportSelecting) return;
 
@@ -227,7 +239,7 @@ public class LabPlayer : MonoBehaviour
 
     void FixedUpdate()
     {
-        if (lab == null) return;
+        if (lab == null || IsDead) return;
         if (teleportFrozen || lab.TeleportSelecting)
         {
             dashQueued = false;
@@ -445,7 +457,7 @@ public class LabPlayer : MonoBehaviour
         if (host != null) return;      // 膛里的人没有碰撞箱，这里的回调只能是进膛那一刻的残留
         bool isPlayer = c.collider != null && c.collider.GetComponent<LabPlayer>() != null;
         if (isPlayer) playerContactTimer = 0.12f;
-        else ForgeFromTerrain(c);         // 只有进入的那一帧锻造，贴墙摩擦不算
+        else if (!ResolveMagmaContact(c, true)) ForgeFromTerrain(c);   // 只有进入的那一帧锻造，贴墙摩擦不算
 
         TryResolveHit(c);
     }
@@ -455,8 +467,45 @@ public class LabPlayer : MonoBehaviour
         if (host != null) return;
         bool isPlayer = c.collider != null && c.collider.GetComponent<LabPlayer>() != null;
         if (isPlayer) playerContactTimer = 0.12f;
+        else ResolveMagmaContact(c, false);   // 贴着岩浆块时持续保证接触边是热二
 
         TryResolveHit(c);
+    }
+
+    /// <summary>
+    /// 岩浆块接触：任意方向的表面都强制把 A 的接触边点到热二，不经过 StrikeEdge 的
+    /// 状态机——所以热二不会因此塌框，灵体边也不会被修回来。
+    /// 只有碰撞进入那一帧沿法线撞进去的分量到 v3 才整组破坏；红热边不会融掉岩浆块。
+    /// 返回 false 表示这个碰撞体不是岩浆块，交给普通地形锻造。
+    /// </summary>
+    bool ResolveMagmaContact(Collision2D c, bool entering)
+    {
+        var magma = c.collider != null ? c.collider.GetComponentInParent<LabMagma>() : null;
+        if (magma == null) return false;
+        if (lab == null || c.contactCount == 0) return true;
+
+        Vector2 n = ContactNormal(c);
+        if (entering)
+        {
+            float impact = Mathf.Abs(Vector2.Dot(lastFixedVelocity, n));
+            if (lab.TierOfSpeed(impact) >= LabMagma.BreakTier)
+            {
+                magma.BreakGroup();
+                return true;
+            }
+        }
+
+        ForceEdgeHot(EdgeFor(-n));
+        return true;
+    }
+
+    /// <summary>接触法线归到单轴；方块不旋转，永不产生斜向。</summary>
+    static Vector2 ContactNormal(Collision2D c)
+    {
+        Vector2 n = c.GetContact(0).normal;
+        return Mathf.Abs(n.x) >= Mathf.Abs(n.y)
+            ? new Vector2(Mathf.Sign(n.x), 0f)
+            : new Vector2(0f, Mathf.Sign(n.y));
     }
 
     /// <summary>
@@ -468,11 +517,7 @@ public class LabPlayer : MonoBehaviour
     {
         if (lab == null || c.contactCount == 0) return;
 
-        Vector2 n = c.GetContact(0).normal;
-        // 方块不旋转，接触法线必定是轴；取绝对值大的那根轴，杜绝斜向
-        n = Mathf.Abs(n.x) >= Mathf.Abs(n.y)
-            ? new Vector2(Mathf.Sign(n.x), 0f)
-            : new Vector2(0f, Mathf.Sign(n.y));
+        Vector2 n = ContactNormal(c);
 
         // 用上一帧 FixedUpdate 写进去的速度：碰撞回调里速度已经被解算改掉了
         float impact = Mathf.Abs(Vector2.Dot(lastFixedVelocity, n));
@@ -702,6 +747,40 @@ public class LabPlayer : MonoBehaviour
     public bool AnyHot => edgeStates[0] != EdgeState.Normal || edgeStates[1] != EdgeState.Normal
                        || edgeStates[2] != EdgeState.Normal || edgeStates[3] != EdgeState.Normal;
 
+    /// <summary>四条边的状态快照；A 的形态（u/L/=/‖/矛/灵体）和红热/灵体边都由它决定。</summary>
+    public struct FormState
+    {
+        public EdgeState left;
+        public EdgeState bottom;
+        public EdgeState right;
+        public EdgeState top;
+
+        public static FormState Normal => new FormState
+        {
+            left = EdgeState.Normal,
+            bottom = EdgeState.Normal,
+            right = EdgeState.Normal,
+            top = EdgeState.Normal
+        };
+    }
+
+    public FormState CaptureForm() => new FormState
+    {
+        left = edgeStates[(int)Edge.Left],
+        bottom = edgeStates[(int)Edge.Bottom],
+        right = edgeStates[(int)Edge.Right],
+        top = edgeStates[(int)Edge.Top]
+    };
+
+    /// <summary>把四条边恢复成快照；灵体遮罩、形态和贴图都由 SetEdge 同步。</summary>
+    public void ApplyForm(FormState state)
+    {
+        SetEdge(Edge.Top, state.top);
+        SetEdge(Edge.Bottom, state.bottom);
+        SetEdge(Edge.Left, state.left);
+        SetEdge(Edge.Right, state.right);
+    }
+
     /// <summary>红热态变化的外抛接口。形态由"哪几条边成了灵体"决定，挂这里。</summary>
     public event System.Action<LabPlayer, Edge, EdgeState, EdgeState> EdgeStateChanged;
 
@@ -770,9 +849,21 @@ public class LabPlayer : MonoBehaviour
     }
 
     /// <summary>
+    /// 把一条边强制点到热二。岩浆块用：这是设定，不经过 StrikeEdge 的状态机，
+    /// 所以已经热二的边不会塌框，灵体边也不会被修好。
+    /// </summary>
+    public void ForceEdgeHot(Edge e)
+    {
+        if (!canBeRedHot) return;
+        if (edgeStates[(int)e] != EdgeState.Normal) return;
+        SetEdge(e, EdgeState.Hot2);
+    }
+
+    /// <summary>
     /// 即死：踩到地刺，或热二的边再吃一记红热。
-    /// 膛里的人先退膛，不能跟着宿主一起没。有检查点回检查点；
-    /// 没有则按 <see cref="TuningLab.deathWhenNoCheckpoint"/> 决定重开本关还是把人销毁。
+    /// 膛里的人先退膛，不能跟着宿主一起没；自己进了别人的膛也先出来。
+    /// 死亡后先原地隐藏冻结，由 <see cref="TuningLab.NotifyPlayerDied"/> 决定
+    /// 是等队友、回重生点、重开本关还是销毁。
     /// </summary>
     public void Kill()
     {
@@ -781,19 +872,48 @@ public class LabPlayer : MonoBehaviour
         IsDead = true;
 
         Eject();
+        if (host != null) host.Eject();
         if (lab == null) { Destroy(gameObject); return; }
 
-        if (lab.TryRespawn(this)) { dying = false; return; }
+        SuspendDead();
+        lab.NotifyPlayerDied(this);
+    }
 
-        if (lab.deathWhenNoCheckpoint == TuningLab.DeathFallback.RespawnAtSpawn)
+    /// <summary>死亡等待：不可视、无碰撞、运动学停在原地，输入和物理逻辑都早退。</summary>
+    void SuspendDead()
+    {
+        if (col != null) col.enabled = false;
+        if (rb != null)
         {
-            lab.ResetMap();
-            lab.ResetPlayers();
-            dying = false;
-            return;
+            rb.linearVelocity = Vector2.zero;
+            rb.bodyType = RigidbodyType2D.Kinematic;
+            rb.gravityScale = 0f;
         }
+        if (visual != null) visual.SetVisible(false);
 
-        Destroy(gameObject);
+        teleportFrozen = false;
+        grounded = false;
+        support = null;
+        playerContactTimer = 0f;
+        dashPhase = DashPhase.None;
+        dashTimer = 0f;
+        dashLock = 0f;
+        dashQueued = false;
+        jumpBuffer = 0f;
+        gliding = false;
+        refillArmed = false;
+    }
+
+    /// <summary>复活前把碰撞箱和动力学交还给玩家；位置由 <see cref="ReviveAt"/> 的 Teleport 决定。</summary>
+    void WakeFromDeath()
+    {
+        if (col != null) col.enabled = true;
+        if (rb != null)
+        {
+            rb.bodyType = RigidbodyType2D.Dynamic;
+            rb.gravityScale = lab != null ? lab.GravityScale : 5.1f;
+        }
+        if (visual != null) visual.SetVisible(true);
     }
 
     /// <summary>四条边全部回到常态（复活时用）。</summary>
@@ -959,7 +1079,6 @@ public class LabPlayer : MonoBehaviour
     /// <summary>进膛：不可视、无碰撞箱、运动学跟随宿主，各种逻辑在 Update/FixedUpdate 里早退。</summary>
     void SuspendIn()
     {
-        if (col != null) chamberHalf = col.bounds.extents.y;   // 关掉之后再想量自己就量不到了
         if (visual != null) visual.SetVisible(false);
         col.enabled = false;
         rb.bodyType = RigidbodyType2D.Kinematic;
@@ -1026,13 +1145,15 @@ public class LabPlayer : MonoBehaviour
         LandedApexDescent = 0f;
         LaunchFootY = FootY;
         ApexFootY = FootY;
+        TeleportCount++;
     }
 
     public void ReviveAt(Vector2 position)
     {
-        Teleport(position);
+        if (IsDead) WakeFromDeath();
         IsDead = false;
         dying = false;
+        Teleport(position);
     }
 
     public void TeleportPreservingState(Vector2 position, Vector2 velocity)

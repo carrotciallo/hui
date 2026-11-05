@@ -169,6 +169,8 @@ public class TuningLab : MonoBehaviour
     public int IceBreakTier => Mathf.Clamp(iceBreakTierIndex, 0, MaxTier);
     /// <summary>冰块整组破坏的碰撞门槛（该等级的下边界速度）。</summary>
     public float IceBreakSpeed => SpeedForCells(Boundary(Mathf.Max(0, IceBreakTier - 1)));
+    /// <summary>岩浆块整组破坏的碰撞门槛：固定三级（该等级的下边界速度）。</summary>
+    public float MagmaBreakSpeed => SpeedForCells(Boundary(Mathf.Max(0, LabMagma.BreakTier - 1)));
     /// <summary>冰面加速的上限：最高等级的名义顶端（默认 v4 ≈ 44.72）。</summary>
     public float IceMaxSpeed => SpeedForCells(Boundary(MaxTier - 1) + Mathf.Max(0.01f, tierSpacingCells));
     /// <summary>大炮发射的增量 = 一个等级间距的 v²（= 2·g·间距格数）。v' = √(Vb² + 这个数)。</summary>
@@ -389,12 +391,12 @@ public class TuningLab : MonoBehaviour
         if (PlayerA != null)
         {
             Vector2 feet = level != null ? level.Data.spawnA : SpawnAFeet;
-            PlayerA.Teleport(new Vector2(feet.x, feet.y + PlayerA.HalfHeight));
+            PlayerA.ReviveAt(new Vector2(feet.x, feet.y + PlayerA.HalfHeight));
         }
         if (PlayerB != null)
         {
             Vector2 feet = level != null ? level.Data.spawnB : SpawnBFeet;
-            PlayerB.Teleport(new Vector2(feet.x, feet.y + PlayerB.HalfHeight));
+            PlayerB.ReviveAt(new Vector2(feet.x, feet.y + PlayerB.HalfHeight));
         }
     }
 
@@ -423,19 +425,58 @@ public class TuningLab : MonoBehaviour
         ActiveRespawnPoint = point;
     }
 
-    public bool TryRespawn(LabPlayer deadPlayer)
+    /// <summary>
+    /// 任意一名玩家死亡后由 <see cref="LabPlayer.Kill"/> 调用。
+    /// 单人只是隐藏等待；两人都死亡才结算：有激活的重生点就双人重生，
+    /// 否则只在场景里只有一个重生点时回它，再否则按 <see cref="deathWhenNoCheckpoint"/> 处理。
+    /// </summary>
+    public void NotifyPlayerDied(LabPlayer deadPlayer)
+    {
+        if (TeleportSelecting) EndTeleportSelection();
+
+        // 只创建了一个玩家（测试/调试）时没有“队友”，直接按单人结算。
+        if (PlayerA != null || PlayerB != null)
+        {
+            if (PlayerA != null && PlayerA.IsAlive) return;
+            if (PlayerB != null && PlayerB.IsAlive) return;
+        }
+
+        ResolveTeamDeath(deadPlayer);
+    }
+
+    void ResolveTeamDeath(LabPlayer deadPlayer)
     {
         if (ActiveRespawnPoint != null)
         {
-            ActiveRespawnPoint.RespawnAfterDeath(this, deadPlayer);
-            return true;
+            ActiveRespawnPoint.RespawnRecordedPlayers(this);
+            return;
         }
+
         if (respawnPoints.Count == 1 && respawnPoints[0] != null)
         {
-            respawnPoints[0].RespawnPlayers(this);
-            return true;
+            ActivateRespawnPoint(respawnPoints[0]);
+            respawnPoints[0].RespawnRecordedPlayers(this);
+            return;
         }
-        return false;
+
+        if (deathWhenNoCheckpoint == DeathFallback.RespawnAtSpawn)
+        {
+            ResetMap();
+            ResetPlayers();
+            return;
+        }
+
+        DestroyDeadPlayers(deadPlayer);
+    }
+
+    void DestroyDeadPlayers(LabPlayer deadPlayer)
+    {
+        if (PlayerA != null && PlayerA.IsDead) Destroy(PlayerA.gameObject);
+        if (PlayerB != null && PlayerB.IsDead) Destroy(PlayerB.gameObject);
+
+        // 场景里手工摆的玩家不在 PlayerA/B 上，也要按死亡处理，不能漏掉。
+        if (deadPlayer != null && deadPlayer != PlayerA && deadPlayer != PlayerB)
+            Destroy(deadPlayer.gameObject);
     }
 
     public void ResetMap()

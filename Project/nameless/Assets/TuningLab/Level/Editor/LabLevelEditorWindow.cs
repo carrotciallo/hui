@@ -29,13 +29,14 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Door = 9,
         Spike = 10,
         Ice = 11,
-        RespawnPoint = 12,
-        TeleportPoint = 13,
-        Marquee = 14,
-        Move = 15
+        Magma = 12,
+        RespawnPoint = 13,
+        TeleportPoint = 14,
+        Marquee = 15,
+        Move = 16
     }
 
-    /// <summary>下一次拉选区时怎么处理已有的选区。</summary>
+    /// <summary>下一次拉选区时怎么处理当前选区。</summary>
     enum MarqueeMode
     {
         Replace = 0,
@@ -53,8 +54,9 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Door = 4,
         Spike = 5,
         Ice = 6,
-        RespawnPoint = 7,
-        TeleportPoint = 8
+        Magma = 7,
+        RespawnPoint = 8,
+        TeleportPoint = 9
     }
 
     struct Pick
@@ -69,7 +71,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     static readonly string[] ToolLabels =
     {
-        "铺地形", "擦地形", "矩形", "竖绳", "横绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺", "冰块", "重生点", "传送点",
+        "铺地形", "擦地形", "矩形", "竖绳", "横绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺", "冰块", "岩浆块", "重生点", "传送点",
         "选区", "选择"
     };
 
@@ -91,6 +93,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     Color newDoorColor = LabDoor.DefaultClosedColor;
     LabSpikeDir newSpikeDir = LabSpikeDir.Up;
     int iceGroupId = 1;
+    int magmaGroupId = 1;
     bool showGrid = true;
     bool showSpawns = true;
     bool showCameraFrames = true;
@@ -99,6 +102,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     Vector2 keyDoorScroll;
     Vector2 spikeScroll;
     Vector2 iceScroll;
+    Vector2 magmaScroll;
     Vector2 respawnScroll;
     Vector2 teleportScroll;
 
@@ -110,17 +114,18 @@ public sealed class LabLevelEditorWindow : EditorWindow
     // 连续摆放：拖动时每个经过的格子都按第一次的"放/删"语义执行。
     bool dragAdds;
 
-    // 选区
+    // 选区：同一时间只有一个，用互不重叠的矩形块拼出任意形状；增加选区走并集。
     MarqueeMode marqueeMode = MarqueeMode.Replace;
-    readonly List<RectInt> marquees = new List<RectInt>();
+    readonly List<RectInt> selection = new List<RectInt>();
     bool marqueeDragging;
     Vector2Int marqueeStart;
     Vector2Int marqueeEnd;
-    Vector2 marqueeScroll;
 
     // 选择 / 拖动
     Pick picked;
     bool movingContent;
+    bool movingSelection;
+    LabLevelData.ContentSelection moveCapture;
     Vector2Int moveLastCell;
 
     int partitionIndex = -1;
@@ -266,6 +271,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawSpikes();
         EditorGUILayout.Space();
         DrawIces();
+        EditorGUILayout.Space();
+        DrawMagmas();
         EditorGUILayout.Space();
         DrawRespawnPoints();
         EditorGUILayout.Space();
@@ -439,6 +446,20 @@ public sealed class LabLevelEditorWindow : EditorWindow
                         iceGroupId = level.Data.NextIceGroupId();
                 }
                 break;
+            case Tool.Magma:
+                EditorGUILayout.HelpBox(
+                    "左键放一块 1×1 岩浆块，按住拖可以连续铺。任意方向接触都会把 A 的对应边强制点到热二，\n" +
+                    "但不会塌框；红热边接触不会融掉岩浆块；只有法线撞击到 v3 才整组破坏。\n" +
+                    "在上面走动和普通地面相同。同格再点 = 删除，换组号再点 = 改组。\n" +
+                    "0 也是普通组；「新建组」会给一个当前最大组号 + 1 的新组。",
+                    MessageType.None);
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    magmaGroupId = EditorGUILayout.IntField("组号", magmaGroupId);
+                    if (GUILayout.Button("新建组", GUILayout.Width(64f)))
+                        magmaGroupId = level.Data.NextMagmaGroupId();
+                }
+                break;
             case Tool.RespawnPoint:
                 EditorGUILayout.HelpBox(
                     "左键放置 3×3 重生点；同一格再次点击删除。重生点由 LabLevel 数据生成，" +
@@ -454,15 +475,17 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
             case Tool.Marquee:
                 EditorGUILayout.HelpBox(
-                    "左键拖出一个矩形选区，起点和对角就是它的两个顶点。\n" +
-                    "下一次拉选区怎么处理已有的：重新选择（默认，清掉旧的）/ 增加选区 / 删除选区（从已有选区里挖掉这块）。",
+                    "左键拖出一个矩形选区，起点和对角就是它的两个顶点。同一时间只有一个选区。\n" +
+                    "下一次拉选区怎么处理它：重新选择（默认，换掉旧的）/ 增加选区（并进去，可以拼出不规则形状）/ " +
+                    "删除选区（从选区里挖掉这块）。",
                     MessageType.None);
                 marqueeMode = (MarqueeMode)GUILayout.SelectionGrid((int)marqueeMode, MarqueeModeLabels, 3);
                 break;
 
             case Tool.Move:
                 EditorGUILayout.HelpBox(
-                    "左键点中物件后拖动 = 移动那个物件；场景里有选区时，改成拖动选区里的所有内容。\n" +
+                    "左键点中物件后拖动 = 移动那个物件。只要场景里有选区，不管鼠标从哪里开始拖，" +
+                    "都改成拖动选区框和里面的全部内容；框扫过、但原本不在选区里的物件不会被带走。\n" +
                     "删除用下面「选区 / 选择」面板里的按钮。移动和删除都能撤销。",
                     MessageType.None);
                 break;
@@ -481,37 +504,23 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
         marqueeMode = (MarqueeMode)GUILayout.SelectionGrid((int)marqueeMode, MarqueeModeLabels, 3);
 
-        if (marquees.Count == 0)
+        if (selection.Count == 0)
         {
             EditorGUILayout.LabelField("（没有选区）");
         }
         else
         {
-            marqueeScroll = EditorGUILayout.BeginScrollView(marqueeScroll, GUILayout.MaxHeight(90f));
-            for (int i = 0; i < marquees.Count; i++)
-            {
-                var rect = marquees[i];
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    EditorGUILayout.LabelField(
-                        string.Format("选区 {0}：{1}×{2} @ ({3}, {4})",
-                            i, rect.width, rect.height, rect.x, rect.y),
-                        EditorStyles.miniLabel);
-                    if (GUILayout.Button("×", GUILayout.Width(24f)))
-                    {
-                        marquees.RemoveAt(i);
-                        break;
-                    }
-                }
-            }
-            EditorGUILayout.EndScrollView();
+            RectInt bounds = SelectionBounds(selection);
+            EditorGUILayout.LabelField(
+                string.Format("当前选区：{0} 格，包围盒 {1}×{2} @ ({3}, {4})",
+                    SelectionArea(selection), bounds.width, bounds.height, bounds.x, bounds.y));
         }
 
         using (new EditorGUILayout.HorizontalScope())
         {
-            using (new EditorGUI.DisabledScope(marquees.Count == 0))
+            using (new EditorGUI.DisabledScope(selection.Count == 0))
             {
-                if (GUILayout.Button("清空选区")) marquees.Clear();
+                if (GUILayout.Button("清空选区")) selection.Clear();
                 if (GUILayout.Button("删除选区内容")) DeleteSelection();
             }
         }
@@ -519,8 +528,10 @@ public sealed class LabLevelEditorWindow : EditorWindow
         EditorGUILayout.LabelField("选中", picked.kind == PickKind.None ? "（无）" : PickLabel(picked));
 
         EditorGUILayout.HelpBox(
-            "选区只是编辑器的状态，不存进关卡数据；拖动和删除作用在选区覆盖的物件上。\n" +
-            "地形格、绳、钥匙、门、地刺、冰块、重生点、传送点都算物件；出生点和关卡分区不算。",
+            "同一时间只有一个选区，它只是编辑器的状态，不存进关卡数据。\n" +
+            "拖动时选区框和里面的物件一起移动；删除作用在选区覆盖的物件上。\n" +
+            "增加选区会把新拖出的矩形并进当前选区，所以选区可以是不规则形状。\n" +
+            "地形格、绳、钥匙、门、地刺、冰块、岩浆块、重生点、传送点都算物件；出生点和关卡分区不算。",
             MessageType.None);
     }
 
@@ -909,6 +920,56 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 if (!EditorUtility.DisplayDialog("清空冰块", "删掉所有冰块？", "清空", "取消")) return;
                 Record("清空冰块");
                 level.Data.ClearIces();
+                AfterStructuralEdit();
+            }
+        }
+    }
+
+    void DrawMagmas()
+    {
+        EditorGUILayout.LabelField("岩浆块", EditorStyles.boldLabel);
+        var data = level.Data;
+        if (data.magmas == null) data.magmas = new List<LabMagmaSpec>();
+        EditorGUILayout.LabelField("岩浆块", level.MagmaCount + "（1×1，任意面接触强制红热，v3 整组破坏）");
+
+        magmaScroll = EditorGUILayout.BeginScrollView(magmaScroll, GUILayout.MaxHeight(120f));
+        for (int i = 0; i < data.magmas.Count; i++)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                var magma = data.magmas[i];
+                EditorGUILayout.LabelField(
+                    string.Format("岩 ({0}, {1})", magma.cell.x, magma.cell.y),
+                    EditorStyles.miniLabel, GUILayout.Width(110f));
+
+                EditorGUI.BeginChangeCheck();
+                int next = EditorGUILayout.IntField(magma.groupId, GUILayout.Width(48f));
+                if (EditorGUI.EndChangeCheck())
+                {
+                    Record("改岩浆块组号");
+                    magma.groupId = next;
+                    data.magmas[i] = magma;
+                    MarkDirty(true);
+                }
+
+                if (GUILayout.Button("×", GUILayout.Width(24f)))
+                {
+                    Record("删岩浆块");
+                    data.magmas.RemoveAt(i);
+                    AfterStructuralEdit();
+                    break;
+                }
+            }
+        }
+        EditorGUILayout.EndScrollView();
+
+        using (new EditorGUI.DisabledScope(level.MagmaCount == 0))
+        {
+            if (GUILayout.Button("清空岩浆块"))
+            {
+                if (!EditorUtility.DisplayDialog("清空岩浆块", "删掉所有岩浆块？", "清空", "取消")) return;
+                Record("清空岩浆块");
+                level.Data.ClearMagmas();
                 AfterStructuralEdit();
             }
         }
@@ -1413,6 +1474,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     issues.Add("第 " + i + " 块冰和地形重叠：" + ice.cell);
                 if (data.HasSpike(ice.cell))
                     issues.Add("第 " + i + " 块冰和地刺在同一格：" + ice.cell);
+                if (data.HasMagma(ice.cell))
+                    issues.Add("第 " + i + " 块冰和岩浆块在同一格：" + ice.cell);
                 if (ice.groupId < 0)
                     issues.Add("第 " + i + " 块冰的组号不能是负数：" + ice.groupId);
 
@@ -1430,6 +1493,39 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     for (int d = 0; d < data.doors.Count; d++)
                         if (data.doors[d].Cells().Contains(ice.cell))
                             issues.Add("第 " + i + " 块冰在第 " + d + " 扇门里：" + ice.cell);
+            }
+        }
+
+        if (data.magmas != null)
+        {
+            for (int i = 0; i < data.magmas.Count; i++)
+            {
+                var magma = data.magmas[i];
+                if (!data.ContainsCell(magma.cell))
+                    issues.Add("第 " + i + " 块岩浆不在编辑范围内：" + magma.cell);
+                if (data.HasCell(magma.cell))
+                    issues.Add("第 " + i + " 块岩浆和地形重叠：" + magma.cell);
+                if (data.HasSpike(magma.cell))
+                    issues.Add("第 " + i + " 块岩浆和地刺在同一格：" + magma.cell);
+                if (data.HasIce(magma.cell))
+                    issues.Add("第 " + i + " 块岩浆和冰块在同一格：" + magma.cell);
+                if (magma.groupId < 0)
+                    issues.Add("第 " + i + " 块岩浆的组号不能是负数：" + magma.groupId);
+
+                if (SpawnTouchesCell(data.spawnA, TuningLab.A_Pixels / (float)TuningLab.CellPixels, magma.cell))
+                    issues.Add("第 " + i + " 块岩浆压在 A 的出生点上：" + magma.cell);
+                if (SpawnTouchesCell(data.spawnB, TuningLab.B_Pixels / (float)TuningLab.CellPixels, magma.cell))
+                    issues.Add("第 " + i + " 块岩浆压在 B 的出生点上：" + magma.cell);
+
+                if (data.keys != null)
+                    for (int k = 0; k < data.keys.Count; k++)
+                        if (data.keys[k].Cells().Contains(magma.cell))
+                            issues.Add("第 " + i + " 块岩浆和第 " + k + " 把钥匙在同一格：" + magma.cell);
+
+                if (data.doors != null)
+                    for (int d = 0; d < data.doors.Count; d++)
+                        if (data.doors[d].Cells().Contains(magma.cell))
+                            issues.Add("第 " + i + " 块岩浆在第 " + d + " 扇门里：" + magma.cell);
             }
         }
 
@@ -1489,9 +1585,9 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
         if (issues.Count == 0)
         {
-            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 根刺，{6} 块冰，{7} 个重生点，{8} 个传送点，{9} 个关卡分区。",
+            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 根刺，{6} 块冰，{7} 块岩浆，{8} 个重生点，{9} 个传送点，{10} 个关卡分区。",
                 level.SolidCellCount, level.MergedRectCount, level.RopeCount, level.KeyCount, level.DoorCount,
-                level.SpikeCount, level.IceCount, level.RespawnPointCount, level.TeleportCount,
+                level.SpikeCount, level.IceCount, level.MagmaCount, level.RespawnPointCount, level.TeleportCount,
                 data.partitions != null ? data.partitions.Count : 0), level);
         }
         else
@@ -1580,9 +1676,10 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawKeyDoorHandles(data);
         DrawSpikeHandles(data);
         DrawIceHandles(data);
+        DrawMagmaHandles(data);
         DrawRespawnPointHandles(data);
         DrawTeleportHandles(data);
-        DrawMarquees();
+        DrawSelectionRegion();
         DrawPickedHighlight();
         if (showSpawns) DrawSpawnHandles(data);
         if (showCameraFrames) DrawCameraFrames(data);
@@ -1603,7 +1700,9 @@ public sealed class LabLevelEditorWindow : EditorWindow
         switch (e.type)
         {
             case EventType.MouseDown when e.button == 0 && !e.alt:
-                if (tool != Tool.Partition && !inArea) return;
+                // 有选区时，移动工具在场景任意位置起手都拖整个选区；其它工具仍限制在编辑范围内。
+                bool movesSelection = tool == Tool.Move && selection.Count > 0;
+                if (tool != Tool.Partition && !inArea && !movesSelection) return;
                 BeginGesture(cell, inBounds, view);
                 e.Use();
                 break;
@@ -1761,6 +1860,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     Notify(view, "冰块不能放在实心格里：" + cell);
                     return;
                 }
+                if (level.Data.HasMagma(cell))
+                {
+                    Notify(view, "冰块不能和岩浆块放在同一格：" + cell);
+                    return;
+                }
 
                 var existingIce = level.Data.FindIce(cell);
                 if (existingIce.HasValue && existingIce.Value.groupId == iceGroupId)
@@ -1772,6 +1876,37 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 {
                     Record(existingIce.HasValue ? "改冰块组号" : "放冰块");
                     level.Data.PlaceIce(cell, iceGroupId);
+                }
+                AfterStructuralEdit();
+                break;
+
+            case Tool.Magma:
+                if (!inBounds)
+                {
+                    Notify(view, "岩浆块必须放在相机范围里。");
+                    return;
+                }
+                if (level.Data.HasCell(cell))
+                {
+                    Notify(view, "岩浆块不能放在实心格里：" + cell);
+                    return;
+                }
+                if (level.Data.HasIce(cell))
+                {
+                    Notify(view, "岩浆块不能和冰块放在同一格：" + cell);
+                    return;
+                }
+
+                var existingMagma = level.Data.FindMagma(cell);
+                if (existingMagma.HasValue && existingMagma.Value.groupId == magmaGroupId)
+                {
+                    Record("删岩浆块");
+                    level.Data.RemoveMagma(cell);
+                }
+                else
+                {
+                    Record(existingMagma.HasValue ? "改岩浆块组号" : "放岩浆块");
+                    level.Data.PlaceMagma(cell, magmaGroupId);
                 }
                 AfterStructuralEdit();
                 break;
@@ -1823,16 +1958,21 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 break;
 
             case Tool.Move:
-                if (marquees.Count > 0)
+                if (selection.Count > 0)
                 {
+                    // 锁住拖动开始时选区里的条目：框和内容一起走，沿途扫过的物件不会被带走。
                     Record("移动选区内容");
                     movingContent = true;
+                    movingSelection = true;
+                    moveCapture = level.Data.CaptureContents(selection);
                     moveLastCell = cell;
                     gesture = true;
                     Repaint();
                     break;
                 }
 
+                movingSelection = false;
+                moveCapture = null;
                 picked = PickAt(cell);
                 if (picked.kind == PickKind.None)
                 {
@@ -1882,7 +2022,15 @@ public sealed class LabLevelEditorWindow : EditorWindow
             if (areas == null) return;
 
             moveLastCell = cell;
-            level.Data.MoveContents(areas, delta);
+            if (movingSelection)
+            {
+                level.Data.MoveCapturedContents(moveCapture, delta);
+                TranslateRects(selection, delta);
+            }
+            else
+            {
+                level.Data.MoveContents(areas, delta);
+            }
             MarkDirty(true);
             return;
         }
@@ -1938,6 +2086,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         if (tool == Tool.Move)
         {
             movingContent = false;
+            movingSelection = false;
+            moveCapture = null;
             gesture = false;
             level.Data.Normalize();
             level.RebuildPreview();
@@ -2102,6 +2252,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         if (data.doors != null) data.doors.RemoveAll(door => door.Cells().Contains(cell));
         if (data.spikes != null) data.spikes.RemoveAll(spike => spike.cell == cell);
         if (data.ices != null) data.ices.RemoveAll(ice => ice.cell == cell);
+        if (data.magmas != null) data.magmas.RemoveAll(magma => magma.cell == cell);
         if (data.respawnPoints != null)
             data.respawnPoints.RemoveAll(point => point.Cells().Contains(cell));
         if (data.teleports != null)
@@ -2168,6 +2319,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.HorizontalRope:
             case Tool.Spike:
             case Tool.Ice:
+            case Tool.Magma:
             case Tool.RespawnPoint:
             case Tool.TeleportPoint:
                 return true;
@@ -2191,6 +2343,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
             {
                 var existing = data.FindIce(cell);
                 return !(existing.HasValue && existing.Value.groupId == iceGroupId);
+            }
+            case Tool.Magma:
+            {
+                var existing = data.FindMagma(cell);
+                return !(existing.HasValue && existing.Value.groupId == magmaGroupId);
             }
             case Tool.RespawnPoint:
                 return !data.HasRespawnPoint(cell);
@@ -2249,8 +2406,13 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
             case Tool.Ice:
                 if (!add) return data.RemoveIce(cell);
-                if (!data.ContainsCell(cell) || data.HasCell(cell)) return false;
+                if (!data.ContainsCell(cell) || data.HasCell(cell) || data.HasMagma(cell)) return false;
                 return data.PlaceIce(cell, iceGroupId);
+
+            case Tool.Magma:
+                if (!add) return data.RemoveMagma(cell);
+                if (!data.ContainsCell(cell) || data.HasCell(cell) || data.HasIce(cell)) return false;
+                return data.PlaceMagma(cell, magmaGroupId);
 
             case Tool.RespawnPoint:
                 if (!add) return data.RemoveRespawnPoint(cell);
@@ -2301,7 +2463,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     static RectInt CellRect(Vector2 point)
         => new RectInt(Mathf.FloorToInt(point.x), Mathf.FloorToInt(point.y), 1, 1);
 
-    /// <summary>这一格上最上层的物件。优先级：传送点 &gt; 重生点 &gt; 钥匙 &gt; 冰块 &gt; 地刺 &gt; 门 &gt; 绳 &gt; 地形。</summary>
+    /// <summary>这一格上最上层的物件。优先级：传送点 &gt; 重生点 &gt; 钥匙 &gt; 冰块/岩浆块 &gt; 地刺 &gt; 门 &gt; 绳 &gt; 地形。</summary>
     Pick PickAt(Vector2Int cell)
     {
         var data = level.Data;
@@ -2325,6 +2487,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
             for (int i = 0; i < data.ices.Count; i++)
                 if (data.ices[i].cell == cell)
                     return new Pick { kind = PickKind.Ice, index = i };
+
+        if (data.magmas != null)
+            for (int i = 0; i < data.magmas.Count; i++)
+                if (data.magmas[i].cell == cell)
+                    return new Pick { kind = PickKind.Magma, index = i };
 
         if (data.spikes != null)
             for (int i = 0; i < data.spikes.Count; i++)
@@ -2361,6 +2528,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Door: return pick.index >= 0 && pick.index < data.doors.Count;
             case PickKind.Spike: return pick.index >= 0 && pick.index < data.spikes.Count;
             case PickKind.Ice: return pick.index >= 0 && pick.index < data.ices.Count;
+            case PickKind.Magma: return pick.index >= 0 && pick.index < data.magmas.Count;
             case PickKind.RespawnPoint: return pick.index >= 0 && pick.index < data.respawnPoints.Count;
             case PickKind.TeleportPoint: return pick.index >= 0 && pick.index < data.teleports.Count;
             default: return false;
@@ -2378,6 +2546,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Door: return CellRect(data.doors[pick.index].position);
             case PickKind.Spike: return new RectInt(data.spikes[pick.index].cell, Vector2Int.one);
             case PickKind.Ice: return new RectInt(data.ices[pick.index].cell, Vector2Int.one);
+            case PickKind.Magma: return new RectInt(data.magmas[pick.index].cell, Vector2Int.one);
             case PickKind.RespawnPoint: return CellRect(data.respawnPoints[pick.index].position);
             case PickKind.TeleportPoint: return CellRect(data.teleports[pick.index].position);
             default: return new RectInt(0, 0, 0, 0);
@@ -2394,6 +2563,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Door: return "门 #" + pick.index;
             case PickKind.Spike: return "地刺 #" + pick.index;
             case PickKind.Ice: return "冰块 #" + pick.index;
+            case PickKind.Magma: return "岩浆块 #" + pick.index;
             case PickKind.RespawnPoint: return "重生点 #" + pick.index;
             case PickKind.TeleportPoint: return "传送点 #" + pick.index;
             default: return "（无）";
@@ -2403,22 +2573,22 @@ public sealed class LabLevelEditorWindow : EditorWindow
     /// <summary>拖动时作用到的范围：有选区就是选区，否则是点中的那个物件。</summary>
     IList<RectInt> CurrentMoveAreas()
     {
-        if (marquees.Count > 0) return marquees;
+        if (selection.Count > 0) return selection;
         if (!ValidPick(picked)) return null;
         return new List<RectInt> { PickArea(picked) };
     }
 
     void DeleteSelection()
     {
-        bool hasMarquee = marquees.Count > 0;
-        if (!hasMarquee && !ValidPick(picked)) return;
+        bool hasSelection = selection.Count > 0;
+        if (!hasSelection && !ValidPick(picked)) return;
 
         Record("删除选区内容");
 
         bool did;
-        if (hasMarquee)
+        if (hasSelection)
         {
-            did = level.Data.DeleteContents(marquees, true) > 0;
+            did = level.Data.DeleteContents(selection, true) > 0;
         }
         else
         {
@@ -2447,24 +2617,42 @@ public sealed class LabLevelEditorWindow : EditorWindow
         RectInt rect = MarqueeRect(marqueeStart, marqueeEnd);
         bool empty = rect.width <= 1 && rect.height <= 1;
 
+        if (empty)
+        {
+            // 单击不产生选区；重新选择模式下单击 = 清掉当前选区。
+            if (marqueeMode == MarqueeMode.Replace) selection.Clear();
+            return;
+        }
+
         switch (marqueeMode)
         {
             case MarqueeMode.Replace:
-                marquees.Clear();
-                if (!empty) AddMarqueeRect(marquees, rect);
+                selection.Clear();
+                AddRect(selection, rect);
                 break;
             case MarqueeMode.Add:
-                if (!empty) AddMarqueeRect(marquees, rect);
+                UnionRect(selection, rect);
                 break;
             case MarqueeMode.Subtract:
-                if (!empty) SubtractRect(marquees, rect);
+                SubtractRect(selection, rect);
                 break;
         }
     }
 
-    static void AddMarqueeRect(List<RectInt> list, RectInt rect)
+    static void AddRect(List<RectInt> list, RectInt rect)
     {
         if (rect.width > 0 && rect.height > 0) list.Add(rect);
+    }
+
+    /// <summary>
+    /// 把一块矩形并进选区。选区用一组互不重叠的矩形表示：先把新矩形从旧矩形里挖掉，
+    /// 再把新矩形加回去，结果正好是并集，且不会留下重叠。
+    /// </summary>
+    internal static void UnionRect(List<RectInt> list, RectInt rect)
+    {
+        if (rect.width <= 0 || rect.height <= 0) return;
+        SubtractRect(list, rect);
+        list.Add(rect);
     }
 
     /// <summary>从一组选区里挖掉一块：被切开的部分按 左/右/上/下 拆成最多四块。</summary>
@@ -2484,12 +2672,50 @@ public sealed class LabLevelEditorWindow : EditorWindow
             int cx0 = cut.x, cx1 = cut.x + cut.width;
             int cy0 = cut.y, cy1 = cut.y + cut.height;
 
-            AddMarqueeRect(list, new RectInt(x0, y0, cx0 - x0, y1 - y0));           // 左
-            AddMarqueeRect(list, new RectInt(cx1, y0, x1 - cx1, y1 - y0));          // 右
+            AddRect(list, new RectInt(x0, y0, cx0 - x0, y1 - y0));           // 左
+            AddRect(list, new RectInt(cx1, y0, x1 - cx1, y1 - y0));          // 右
             int midX0 = Mathf.Max(x0, cx0);
             int midX1 = Mathf.Min(x1, cx1);
-            AddMarqueeRect(list, new RectInt(midX0, y0, midX1 - midX0, cy0 - y0));  // 下
-            AddMarqueeRect(list, new RectInt(midX0, cy1, midX1 - midX0, y1 - cy1)); // 上
+            AddRect(list, new RectInt(midX0, y0, midX1 - midX0, cy0 - y0));  // 下
+            AddRect(list, new RectInt(midX0, cy1, midX1 - midX0, y1 - cy1)); // 上
+        }
+    }
+
+    /// <summary>选区的格数。矩形互不重叠，所以直接累加面积。</summary>
+    static int SelectionArea(IList<RectInt> rects)
+    {
+        int area = 0;
+        for (int i = 0; i < rects.Count; i++) area += rects[i].width * rects[i].height;
+        return area;
+    }
+
+    /// <summary>选区的包围盒，只用于面板显示和标签定位。</summary>
+    static RectInt SelectionBounds(IList<RectInt> rects)
+    {
+        if (rects.Count == 0) return new RectInt();
+        int xMin = int.MaxValue, yMin = int.MaxValue;
+        int xMax = int.MinValue, yMax = int.MinValue;
+        for (int i = 0; i < rects.Count; i++)
+        {
+            RectInt rect = rects[i];
+            xMin = Mathf.Min(xMin, rect.x);
+            yMin = Mathf.Min(yMin, rect.y);
+            xMax = Mathf.Max(xMax, rect.x + rect.width);
+            yMax = Mathf.Max(yMax, rect.y + rect.height);
+        }
+        return new RectInt(xMin, yMin, xMax - xMin, yMax - yMin);
+    }
+
+    /// <summary>平移选区矩形。拖动选区时框和内容保持相对位置一起走。</summary>
+    internal static void TranslateRects(List<RectInt> rects, Vector2Int delta)
+    {
+        if (delta == Vector2Int.zero) return;
+        for (int i = 0; i < rects.Count; i++)
+        {
+            RectInt rect = rects[i];
+            rect.x += delta.x;
+            rect.y += delta.y;
+            rects[i] = rect;
         }
     }
 
@@ -2596,14 +2822,33 @@ public sealed class LabLevelEditorWindow : EditorWindow
         }
     }
 
-    void DrawMarquees()
+    void DrawSelectionRegion()
     {
-        for (int i = 0; i < marquees.Count; i++)
+        if (selection.Count > 0)
         {
-            RectInt rect = marquees[i];
-            DrawFilledRect(rect.x, rect.y, rect.x + rect.width - 1, rect.y + rect.height - 1,
-                new Color(0.35f, 0.9f, 1f, 0.10f), new Color(0.35f, 0.9f, 1f, 0.9f));
-            Handles.Label(new Vector3(rect.x + 0.5f, rect.y + rect.height - 0.5f, 0f), "选区 " + i);
+            Color fill = new Color(0.35f, 0.9f, 1f, 0.10f);
+            for (int i = 0; i < selection.Count; i++)
+            {
+                RectInt rect = selection[i];
+                // 只铺底色，不画每块自己的边；外轮廓统一在下面按并集画。
+                Handles.DrawSolidRectangleWithOutline(
+                    RectVerts(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height),
+                    fill, Color.clear);
+            }
+
+            Handles.color = new Color(0.35f, 0.9f, 1f, 0.9f);
+            for (int i = 0; i < selection.Count; i++)
+            {
+                RectInt rect = selection[i];
+                DrawRegionEdge(selection, i, true, rect.y, false);              // 下边界
+                DrawRegionEdge(selection, i, true, rect.y + rect.height, true); // 上边界
+                DrawRegionEdge(selection, i, false, rect.x, false);             // 左边界
+                DrawRegionEdge(selection, i, false, rect.x + rect.width, true); // 右边界
+            }
+
+            RectInt bounds = SelectionBounds(selection);
+            Handles.Label(new Vector3(bounds.x + 0.5f, bounds.y + bounds.height - 0.5f, 0f),
+                "选区 " + SelectionArea(selection) + " 格");
         }
 
         if (!marqueeDragging) return;
@@ -2613,6 +2858,60 @@ public sealed class LabLevelEditorWindow : EditorWindow
             new Color(1f, 0.9f, 0.35f, 0.16f), new Color(1f, 0.9f, 0.35f, 0.95f));
         Handles.Label(new Vector3(preview.x + 0.5f, preview.y + preview.height - 0.5f, 0f),
             preview.width + "×" + preview.height);
+    }
+
+    /// <summary>
+    /// 画选区的一块外边界：挖掉同一条边上相邻矩形覆盖的区间，只画真正露在外面的线段。
+    /// 这样多块矩形拼出来的选区看起来仍是一个整体，不会出现内部接缝。
+    /// towardPositive 表示相邻矩形在边的正方向一侧：上边界 / 右边界为 true。
+    /// </summary>
+    static void DrawRegionEdge(List<RectInt> region, int index, bool horizontal, int edge, bool towardPositive)
+    {
+        RectInt rect = region[index];
+        int start = horizontal ? rect.x : rect.y;
+        int end = horizontal ? rect.x + rect.width : rect.y + rect.height;
+
+        var covered = new List<Vector2Int>();
+        for (int i = 0; i < region.Count; i++)
+        {
+            if (i == index) continue;
+            RectInt other = region[i];
+            if (horizontal)
+            {
+                int otherEdge = towardPositive ? other.y : other.y + other.height;
+                if (otherEdge != edge) continue;
+                int from = Mathf.Max(start, other.x);
+                int to = Mathf.Min(end, other.x + other.width);
+                if (from < to) covered.Add(new Vector2Int(from, to));
+            }
+            else
+            {
+                int otherEdge = towardPositive ? other.x : other.x + other.width;
+                if (otherEdge != edge) continue;
+                int from = Mathf.Max(start, other.y);
+                int to = Mathf.Min(end, other.y + other.height);
+                if (from < to) covered.Add(new Vector2Int(from, to));
+            }
+        }
+
+        covered.Sort((a, b) => a.x.CompareTo(b.x));
+        int cursor = start;
+        for (int i = 0; i < covered.Count && cursor < end; i++)
+        {
+            Vector2Int span = covered[i];
+            if (span.x > cursor) DrawRegionLine(horizontal, edge, cursor, span.x);
+            cursor = Mathf.Max(cursor, span.y);
+        }
+        if (cursor < end) DrawRegionLine(horizontal, edge, cursor, end);
+    }
+
+    static void DrawRegionLine(bool horizontal, int edge, int from, int to)
+    {
+        if (from >= to) return;
+        if (horizontal)
+            Handles.DrawLine(new Vector3(from, edge, 0f), new Vector3(to, edge, 0f));
+        else
+            Handles.DrawLine(new Vector3(edge, from, 0f), new Vector3(edge, to, 0f));
     }
 
     void DrawPickedHighlight()
@@ -2751,11 +3050,23 @@ public sealed class LabLevelEditorWindow : EditorWindow
         for (int i = 0; i < data.ices.Count; i++)
         {
             var ice = data.ices[i];
-            bool blocked = data.HasCell(ice.cell);
+            bool blocked = data.HasCell(ice.cell) || data.HasMagma(ice.cell);
             Handles.color = blocked ? new Color(1f, 0.35f, 0.3f, 0.95f) : IceGroupColor(ice.groupId);
             Handles.DrawWireCube(CellCenter(ice.cell), Vector3.one);
         }
 
+    }
+
+    void DrawMagmaHandles(LabLevelData data)
+    {
+        if (data.magmas == null) return;
+        for (int i = 0; i < data.magmas.Count; i++)
+        {
+            var magma = data.magmas[i];
+            bool blocked = data.HasCell(magma.cell) || data.HasIce(magma.cell);
+            Handles.color = blocked ? new Color(1f, 0.35f, 0.3f, 0.95f) : MagmaGroupColor(magma.groupId);
+            Handles.DrawWireCube(CellCenter(magma.cell), Vector3.one);
+        }
     }
 
     void DrawRespawnPointHandles(LabLevelData data)
@@ -2799,6 +3110,14 @@ public sealed class LabLevelEditorWindow : EditorWindow
         return Color.HSVToRGB(hue, 0.55f, 1f);
     }
 
+    /// <summary>岩浆块用暖色区分组号，和冰块的冷色调分开。</summary>
+    static Color MagmaGroupColor(int groupId)
+    {
+        float hue = Mathf.Lerp(0f, 0.14f, Mathf.Repeat(groupId * 0.37f, 1f));
+        float value = 0.72f + 0.28f * Mathf.Repeat(groupId * 0.53f, 1f);
+        return Color.HSVToRGB(hue, 0.85f, value);
+    }
+
     void DrawHover(Vector2Int cell, bool inArea, bool inBounds, LabLevelData data)
     {
         if (tool == Tool.Partition)
@@ -2819,8 +3138,17 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
         if (tool == Tool.Move)
         {
-            var hover = PickAt(cell);
             Handles.color = new Color(1f, 0.55f, 0.2f, 0.9f);
+
+            // 有选区时移动工具不按鼠标位置挑物件，任何位置起手都是拖整个选区。
+            if (selection.Count > 0)
+            {
+                Handles.DrawWireCube(CellCenter(cell), Vector3.one);
+                Handles.Label(CellCenter(cell) + Vector3.up * 0.6f, "拖动整个选区");
+                return;
+            }
+
+            var hover = PickAt(cell);
             if (hover.kind == PickKind.None)
             {
                 Handles.DrawWireCube(CellCenter(cell), Vector3.one);
@@ -2931,13 +3259,25 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
         if (tool == Tool.Ice)
         {
-            bool blocked = !inBounds || data.HasCell(cell) || data.HasSpike(cell);
+            bool blocked = !inBounds || data.HasCell(cell) || data.HasSpike(cell) || data.HasMagma(cell);
             Handles.color = blocked
                 ? new Color(1f, 0.3f, 0.25f, 0.9f)
                 : new Color(IceGroupColor(iceGroupId).r, IceGroupColor(iceGroupId).g,
                             IceGroupColor(iceGroupId).b, 0.9f);
             Handles.DrawWireCube(CellCenter(cell), Vector3.one);
             Handles.Label(CellCenter(cell) + Vector3.up * 0.6f, "冰 组 " + iceGroupId);
+            return;
+        }
+
+        if (tool == Tool.Magma)
+        {
+            bool blocked = !inBounds || data.HasCell(cell) || data.HasSpike(cell) || data.HasIce(cell);
+            Handles.color = blocked
+                ? new Color(1f, 0.3f, 0.25f, 0.9f)
+                : new Color(MagmaGroupColor(magmaGroupId).r, MagmaGroupColor(magmaGroupId).g,
+                            MagmaGroupColor(magmaGroupId).b, 0.9f);
+            Handles.DrawWireCube(CellCenter(cell), Vector3.one);
+            Handles.Label(CellCenter(cell) + Vector3.up * 0.6f, "岩浆 组 " + magmaGroupId);
             return;
         }
 
@@ -3004,6 +3344,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Door: return new Color(newDoorColor.r, newDoorColor.g, newDoorColor.b, 0.95f);
             case Tool.Spike: return new Color(0.75f, 0.82f, 0.92f, 0.95f);
             case Tool.Ice: return new Color(0.42f, 0.75f, 1f, 0.95f);
+            case Tool.Magma: return new Color(1f, 0.34f, 0.12f, 0.95f);
             case Tool.RespawnPoint: return new Color(0.35f, 1f, 0.65f, 0.95f);
             case Tool.TeleportPoint: return new Color(0.8f, 0.5f, 1f, 0.95f);
             case Tool.Marquee: return new Color(0.35f, 0.9f, 1f, 0.95f);

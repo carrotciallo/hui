@@ -3,7 +3,7 @@ using UnityEngine;
 /// <summary>
 /// 自由相机：跟随两名玩家的中点，按两人的距离缩放，并限制在当前关卡范围内。
 /// 从仓库的 CoopCamera 移植，去掉 PlayerLife / World 依赖。
-/// 锻造塌框会销毁一名玩家：那时相机改绑存活者，尺寸收到最小值，不再按距离伸缩。
+/// 一方死亡（隐藏等待或销毁）时相机改绑存活者，尺寸收到最小值，不再按距离伸缩。
 ///
 /// 连续关卡时，用 B 的位置向 TuningLab 查当前关卡分区（bounds / minSize / maxSize）；
 /// 分区切换时 active 值会按 frameBlend 混合，避免相机直接跳。
@@ -92,9 +92,9 @@ public sealed class LabCamera : MonoBehaviour
             return;
         }
 
-        // 一方死亡（GameObject 被销毁）后，相机绑在活着的这个人身上，spread 归零 = 不再伸缩。
-        bool hasA = a != null;
-        bool hasB = b != null;
+        // 一方死亡（隐藏等待或 GameObject 被销毁）后，相机绑在活着的这个人身上，spread 归零 = 不再伸缩。
+        bool hasA = IsFollowable(a);
+        bool hasB = IsFollowable(b);
         if (!hasA && !hasB) return;
         bool solo = !hasA || !hasB;
 
@@ -189,5 +189,13 @@ public sealed class LabCamera : MonoBehaviour
             Mathf.Lerp(from.y, to.y, t),
             Mathf.Lerp(from.width, to.width, t),
             Mathf.Lerp(from.height, to.height, t));
+    }
+
+    /// <summary>死亡等待中的玩家不再参与取景；没有 LabPlayer 的普通 Transform 照旧跟随。</summary>
+    static bool IsFollowable(Transform target)
+    {
+        if (target == null) return false;
+        var player = target.GetComponent<LabPlayer>();
+        return player == null || player.IsAlive;
     }
 }

@@ -193,10 +193,12 @@ public class LabHud : MonoBehaviour
         GUILayout.BeginArea(new Rect(Screen.width - w - 10f, 10f, w, Screen.height - 20f), GUI.skin.box);
 
         GUILayout.Label("读数", title);
-        if (lab.PlayerA == null) GUILayout.Label("P1 塌框死亡：相机改绑 P2，尺寸不再伸缩", WarnStyle());
+        if (lab.PlayerA == null) GUILayout.Label("P1 已销毁：相机改绑 P2", WarnStyle());
+        else if (!lab.PlayerA.IsAlive) GUILayout.Label("P1 死亡：隐藏等待队友", WarnStyle());
         else DrawPlayer(lab.PlayerA, "P1");
         GUILayout.Space(6f);
-        if (lab.PlayerB == null) GUILayout.Label("P2 塌框死亡：相机改绑 P1，尺寸不再伸缩", WarnStyle());
+        if (lab.PlayerB == null) GUILayout.Label("P2 已销毁：相机改绑 P1", WarnStyle());
+        else if (!lab.PlayerB.IsAlive) GUILayout.Label("P2 死亡：隐藏等待队友", WarnStyle());
         else DrawPlayer(lab.PlayerB, "P2");
 
         GUILayout.Space(10f);
@@ -224,6 +226,8 @@ public class LabHud : MonoBehaviour
             lab.ForgeSpeed, Mathf.Min(lab.forgeTierIndex, lab.redHotTierIndex)), small);
         GUILayout.Label(string.Format("冰块      法线撞击 ≥ {0:0}（v{1} 门槛）→ 整组碎（优先）；红热非承重接触 → 只融一块",
             lab.IceBreakSpeed, lab.IceBreakTier), small);
+        GUILayout.Label(string.Format("岩浆      任意面接触 → 强制热二（不塌框）；法线撞击 ≥ {0:0}（v{1} 门槛）→ 整组碎；红热接触不融",
+            lab.MagmaBreakSpeed, LabMagma.BreakTier), small);
         if (collapseCount > 0)
             GUILayout.Label(string.Format("  塌框 {0} 次   最近 {1}（热二遇红热 = 死亡）", collapseCount, lastCollapse), WarnStyle());
         GUILayout.Label(string.Format("大炮      v' = √(Vb² + {0:0})   一个等级间距 = {1:0.0} 格   方向 = 进入方向的反向",
