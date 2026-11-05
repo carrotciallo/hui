@@ -61,6 +61,7 @@
 
 - 把 `solids` 合并成尽量少的矩形，每个矩形一个 `BoxCollider2D`；竖绳生成 `LabVerticalRope`，横绳生成 `LabHorizontalRope`。
 - 钥匙、门、地刺、冰块、岩浆块、重生点、传送点都逐格/逐点生成；冰块和岩浆块按 `groupId` 共享整组破坏，不能并入 `MergedRects`。
+- 岩浆块的视觉和破坏仍然逐块，但所有岩浆块的碰撞箱合并到一个 `CompositeCollider2D`（`MagmaField`）；相邻格之间没有可碰撞的内侧竖面，走上表面时不会被接缝卡住，也不会把左右边误判成侧面接触。
 - 传送点生成后由 `TuningLab` 统一注册；选择终点时不依赖场景里的手工引用。
 - 绳子规格保存在 `LabRopeSpec.orientation`；旧数据缺省为竖绳。
 - 地图重置时恢复被拾取的钥匙、关回门并恢复所有冰块和岩浆块。

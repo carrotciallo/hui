@@ -145,7 +145,25 @@ public sealed class LabLevel : MonoBehaviour
         for (int i = 0; i < data.doors.Count; i++) AddDoor(root.transform, data.doors[i], preview);
         for (int i = 0; i < data.spikes.Count; i++) AddSpike(root.transform, data.spikes[i]);
         for (int i = 0; i < data.ices.Count; i++) AddIce(root.transform, data.ices[i], material, preview);
-        for (int i = 0; i < data.magmas.Count; i++) AddMagma(root.transform, data.magmas[i], material, preview);
+
+        // 所有岩浆块共用一个合并碰撞体：相邻方块的内侧竖面会在接缝处卡住横走的玩家，
+        // 也会把上表面行走误判成侧面接触。视觉/破坏仍然是逐块的 LabMagma。
+        Transform magmaParent = root.transform;
+        if (data.magmas.Count > 0)
+        {
+            var fieldGo = new GameObject("MagmaField");
+            fieldGo.transform.SetParent(root.transform, false);
+            var fieldBody = fieldGo.AddComponent<Rigidbody2D>();
+            fieldBody.bodyType = RigidbodyType2D.Static;
+            var fieldComposite = fieldGo.AddComponent<CompositeCollider2D>();
+            fieldComposite.geometryType = CompositeCollider2D.GeometryType.Polygons;
+            fieldComposite.generationType = CompositeCollider2D.GenerationType.Synchronous;
+            fieldComposite.offsetDistance = 0f;
+            if (material != null) fieldComposite.sharedMaterial = material;
+            fieldGo.AddComponent<LabMagmaField>();
+            magmaParent = fieldGo.transform;
+        }
+        for (int i = 0; i < data.magmas.Count; i++) AddMagma(magmaParent, data.magmas[i], material, preview);
         for (int i = 0; i < data.respawnPoints.Count; i++)
             AddRespawnPoint(root.transform, data.respawnPoints[i]);
         for (int i = 0; i < data.teleports.Count; i++)

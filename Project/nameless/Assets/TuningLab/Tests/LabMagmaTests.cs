@@ -230,6 +230,90 @@ public sealed class LabMagmaTests
             "强制热二后边不会被打回普通");
     }
 
+    [UnityTest]
+    public IEnumerator MergedMagmaFieldForcesSideHot()
+    {
+        MakeFloor();
+        MakeMagmaLevel(2, 1, 1);
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(0.2f, a.HalfHeight));
+        yield return WaitUntil(() => a.Grounded, 2f);
+
+        a.SetVelocity(new Vector2(12f, 0f));
+        yield return WaitUntil(() => a.GetEdge(LabPlayer.Edge.Right) == LabPlayer.EdgeState.Hot2, 2f);
+
+        var magmas = root.GetComponentsInChildren<LabMagma>();
+        Assert.IsFalse(magmas[0].Broken, "合并碰撞体的低速接触也不破坏岩浆块");
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, a.GetEdge(LabPlayer.Edge.Left),
+            "只加热真正接触的那条边");
+    }
+
+    [UnityTest]
+    public IEnumerator MergedMagmaFieldBreaksGroupAtV3()
+    {
+        MakeFloor();
+        MakeMagmaLevel(3, 1, 1);
+        var magmas = root.GetComponentsInChildren<LabMagma>();
+        Assert.AreEqual(3, magmas.Length, "正式生成路径每格一块岩浆");
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(0.1f, a.HalfHeight));
+        yield return WaitUntil(() => a.Grounded, 2f);
+
+        a.SetVelocity(new Vector2(lab.MagmaBreakSpeed + 4f, 0f));
+        yield return WaitUntil(() => magmas[0].Broken, 2f);
+
+        Assert.IsTrue(magmas[0].Broken, "合并碰撞体也要能定位并破坏被撞的那一块");
+        for (int i = 1; i < magmas.Length; i++)
+            Assert.IsTrue(magmas[i].Broken, "同组岩浆一起碎");
+    }
+
+    [UnityTest]
+    public IEnumerator MergedMagmaFieldStopsSupportingAfterBreak()
+    {
+        MakeFloor();
+        MakeMagmaLevel(3, 1);
+        var magmas = root.GetComponentsInChildren<LabMagma>();
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(0.5f, 1f + a.HalfHeight));
+        yield return WaitUntil(() => a.Grounded, 2f);
+
+        magmas[0].BreakGroup();
+        yield return WaitUntil(() => a.transform.position.y < 1f, 2f);
+
+        Assert.Less(a.transform.position.y, 1f, "碎掉的岩浆块必须从合并碰撞里移除，玩家应掉下去");
+    }
+
+    [UnityTest]
+    public IEnumerator WalkingAcrossMagmaRowDoesNotStopOrHeatSideEdges()
+    {
+        MakeFloor();
+        MakeMagmaLevel(12, 1);
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(0.5f, 1f + a.HalfHeight));
+        yield return WaitUntil(() => a.Grounded, 2f);
+
+        float startX = a.transform.position.x;
+        for (int i = 0; i < 60; i++)
+        {
+            // 等价于一直按住走路方向：每步保持走路速度，但碰撞仍由物理结算。
+            a.SetVelocity(new Vector2(lab.walkSpeed, a.Velocity.y));
+            yield return new WaitForFixedUpdate();
+        }
+
+        Assert.Greater(a.transform.position.x, startX + 5f,
+            "持续向右 1.2 秒应走过至少 5 格；实际位移 " + (a.transform.position.x - startX));
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, a.GetEdge(LabPlayer.Edge.Bottom),
+            "走在岩浆上表面只应强制底边热二");
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, a.GetEdge(LabPlayer.Edge.Left),
+            "走上表面不应把左边加热");
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, a.GetEdge(LabPlayer.Edge.Right),
+            "走上表面不应把右边加热");
+    }
+
     // 工具 ---------------------------------------------------------------
 
     void MakeFloor()
@@ -257,6 +341,18 @@ public sealed class LabMagmaTests
 
         magma.ApplyShape();
         return magma;
+    }
+
+    /// <summary>用正式生成路径铺一排岩浆，走 LabLevel 的合并碰撞。</summary>
+    LabLevel MakeMagmaLevel(int count, int groupId, int startX = 0)
+    {
+        var level = root.AddComponent<LabLevel>();
+        lab.level = level;
+        for (int x = 0; x < count; x++)
+            level.Data.PlaceMagma(new Vector2Int(startX + x, 0), groupId);
+        level.Data.Normalize();
+        level.BuildRuntime(root.transform, slick);
+        return level;
     }
 
     LabPlayer MakePlayer(string name, int pixels, bool isFrame)

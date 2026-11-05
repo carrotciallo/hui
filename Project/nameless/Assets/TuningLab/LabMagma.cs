@@ -30,6 +30,7 @@ public sealed class LabMagma : MonoBehaviour
 
     BoxCollider2D body;
     SpriteRenderer spriteRenderer;
+    CompositeCollider2D composite;
 
     void Awake() => ApplyShape();
 
@@ -46,11 +47,17 @@ public sealed class LabMagma : MonoBehaviour
     public void ApplyShape()
     {
         if (body == null) body = GetComponent<BoxCollider2D>();
+        composite = GetComponentInParent<CompositeCollider2D>();
         if (body != null)
         {
             body.isTrigger = false;
             body.size = Vector2.one;
             body.offset = Vector2.zero;
+            // 关卡生成时所有岩浆块共用一个 CompositeCollider2D，把相邻 1×1 方块之间的
+            // 内侧竖面焊掉；测试或手摆的独立方块没有父级 composite，仍用自身碰撞箱。
+            body.compositeOperation = composite != null
+                ? Collider2D.CompositeOperation.Merge
+                : Collider2D.CompositeOperation.None;
             body.enabled = !Broken;
         }
 
@@ -73,6 +80,9 @@ public sealed class LabMagma : MonoBehaviour
         var members = GroupOf(groupId);
         for (int i = 0; i < members.Count; i++)
             if (members[i] != null) members[i].BreakSelf();
+
+        // 整组关完碰撞后只重建一次合并几何，别让组里每块各算一遍。
+        if (members.Count > 0 && members[0] != null) members[0].RebuildComposite();
     }
 
     void BreakSelf()
@@ -88,6 +98,29 @@ public sealed class LabMagma : MonoBehaviour
     {
         Broken = false;
         ApplyShape();
+        RebuildComposite();
+    }
+
+    void RebuildComposite()
+    {
+        if (composite != null) composite.GenerateGeometry();
+    }
+
+    /// <summary>离给定点最近的未破坏岩浆块；合并碰撞体需要靠接触点找回是哪一块。</summary>
+    public static LabMagma NearestActive(Vector2 point)
+    {
+        LabMagma best = null;
+        float bestDistance = float.MaxValue;
+        for (int i = 0; i < All.Count; i++)
+        {
+            var magma = All[i];
+            if (magma == null || magma.Broken) continue;
+            float distance = ((Vector2)magma.transform.position - point).sqrMagnitude;
+            if (distance >= bestDistance) continue;
+            bestDistance = distance;
+            best = magma;
+        }
+        return best;
     }
 
     /// <summary>当前 Play 里同一组的岩浆块；返回新列表，避免遍历时被回调修改。</summary>
@@ -101,4 +134,14 @@ public sealed class LabMagma : MonoBehaviour
         }
         return list;
     }
+}
+
+/// <summary>
+/// 一个关卡里所有岩浆块共享的合并碰撞体。
+/// 相邻的 1×1 方块如果各有自己的 BoxCollider2D，接缝处的内侧竖面会卡住横走的玩家，
+/// 也会把侧面误判成"接触岩浆"。合并成一块几何后，接缝只在视觉和数据里存在。
+/// </summary>
+[RequireComponent(typeof(Rigidbody2D), typeof(CompositeCollider2D))]
+public sealed class LabMagmaField : MonoBehaviour
+{
 }
