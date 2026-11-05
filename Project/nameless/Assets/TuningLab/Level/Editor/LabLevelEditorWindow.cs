@@ -120,6 +120,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
     // 选择 / 拖动
     Pick picked;
     bool movingContent;
+    bool movingSelection;
+    LabLevelData.ContentSelection moveCapture;
     Vector2Int moveLastCell;
 
     int partitionIndex = -1;
@@ -463,7 +465,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Move:
                 EditorGUILayout.HelpBox(
                     "左键点中物件后拖动 = 移动那个物件。只要场景里有选区，不管鼠标从哪里开始拖，" +
-                    "都改成拖动选区里的全部内容。\n" +
+                    "都改成拖动选区框和里面的全部内容；框扫过、但原本不在选区里的物件不会被带走。\n" +
                     "删除用下面「选区 / 选择」面板里的按钮。移动和删除都能撤销。",
                     MessageType.None);
                 break;
@@ -506,7 +508,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         EditorGUILayout.LabelField("选中", picked.kind == PickKind.None ? "（无）" : PickLabel(picked));
 
         EditorGUILayout.HelpBox(
-            "同一时间只有一个选区，它只是编辑器的状态，不存进关卡数据；拖动和删除作用在选区覆盖的物件上。\n" +
+            "同一时间只有一个选区，它只是编辑器的状态，不存进关卡数据。\n" +
+            "拖动时选区框和里面的物件一起移动；删除作用在选区覆盖的物件上。\n" +
             "增加选区会把新拖出的矩形并进当前选区，所以选区可以是不规则形状。\n" +
             "地形格、绳、钥匙、门、地刺、冰块、重生点、传送点都算物件；出生点和关卡分区不算。",
             MessageType.None);
@@ -1815,14 +1818,19 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Move:
                 if (selection.Count > 0)
                 {
+                    // 锁住拖动开始时选区里的条目：框和内容一起走，沿途扫过的物件不会被带走。
                     Record("移动选区内容");
                     movingContent = true;
+                    movingSelection = true;
+                    moveCapture = level.Data.CaptureContents(selection);
                     moveLastCell = cell;
                     gesture = true;
                     Repaint();
                     break;
                 }
 
+                movingSelection = false;
+                moveCapture = null;
                 picked = PickAt(cell);
                 if (picked.kind == PickKind.None)
                 {
@@ -1872,7 +1880,15 @@ public sealed class LabLevelEditorWindow : EditorWindow
             if (areas == null) return;
 
             moveLastCell = cell;
-            level.Data.MoveContents(areas, delta);
+            if (movingSelection)
+            {
+                level.Data.MoveCapturedContents(moveCapture, delta);
+                TranslateRects(selection, delta);
+            }
+            else
+            {
+                level.Data.MoveContents(areas, delta);
+            }
             MarkDirty(true);
             return;
         }
@@ -1928,6 +1944,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         if (tool == Tool.Move)
         {
             movingContent = false;
+            movingSelection = false;
+            moveCapture = null;
             gesture = false;
             level.Data.Normalize();
             level.RebuildPreview();
@@ -2524,6 +2542,19 @@ public sealed class LabLevelEditorWindow : EditorWindow
             yMax = Mathf.Max(yMax, rect.y + rect.height);
         }
         return new RectInt(xMin, yMin, xMax - xMin, yMax - yMin);
+    }
+
+    /// <summary>平移选区矩形。拖动选区时框和内容保持相对位置一起走。</summary>
+    internal static void TranslateRects(List<RectInt> rects, Vector2Int delta)
+    {
+        if (delta == Vector2Int.zero) return;
+        for (int i = 0; i < rects.Count; i++)
+        {
+            RectInt rect = rects[i];
+            rect.x += delta.x;
+            rect.y += delta.y;
+            rects[i] = rect;
+        }
     }
 
     /// <summary>

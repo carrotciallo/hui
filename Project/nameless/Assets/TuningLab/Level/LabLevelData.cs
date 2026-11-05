@@ -673,111 +673,160 @@ public sealed class LabLevelData
     static Vector2 CellCenter(Vector2Int cell) => new Vector2(cell.x + 0.5f, cell.y + 0.5f);
 
     /// <summary>
-    /// 把选区里的内容整体平移。地形按格心、绳/钥匙/门/重生点按中心、地刺/冰块按格心判定；
-    /// 每个物件只移动一次（多个选区重叠也不会移两遍）。出生点和关卡分区不算"物件"，不参与。
-    /// 返回移动到的条目数。
+    /// 拖动开始时锁定的选区内容：记下每种条目的索引，之后只平移这些条目。
+    /// 这样选区框移动时不会把沿途扫过、但原本不在选区里的物件带进来。
     /// </summary>
-    public int MoveContents(IList<RectInt> areas, Vector2Int delta)
+    public sealed class ContentSelection
     {
-        if (areas == null || areas.Count == 0 || delta == Vector2Int.zero) return 0;
+        internal readonly List<int> solids = new List<int>();
+        internal readonly List<int> ropes = new List<int>();
+        internal readonly List<int> keys = new List<int>();
+        internal readonly List<int> doors = new List<int>();
+        internal readonly List<int> spikes = new List<int>();
+        internal readonly List<int> ices = new List<int>();
+        internal readonly List<int> respawnPoints = new List<int>();
+        internal readonly List<int> teleports = new List<int>();
+
+        /// <summary>锁定的条目数（地形格也算一条）。</summary>
+        public int Count => solids.Count + ropes.Count + keys.Count + doors.Count
+            + spikes.Count + ices.Count + respawnPoints.Count + teleports.Count;
+    }
+
+    /// <summary>
+    /// 按当前选区锁定要移动的条目。拖动期间不要增删条目，否则锁定的索引会失效。
+    /// </summary>
+    public ContentSelection CaptureContents(IList<RectInt> areas)
+    {
+        var capture = new ContentSelection();
+        if (areas == null || areas.Count == 0) return capture;
+
+        if (solids != null)
+            for (int i = 0; i < solids.Count; i++)
+                if (InAnyArea(areas, CellCenter(solids[i]))) capture.solids.Add(i);
+
+        if (ropes != null)
+            for (int i = 0; i < ropes.Count; i++)
+                if (InAnyArea(areas, ropes[i].center)) capture.ropes.Add(i);
+
+        if (keys != null)
+            for (int i = 0; i < keys.Count; i++)
+                if (InAnyArea(areas, keys[i].position)) capture.keys.Add(i);
+
+        if (doors != null)
+            for (int i = 0; i < doors.Count; i++)
+                if (InAnyArea(areas, doors[i].position)) capture.doors.Add(i);
+
+        if (spikes != null)
+            for (int i = 0; i < spikes.Count; i++)
+                if (InAnyArea(areas, CellCenter(spikes[i].cell))) capture.spikes.Add(i);
+
+        if (ices != null)
+            for (int i = 0; i < ices.Count; i++)
+                if (InAnyArea(areas, CellCenter(ices[i].cell))) capture.ices.Add(i);
+
+        if (respawnPoints != null)
+            for (int i = 0; i < respawnPoints.Count; i++)
+                if (InAnyArea(areas, respawnPoints[i].position)) capture.respawnPoints.Add(i);
+
+        if (teleports != null)
+            for (int i = 0; i < teleports.Count; i++)
+                if (InAnyArea(areas, teleports[i].position)) capture.teleports.Add(i);
+
+        return capture;
+    }
+
+    /// <summary>
+    /// 平移一次之前锁定的内容。地形、地刺、冰块按格心；绳/钥匙/门/重生点/传送点按中心。
+    /// 返回移动的条目数。
+    /// </summary>
+    public int MoveCapturedContents(ContentSelection capture, Vector2Int delta)
+    {
+        if (capture == null || delta == Vector2Int.zero) return 0;
         int moved = 0;
         var shift = new Vector2(delta.x, delta.y);
 
         if (solids != null)
-        {
-            for (int i = 0; i < solids.Count; i++)
+            foreach (int i in capture.solids)
             {
-                if (!InAnyArea(areas, CellCenter(solids[i]))) continue;
                 solids[i] += delta;
                 moved++;
             }
-        }
 
         if (ropes != null)
-        {
-            for (int i = 0; i < ropes.Count; i++)
+            foreach (int i in capture.ropes)
             {
                 var rope = ropes[i];
-                if (!InAnyArea(areas, rope.center)) continue;
                 rope.center += shift;
                 ropes[i] = rope;
                 moved++;
             }
-        }
 
         if (keys != null)
-        {
-            for (int i = 0; i < keys.Count; i++)
+            foreach (int i in capture.keys)
             {
                 var key = keys[i];
-                if (!InAnyArea(areas, key.position)) continue;
                 key.position += shift;
                 keys[i] = key;
                 moved++;
             }
-        }
 
         if (doors != null)
-        {
-            for (int i = 0; i < doors.Count; i++)
+            foreach (int i in capture.doors)
             {
                 var door = doors[i];
-                if (!InAnyArea(areas, door.position)) continue;
                 door.position += shift;
                 doors[i] = door;
                 moved++;
             }
-        }
 
         if (spikes != null)
-        {
-            for (int i = 0; i < spikes.Count; i++)
+            foreach (int i in capture.spikes)
             {
                 var spike = spikes[i];
-                if (!InAnyArea(areas, CellCenter(spike.cell))) continue;
                 spike.cell += delta;
                 spikes[i] = spike;
                 moved++;
             }
-        }
 
         if (ices != null)
-        {
-            for (int i = 0; i < ices.Count; i++)
+            foreach (int i in capture.ices)
             {
                 var ice = ices[i];
-                if (!InAnyArea(areas, CellCenter(ice.cell))) continue;
                 ice.cell += delta;
                 ices[i] = ice;
                 moved++;
             }
-        }
 
         if (respawnPoints != null)
-        {
-            for (int i = 0; i < respawnPoints.Count; i++)
+            foreach (int i in capture.respawnPoints)
             {
                 var point = respawnPoints[i];
-                if (!InAnyArea(areas, point.position)) continue;
                 point.position += shift;
                 respawnPoints[i] = point;
                 moved++;
             }
-        }
 
         if (teleports != null)
-        {
-            for (int i = 0; i < teleports.Count; i++)
+            foreach (int i in capture.teleports)
             {
                 var point = teleports[i];
-                if (!InAnyArea(areas, point.position)) continue;
                 point.position += shift;
                 teleports[i] = point;
                 moved++;
             }
-        }
 
         return moved;
+    }
+
+    /// <summary>
+    /// 把选区里的内容整体平移（按当前选区判定一次）。编辑器拖动请用
+    /// <see cref="CaptureContents"/> + <see cref="MoveCapturedContents"/>，保证拖动过程中
+    /// 选区框扫过的新物件不会被带走。出生点和关卡分区不算"物件"，不参与。
+    /// </summary>
+    public int MoveContents(IList<RectInt> areas, Vector2Int delta)
+    {
+        if (areas == null || areas.Count == 0 || delta == Vector2Int.zero) return 0;
+        return MoveCapturedContents(CaptureContents(areas), delta);
     }
 
     /// <summary>删掉选区里的内容，返回删掉的条目数。includeSolids = false 时只删摆放物件。</summary>
