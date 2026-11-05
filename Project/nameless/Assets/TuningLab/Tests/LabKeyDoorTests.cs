@@ -25,30 +25,36 @@ public sealed class LabKeyDoorTests
     }
 
     [Test]
-    public void ACanCollectOnlyInNormalOrSpiritForm()
+    public void ACanCollectKeysInEveryForm()
     {
         var a = MakePlayer("A", true);
-        var key = MakeKey();
 
-        Assert.IsTrue(key.TryCollect(a));
-        Assert.AreEqual(1, a.KeyCount);
+        AssertFormCollects(a, LabForm.Normal, null);
 
-        a.SetEdge(LabPlayer.Edge.Top, LabPlayer.EdgeState.Spirit);
-        a.SetEdge(LabPlayer.Edge.Bottom, LabPlayer.EdgeState.Spirit);
-        a.SetEdge(LabPlayer.Edge.Left, LabPlayer.EdgeState.Spirit);
-        a.SetEdge(LabPlayer.Edge.Right, LabPlayer.EdgeState.Spirit);
-        Assert.AreEqual(LabForm.Spirit, a.Form);
-        key = MakeKey();
-        Assert.IsTrue(key.TryCollect(a));
-        Assert.AreEqual(2, a.KeyCount);
+        // 碎一条边 = u 大炮：反馈里"A 拿不起钥匙"卡的就是这一档
+        AssertFormCollects(a, LabForm.Cannon, new[] { LabPlayer.Edge.Top });
 
+        AssertFormCollects(a, LabForm.Converter, new[] { LabPlayer.Edge.Top, LabPlayer.Edge.Right });
+        AssertFormCollects(a, LabForm.Elevator, new[] { LabPlayer.Edge.Top, LabPlayer.Edge.Bottom });
+        AssertFormCollects(a, LabForm.Spear,
+            new[] { LabPlayer.Edge.Top, LabPlayer.Edge.Right, LabPlayer.Edge.Bottom });
+
+        AssertFormCollects(a, LabForm.Spirit,
+            new[] { LabPlayer.Edge.Top, LabPlayer.Edge.Bottom, LabPlayer.Edge.Left, LabPlayer.Edge.Right });
+    }
+
+    /// <summary>按给定碎边组合摆好形态，再验一次"这形态下 A 捡得起钥匙"。</summary>
+    void AssertFormCollects(LabPlayer a, LabForm expected, LabPlayer.Edge[] broken)
+    {
         a.ResetEdges();
-        a.SetEdge(LabPlayer.Edge.Top, LabPlayer.EdgeState.Spirit);
-        a.SetEdge(LabPlayer.Edge.Right, LabPlayer.EdgeState.Spirit);
-        Assert.AreEqual(LabForm.Converter, a.Form);
-        var blocked = MakeKey();
-        Assert.IsFalse(blocked.TryCollect(a));
-        Assert.AreEqual(2, a.KeyCount);
+        if (broken != null)
+            for (int i = 0; i < broken.Length; i++)
+                a.SetEdge(broken[i], LabPlayer.EdgeState.Spirit);
+        Assert.AreEqual(expected, a.Form, $"用例前提没成立：这组碎边应该是 {expected}");
+
+        int before = a.KeyCount;
+        Assert.IsTrue(MakeKey().TryCollect(a), $"{expected} 形态下 A 应该捡得起钥匙");
+        Assert.AreEqual(before + 1, a.KeyCount, $"{expected} 形态下钥匙数量要真的加上去");
     }
 
     [Test]

@@ -131,9 +131,9 @@ public class LabPlayer : MonoBehaviour
     public LabForm Form => form;
     /// <summary>已装入身体、尚未被门消耗的钥匙数量。</summary>
     public int KeyCount { get; private set; }
-    /// <summary>A 只有普通态和灵体态可拾取；B 在所有形态下都可拾取。</summary>
-    public bool CanCollectKey => !Suspended &&
-        (!canBeRedHot || form == LabForm.Normal || form == LabForm.Spirit);
+    /// <summary>捡钥匙只看人在不在场外：碎边、形态都不拦。A 和 B 一样，
+    /// 只有被装进队友炮膛（<see cref="Suspended"/>）时捡不到；死亡是 Destroy，对象已经没了。</summary>
+    public bool CanCollectKey => !Suspended;
     /// <summary>形态读数，带朝向，给 HUD 用。</summary>
     public string FormLabel => LabForms.Label(spiritMask, form);
     /// <summary>炮口朝向 = 唯一（或最后）碎掉的那条边。</summary>
