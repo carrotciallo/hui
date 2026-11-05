@@ -712,7 +712,7 @@ public class LabPlayer : MonoBehaviour
         float a = Vector2.Dot(vA, axis);
         float b = Vector2.Dot(vB, axis);
 
-        // ---- 红热：双方都严格低于第一道门槛就不判 ----
+        // ---- 锻造与红热：双方都严格低于第一道门槛就不判 ----
         float cellsA = lab.CellsForSpeed(Mathf.Abs(a));
         float cellsB = lab.CellsForSpeed(Mathf.Abs(b));
         bool anyAboveV0 = Mathf.Max(cellsA, cellsB) >= lab.Boundary(0) - 0.0001f;
@@ -726,15 +726,21 @@ public class LabPlayer : MonoBehaviour
             bool sameDir = a * b > 0f;
             Vp = sameDir ? Mathf.Abs(a2 - b2) : a2 + b2;
 
-            float threshold = lab.RedHotSpeed;
-            threshold *= threshold;
+            float redHotV2 = lab.RedHotSpeed;
+            redHotV2 *= redHotV2;
+            float forgeV2 = lab.ForgeSpeed;
+            forgeV2 *= forgeV2;
 
-            redHot = Vp >= threshold;
-            if (redHot)
+            redHot = Vp >= redHotV2;
+
+            // 撞地形和双人撞击共用同一套门槛：够锻造、不够红热 = 冷撞击，
+            // 只把热二框砸成灵体，不给常态边加热。
+            // 对面静止时 b=0、Vp 就是自己那一记的 v²，所以 A 冲撞静止的 B 同样算一级碰撞。
+            if (redHot || Vp >= forgeV2)
             {
-                // 红热只在 A（大框）上判定：有"边"这个概念的只有它
-                StrikeEdge(EdgeFor(axis), true);
-                other.StrikeEdge(EdgeFor(-axis), true);
+                // 有"边"这个概念的只有 A（大框），B 那一路 StrikeEdge 自己会挡掉
+                StrikeEdge(EdgeFor(axis), redHot);
+                other.StrikeEdge(EdgeFor(-axis), redHot);
             }
         }
 
