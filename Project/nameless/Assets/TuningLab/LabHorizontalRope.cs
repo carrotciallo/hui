@@ -94,6 +94,7 @@ public sealed class LabHorizontalRope : MonoBehaviour
         player.ApplyBounce(Vector2.up, BounceSpeed(player));
         // 绳接触不锻造；只有反弹这一种情况按正常红热撞击结算。
         player.ApplyTerrainImpact(Vector2.up, impact);
+        LabAudio.Play(LabAudio.Cue.RopeBounce);
         Raise(player, tier, false, true);
     }
 

@@ -35,6 +35,8 @@ public sealed class LabLevelData
     public List<LabIceSpec> ices = new List<LabIceSpec>();
     /// <summary>岩浆块（1×1，可编组；每个接触面首次接触强制红热，热二边再接触死亡，v2+ 撞击死亡，v3 碰撞碎整组）。</summary>
     public List<LabMagmaSpec> magmas = new List<LabMagmaSpec>();
+    /// <summary>隐藏方块（1×1，可编组；无实体，外形与墙一致；任一玩家完全进入后整组永久揭示为半透明）。</summary>
+    public List<LabHiddenBlockSpec> hiddenBlocks = new List<LabHiddenBlockSpec>();
     /// <summary>重生点（3×3 触发区，中心坐标）。</summary>
     public List<LabRespawnPointSpec> respawnPoints = new List<LabRespawnPointSpec>();
     /// <summary>传送点（3×3 触发区，中心坐标）。双人进入后运行时标记，已标记点可互为终点。</summary>
@@ -100,6 +102,12 @@ public sealed class LabLevelData
     {
         if (magmas == null) magmas = new List<LabMagmaSpec>();
         else magmas.Clear();
+    }
+
+    public void ClearHiddenBlocks()
+    {
+        if (hiddenBlocks == null) hiddenBlocks = new List<LabHiddenBlockSpec>();
+        else hiddenBlocks.Clear();
     }
 
     public void ClearTeleports()
@@ -239,6 +247,50 @@ public sealed class LabLevelData
         return magmas.RemoveAll(magma => magma.cell == cell) > 0;
     }
 
+    /// <summary>这一格是否有任意组的隐藏方块。</summary>
+    public bool HasHiddenBlock(Vector2Int cell)
+    {
+        if (hiddenBlocks == null) return false;
+        for (int i = 0; i < hiddenBlocks.Count; i++)
+            if (hiddenBlocks[i].cell == cell) return true;
+        return false;
+    }
+
+    /// <summary>这一格是否属于指定组的隐藏方块。</summary>
+    public bool HasHiddenBlock(Vector2Int cell, int groupId)
+    {
+        if (hiddenBlocks == null) return false;
+        for (int i = 0; i < hiddenBlocks.Count; i++)
+            if (hiddenBlocks[i].cell == cell && hiddenBlocks[i].groupId == groupId) return true;
+        return false;
+    }
+
+    /// <summary>把这一格加进指定组的隐藏方块。已在该组则什么都不做。同一格可以同时属于多个组。</summary>
+    public bool PlaceHiddenBlock(Vector2Int cell, int groupId)
+    {
+        if (hiddenBlocks == null) hiddenBlocks = new List<LabHiddenBlockSpec>();
+        for (int i = 0; i < hiddenBlocks.Count; i++)
+            if (hiddenBlocks[i].cell == cell && hiddenBlocks[i].groupId == groupId) return false;
+        hiddenBlocks.Add(new LabHiddenBlockSpec(cell, groupId));
+        return true;
+    }
+
+    /// <summary>把这一格从指定组摘掉；摘掉后该格不再属于任何组才返回 true。</summary>
+    public bool RemoveHiddenBlock(Vector2Int cell, int groupId)
+    {
+        if (hiddenBlocks == null) return false;
+        int before = hiddenBlocks.Count;
+        hiddenBlocks.RemoveAll(block => block.cell == cell && block.groupId == groupId);
+        return hiddenBlocks.Count < before;
+    }
+
+    /// <summary>擦掉这一格上所有组里的隐藏方块。</summary>
+    public bool RemoveHiddenBlockAll(Vector2Int cell)
+    {
+        if (hiddenBlocks == null) return false;
+        return hiddenBlocks.RemoveAll(block => block.cell == cell) > 0;
+    }
+
     public bool PlaceRespawnPoint(Vector2Int cell)
     {
         if (respawnPoints == null) respawnPoints = new List<LabRespawnPointSpec>();
@@ -334,6 +386,27 @@ public sealed class LabLevelData
         return list;
     }
 
+    /// <summary>编辑器新建组用：当前最大组号 + 1；没有隐藏方块时从 1 开始。0 是合法组，不作为默认。</summary>
+    public int NextHiddenGroupId()
+    {
+        int max = 0;
+        if (hiddenBlocks != null)
+            for (int i = 0; i < hiddenBlocks.Count; i++)
+                if (hiddenBlocks[i].groupId > max) max = hiddenBlocks[i].groupId;
+        return max + 1;
+    }
+
+    /// <summary>同一组的所有隐藏方块（深拷贝，按格排序），给校验和运行时判定用。</summary>
+    public List<LabHiddenBlockSpec> GroupHiddenBlocks(int groupId)
+    {
+        var list = new List<LabHiddenBlockSpec>();
+        if (hiddenBlocks == null) return list;
+        for (int i = 0; i < hiddenBlocks.Count; i++)
+            if (hiddenBlocks[i].groupId == groupId) list.Add(hiddenBlocks[i]);
+        list.Sort((a, b) => CompareCells(a.cell, b.cell));
+        return list;
+    }
+
     public bool ContainsCell(Vector2Int cell)
     {
         return cell.x >= bounds.x && cell.x < bounds.x + bounds.width
@@ -357,6 +430,7 @@ public sealed class LabLevelData
         if (spikes == null) spikes = new List<LabSpikeSpec>();
         if (ices == null) ices = new List<LabIceSpec>();
         if (magmas == null) magmas = new List<LabMagmaSpec>();
+        if (hiddenBlocks == null) hiddenBlocks = new List<LabHiddenBlockSpec>();
         if (respawnPoints == null) respawnPoints = new List<LabRespawnPointSpec>();
         if (teleports == null) teleports = new List<LabTeleportSpec>();
         if (partitions == null) partitions = new List<LabLevelPartition>();
@@ -476,6 +550,22 @@ public sealed class LabLevelData
             magmas[magmaWrite++] = magmas[read];
         }
         if (magmaWrite < magmas.Count) magmas.RemoveRange(magmaWrite, magmas.Count - magmaWrite);
+
+        // 隐藏方块按 (格, 组) 去重：同一格允许属于多个组（嵌套组独立判定），
+        // 同格同组只留一条。
+        hiddenBlocks.Sort((a, b) =>
+        {
+            int byCell = CompareCells(a.cell, b.cell);
+            return byCell != 0 ? byCell : a.groupId.CompareTo(b.groupId);
+        });
+        int hiddenWrite = 0;
+        for (int read = 0; read < hiddenBlocks.Count; read++)
+        {
+            if (hiddenWrite > 0 && hiddenBlocks[read].cell == hiddenBlocks[hiddenWrite - 1].cell
+                && hiddenBlocks[read].groupId == hiddenBlocks[hiddenWrite - 1].groupId) continue;
+            hiddenBlocks[hiddenWrite++] = hiddenBlocks[read];
+        }
+        if (hiddenWrite < hiddenBlocks.Count) hiddenBlocks.RemoveRange(hiddenWrite, hiddenBlocks.Count - hiddenWrite);
     }
 
     public void CopyFrom(LabLevelData other)
@@ -495,6 +585,7 @@ public sealed class LabLevelData
             spikes = new List<LabSpikeSpec>();
             ices = new List<LabIceSpec>();
             magmas = new List<LabMagmaSpec>();
+            hiddenBlocks = new List<LabHiddenBlockSpec>();
             respawnPoints = new List<LabRespawnPointSpec>();
             teleports = new List<LabTeleportSpec>();
             partitions = new List<LabLevelPartition>();
@@ -514,6 +605,8 @@ public sealed class LabLevelData
         spikes = new List<LabSpikeSpec>(other.spikes ?? new List<LabSpikeSpec>());
         ices = new List<LabIceSpec>(other.ices ?? new List<LabIceSpec>());
         magmas = new List<LabMagmaSpec>(other.magmas ?? new List<LabMagmaSpec>());
+        hiddenBlocks = new List<LabHiddenBlockSpec>(
+            other.hiddenBlocks ?? new List<LabHiddenBlockSpec>());
         respawnPoints = new List<LabRespawnPointSpec>(
             other.respawnPoints ?? new List<LabRespawnPointSpec>());
         teleports = new List<LabTeleportSpec>(
@@ -714,6 +807,17 @@ public sealed class LabLevelData
             }
         }
 
+        if (hiddenBlocks != null)
+        {
+            for (int i = 0; i < hiddenBlocks.Count; i++)
+            {
+                var block = hiddenBlocks[i];
+                if (!oldRect.Contains(new Vector2(block.cell.x + 0.5f, block.cell.y + 0.5f))) continue;
+                block.cell += delta;
+                hiddenBlocks[i] = block;
+            }
+        }
+
         if (respawnPoints != null)
         {
             for (int i = 0; i < respawnPoints.Count; i++)
@@ -797,6 +901,8 @@ public sealed class LabLevelData
                 ices.RemoveAll(ice => rect.Contains(new Vector2(ice.cell.x + 0.5f, ice.cell.y + 0.5f)));
             if (magmas != null)
                 magmas.RemoveAll(magma => rect.Contains(new Vector2(magma.cell.x + 0.5f, magma.cell.y + 0.5f)));
+            if (hiddenBlocks != null)
+                hiddenBlocks.RemoveAll(block => rect.Contains(new Vector2(block.cell.x + 0.5f, block.cell.y + 0.5f)));
             if (respawnPoints != null)
                 respawnPoints.RemoveAll(point => rect.Contains(point.position));
             if (teleports != null)
@@ -836,12 +942,14 @@ public sealed class LabLevelData
         internal readonly List<int> spikes = new List<int>();
         internal readonly List<int> ices = new List<int>();
         internal readonly List<int> magmas = new List<int>();
+        internal readonly List<int> hiddenBlocks = new List<int>();
         internal readonly List<int> respawnPoints = new List<int>();
         internal readonly List<int> teleports = new List<int>();
 
         /// <summary>锁定的条目数（地形格也算一条）。</summary>
         public int Count => solids.Count + ropes.Count + keys.Count + recalls.Count + doors.Count
-            + spikes.Count + ices.Count + magmas.Count + respawnPoints.Count + teleports.Count;
+            + spikes.Count + ices.Count + magmas.Count + hiddenBlocks.Count
+            + respawnPoints.Count + teleports.Count;
     }
 
     /// <summary>
@@ -883,6 +991,10 @@ public sealed class LabLevelData
         if (magmas != null)
             for (int i = 0; i < magmas.Count; i++)
                 if (InAnyArea(areas, CellCenter(magmas[i].cell))) capture.magmas.Add(i);
+
+        if (hiddenBlocks != null)
+            for (int i = 0; i < hiddenBlocks.Count; i++)
+                if (InAnyArea(areas, CellCenter(hiddenBlocks[i].cell))) capture.hiddenBlocks.Add(i);
 
         if (respawnPoints != null)
             for (int i = 0; i < respawnPoints.Count; i++)
@@ -975,6 +1087,15 @@ public sealed class LabLevelData
                 moved++;
             }
 
+        if (hiddenBlocks != null)
+            foreach (int i in capture.hiddenBlocks)
+            {
+                var block = hiddenBlocks[i];
+                block.cell += delta;
+                hiddenBlocks[i] = block;
+                moved++;
+            }
+
         if (respawnPoints != null)
             foreach (int i in capture.respawnPoints)
             {
@@ -1023,6 +1144,8 @@ public sealed class LabLevelData
         if (spikes != null) removed += spikes.RemoveAll(spike => InAnyArea(areas, CellCenter(spike.cell)));
         if (ices != null) removed += ices.RemoveAll(ice => InAnyArea(areas, CellCenter(ice.cell)));
         if (magmas != null) removed += magmas.RemoveAll(magma => InAnyArea(areas, CellCenter(magma.cell)));
+        if (hiddenBlocks != null)
+            removed += hiddenBlocks.RemoveAll(block => InAnyArea(areas, CellCenter(block.cell)));
         if (respawnPoints != null)
             removed += respawnPoints.RemoveAll(point => InAnyArea(areas, point.position));
         if (teleports != null)
@@ -1062,6 +1185,9 @@ public sealed class LabLevelData
         if (magmas != null)
             for (int i = 0; i < magmas.Count; i++)
                 if (InAnyArea(areas, CellCenter(magmas[i].cell))) count++;
+        if (hiddenBlocks != null)
+            for (int i = 0; i < hiddenBlocks.Count; i++)
+                if (InAnyArea(areas, CellCenter(hiddenBlocks[i].cell))) count++;
         if (respawnPoints != null)
             for (int i = 0; i < respawnPoints.Count; i++)
                 if (InAnyArea(areas, respawnPoints[i].position)) count++;
@@ -1214,6 +1340,22 @@ public sealed class LabLevelData
                 var magma = magmas[i];
                 int cx0 = magma.cell.x, cx1 = magma.cell.x + 1;
                 int cy0 = magma.cell.y, cy1 = magma.cell.y + 1;
+                if (!any) { x0 = cx0; y0 = cy0; x1 = cx1; y1 = cy1; any = true; }
+                else
+                {
+                    x0 = Mathf.Min(x0, cx0); y0 = Mathf.Min(y0, cy0);
+                    x1 = Mathf.Max(x1, cx1); y1 = Mathf.Max(y1, cy1);
+                }
+            }
+        }
+
+        if (hiddenBlocks != null)
+        {
+            for (int i = 0; i < hiddenBlocks.Count; i++)
+            {
+                var block = hiddenBlocks[i];
+                int cx0 = block.cell.x, cx1 = block.cell.x + 1;
+                int cy0 = block.cell.y, cy1 = block.cell.y + 1;
                 if (!any) { x0 = cx0; y0 = cy0; x1 = cx1; y1 = cy1; any = true; }
                 else
                 {
@@ -1481,6 +1623,31 @@ public struct LabMagmaSpec
     public Vector2 Center => new Vector2(cell.x + 0.5f, cell.y + 0.5f);
 
     /// <summary>岩浆块盖住的格子（1×1）。</summary>
+    public RectInt Cells() => new RectInt(cell.x, cell.y, 1, 1);
+}
+
+/// <summary>
+/// 一块隐藏方块：1×1 格，无实体，外形与墙一致。
+/// groupId 与冰/岩浆共用同一套整数编组语义；0 也是普通组。
+/// 任一玩家 BodyBounds 完全落入某组的格子并集后，该组整组揭示为半透明，
+/// 揭示对地图重置免疫；同一格可以同时属于多个组（嵌套组独立判定）。
+/// </summary>
+[System.Serializable]
+public struct LabHiddenBlockSpec
+{
+    public Vector2Int cell;
+    public int groupId;
+
+    public LabHiddenBlockSpec(Vector2Int cell, int groupId)
+    {
+        this.cell = cell;
+        this.groupId = groupId;
+    }
+
+    /// <summary>物件落点（格中心）。</summary>
+    public Vector2 Center => new Vector2(cell.x + 0.5f, cell.y + 0.5f);
+
+    /// <summary>隐藏方块盖住的格子（1×1）。</summary>
     public RectInt Cells() => new RectInt(cell.x, cell.y, 1, 1);
 }
 

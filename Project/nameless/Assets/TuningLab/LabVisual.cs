@@ -28,6 +28,10 @@ public class LabVisual : MonoBehaviour
     float eyeOffset;
     Color baseColor = Color.white;
     bool hasFrame;
+    Color[] teleportHighlightColors;
+
+    /// <summary>玩家基色；速度反馈的拖尾/残影用它保持与本体同色。</summary>
+    public Color BaseColor => baseColor;
 
     static readonly System.Collections.Generic.Dictionary<long, Sprite> cache =
         new System.Collections.Generic.Dictionary<long, Sprite>();
@@ -128,6 +132,34 @@ public class LabVisual : MonoBehaviour
     {
         for (int i = 0; i < parts.Count; i++)
             if (parts[i] != null) parts[i].enabled = visible;
+    }
+
+    public void SetTeleportHighlight(Color color, float blend, float alpha = 1f)
+    {
+        if (teleportHighlightColors == null)
+        {
+            teleportHighlightColors = new Color[parts.Count];
+            for (int i = 0; i < parts.Count; i++)
+                teleportHighlightColors[i] = parts[i] != null ? parts[i].color : Color.clear;
+        }
+
+        blend = Mathf.Clamp01(blend);
+        alpha = Mathf.Clamp01(alpha);
+        for (int i = 0; i < parts.Count; i++)
+        {
+            if (parts[i] == null) continue;
+            Color highlighted = Color.Lerp(teleportHighlightColors[i], color, blend);
+            highlighted.a *= alpha;
+            parts[i].color = highlighted;
+        }
+    }
+
+    public void ClearTeleportHighlight()
+    {
+        if (teleportHighlightColors == null) return;
+        for (int i = 0; i < parts.Count; i++)
+            if (parts[i] != null) parts[i].color = teleportHighlightColors[i];
+        teleportHighlightColors = null;
     }
 
     // ------------------------------------------------------------------

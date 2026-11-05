@@ -88,6 +88,7 @@ public sealed class LabIce : MonoBehaviour
 
         // 整组关完碰撞后只重建一次合并几何。
         if (members.Count > 0 && members[0] != null) members[0].RebuildComposite();
+        LabAudio.Play(LabAudio.Cue.IceBreak);
     }
 
     void BreakSelf()

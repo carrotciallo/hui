@@ -35,6 +35,8 @@ public sealed class LabCamera : MonoBehaviour
     float focusStarted;
     float focusDuration;
 
+    public bool IsFocusing => focusActive;
+
     void Awake() => cam = GetComponent<Camera>();
 
     public void Configure(Transform playerA, Transform playerB, Rect worldBounds)
@@ -84,7 +86,7 @@ public sealed class LabCamera : MonoBehaviour
             return;
         }
 
-        if (lab != null && lab.TeleportSelecting)
+        if (lab != null && lab.TeleportCameraLocked)
         {
             Vector3 held = focusTo;
             held.z = transform.position.z;
@@ -126,9 +128,23 @@ public sealed class LabCamera : MonoBehaviour
         focusDuration = Mathf.Max(0f, duration);
     }
 
+    public void SnapFocus(Vector2 worldPosition)
+    {
+        focusActive = false;
+        focusFrom = new Vector3(worldPosition.x, worldPosition.y, transform.position.z);
+        focusTo = focusFrom;
+        transform.position = focusFrom;
+    }
+
     public void ResumeFollowing()
     {
         focusActive = false;
+        if (lab != null)
+        {
+            Vector2 probe = b != null ? b.position : (a != null ? a.position : transform.position);
+            UpdateFrameTarget(probe);
+            SnapFrame();
+        }
     }
 
     /// <summary>

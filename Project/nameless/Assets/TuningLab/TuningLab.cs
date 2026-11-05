@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
@@ -66,6 +67,17 @@ public class TuningLab : MonoBehaviour
     [Tooltip("冰块整组破坏的碰撞等级（2 = v2）。只算碰撞前沿接触法线撞进去的分量，站在冰面上横向滑行不算。")]
     [Range(0, 4)] public int iceBreakTierIndex = 2;
 
+    [Header("传送门动画")]
+    [Min(0f)] public float teleportHighlightSeconds = 0.35f;
+    [Min(0.1f)] public float teleportBeamSpeed = 48f;
+    [Min(0f)] public float teleportArrivalFadeSeconds = 0.15f;
+    [Min(0f)] public float teleportArrivalHoldSeconds = 0.20f;
+    [Min(0f)] public float teleportBurstSeconds = 0.15f;
+
+    [Header("隐藏方块")]
+    [Tooltip("隐藏方块被任一玩家完全进入后整组保持的不透明度（0.5 = 半透明）。只在揭示那一刻取值，之后改不影响已揭示的组。")]
+    [Range(0f, 1f)] public float hiddenRevealedAlpha = 0.5f;
+
     /// <summary>没有检查点时的死亡后果。</summary>
     public enum DeathFallback
     {
@@ -117,12 +129,58 @@ public class TuningLab : MonoBehaviour
     [Tooltip("Tab 键切换：相机视野内的整数格网格线。")]
     public bool showGrid = true;
 
+    [Header("死亡反馈")]
+    [Tooltip("任一玩家死亡时，屏幕闪一次红色边缘渐晕。")]
+    public bool deathFlashEnabled = true;
+    [Tooltip("闪烁持续时间（秒）。")]
+    public float deathFlashDuration = 0.55f;
+    [Tooltip("闪烁期内亮度脉动的次数。")]
+    [Range(1f, 8f)] public float deathFlashPulses = 3f;
+    [Tooltip("最贴近屏幕边缘处的红色带深度 = 屏高 × 这个比例；往屏幕中心平滑衰减到无。")]
+    [Range(0.05f, 0.5f)] public float deathFlashEdgeDepth = 0.18f;
+    [Tooltip("满亮时的红色。")]
+    public Color deathFlashColor = new Color(1f, 0.25f, 0.25f, 0.9f);
+
+    [Header("速度反馈")]
+    [Tooltip("残影和拖尾从第几档开始出现（合速度档，含竖直分量）。走路恒为 v0，默认 v3 起。")]
+    [Range(1, 6)] public int speedFxStartTier = 3;
+    [Tooltip("起始档同时存在的残影数。")]
+    [Range(0, 12)] public int ghostCountTier3 = 3;
+    [Tooltip("起始档残影初始不透明度。")]
+    [Range(0f, 1f)] public float ghostAlphaTier3 = 0.5f;
+    [Tooltip("起始档残影存活（秒）。")]
+    public float ghostLifeTier3 = 0.6f;
+    [Tooltip("顶档同时存在的残影数（tierCount=4 时即 V4）。")]
+    [Range(0, 12)] public int ghostCountTopTier = 5;
+    [Tooltip("顶档残影初始不透明度。")]
+    [Range(0f, 1f)] public float ghostAlphaTopTier = 0.7f;
+    [Tooltip("顶档残影存活（秒）。")]
+    public float ghostLifeTopTier = 0.8f;
+    [Tooltip("拖尾亮点同屏上限。")]
+    [Range(0, 128)] public int trailCap = 64;
+    [Tooltip("拖尾亮点存活（秒）：后段才淡出，像画笔留下的笔触。")]
+    public float trailLife = 2f;
+    [Tooltip("每隔几个物理步喷一个拖尾亮点（拉开成速度线，不糊在屁股上）。")]
+    [Range(1, 6)] public int trailEverySteps = 2;
+    [Tooltip("拖尾亮点 V3 初始不透明度。")]
+    [Range(0f, 1f)] public float trailAlphaTier3 = 0.85f;
+    [Tooltip("拖尾亮点 V4 初始不透明度。")]
+    [Range(0f, 1f)] public float trailAlphaTopTier = 1f;
+
     public LabPlayer PlayerA { get; private set; }
     public LabPlayer PlayerB { get; private set; }
     public Camera Cam { get; private set; }
     public LabHud Hud { get; private set; }
+    public LabAudio Sound { get; private set; }
     public LabRespawnPoint ActiveRespawnPoint { get; private set; }
     public event System.Action MapReset;
+    /// <summary>任一玩家死亡后广播（唯一必达点在 NotifyPlayerDied）；现阶段只有边框闪红订阅。</summary>
+    public event System.Action<LabPlayer> PlayerDied;
+
+    float deathFlashLeft;
+    public bool TeleportBusy => teleportPhase != TeleportPhase.None;
+    public bool TeleportSelecting => teleportPhase == TeleportPhase.Selecting;
+    public bool TeleportCameraLocked => TeleportBusy;
 
     /// <summary>召回能力：任一玩家拾取道具后全队永久解锁，地图重置不清空。</summary>
     public bool RecallUnlocked { get; private set; }
@@ -130,7 +188,6 @@ public class TuningLab : MonoBehaviour
 
     /// <summary>摩擦 0 的共用材质；幻影等运行时实体也用它。</summary>
     internal PhysicsMaterial2D SlickMaterial => slick;
-    public bool TeleportSelecting => teleportSource != null;
     /// <summary>选择界面里当前选中的终点；没有在选终点时为 null。</summary>
     public LabTeleportPoint TeleportTarget =>
         teleportSelectionIndex >= 0 && teleportSelectionIndex < teleportTargets.Count
@@ -151,9 +208,26 @@ public class TuningLab : MonoBehaviour
     /// <summary>已注册的传送点数量；用来区分"没生成"和"生成了但没注册"。</summary>
     public int TeleportPointCount => teleports.Count;
 
+    enum TeleportPhase
+    {
+        None,
+        Departing,
+        Selecting,
+        Arriving,
+        Cancelling
+    }
+
     readonly List<LabTeleportPoint> teleports = new List<LabTeleportPoint>();
     readonly List<LabTeleportPoint> teleportTargets = new List<LabTeleportPoint>();
     LabTeleportPoint teleportSource;
+    LabTeleportAnimation teleportAnimation;
+    Coroutine teleportRoutine;
+    TeleportPhase teleportPhase;
+    Vector2 teleportSourcePosition;
+    Vector2 teleportVelocityA;
+    Vector2 teleportVelocityB;
+    LabPlayer.FormState teleportFormA;
+    LabPlayer.FormState teleportFormB;
     int teleportSelectionIndex;
     const float TeleportCameraMoveSeconds = 0.25f;
     readonly List<LabRespawnPoint> respawnPoints = new List<LabRespawnPoint>();
@@ -361,20 +435,28 @@ public class TuningLab : MonoBehaviour
         if (Hud == null) Hud = gameObject.GetComponent<LabHud>();
         if (Hud == null) Hud = gameObject.AddComponent<LabHud>();
         Hud.Bind(this);
+
+        // 音效和 HUD 同一个路子：运行时挂上来，不进场景、不进 prefab。
+        if (Sound == null) Sound = gameObject.GetComponent<LabAudio>();
+        if (Sound == null) Sound = gameObject.AddComponent<LabAudio>();
+        Sound.Bind(this);
     }
 
     void OnDestroy()
     {
+        AbortTeleport();
         Time.timeScale = 1f;
         LabPhantom.ClearAll();
     }
 
     void Update()
     {
+        if (deathFlashLeft > 0f) deathFlashLeft = Mathf.Max(0f, deathFlashLeft - Time.deltaTime);
+
         var kb = UnityEngine.InputSystem.Keyboard.current;
         if (kb == null) return;
         UpdateTeleportSelection(kb);
-        if (TeleportSelecting) return;
+        if (TeleportBusy) return;
         if (kb.rKey.wasPressedThisFrame) ResetPlayers();
         if (kb.pKey.wasPressedThisFrame) showPixelGrid = !showPixelGrid;
         if (kb.tabKey.wasPressedThisFrame) showGrid = !showGrid;
@@ -440,7 +522,9 @@ public class TuningLab : MonoBehaviour
     /// </summary>
     public void NotifyPlayerDied(LabPlayer deadPlayer)
     {
-        if (TeleportSelecting) EndTeleportSelection();
+        TriggerDeathFlash();
+        PlayerDied?.Invoke(deadPlayer);
+        if (TeleportBusy) AbortTeleport();
 
         // 只创建了一个玩家（测试/调试）时没有“队友”，直接按单人结算。
         if (PlayerA != null || PlayerB != null)
@@ -546,7 +630,7 @@ public class TuningLab : MonoBehaviour
         if (point == null) return;
         teleports.Remove(point);
         teleportTargets.Remove(point);
-        if (teleportSource == point || !IsTeleportTargetValid())
+        if (TeleportSelecting && (teleportSource == point || !IsTeleportTargetValid()))
             CancelTeleport();
     }
 
@@ -563,12 +647,12 @@ public class TuningLab : MonoBehaviour
     }
 
     /// <summary>
-    /// 已标记传送点达到两个后进入终点选择：其它已标记传送点是候选，按 A/D 切换，Enter 确认。
-    /// 候选不足时什么都不做，避免冻结玩家或把自己传送到自己。
+    /// 已标记传送点达到两个后先播放离场动画，再进入终点选择。
+    /// 候选不足或双人不可用时什么都不做，避免冻结玩家或把自己传送到自己。
     /// </summary>
     public void EnterTeleportSelection(LabTeleportPoint point)
     {
-        if (point == null || TeleportSelecting || !point.IsMarked) return;
+        if (point == null || TeleportBusy || !point.IsMarked || !CanAnimateTeleportPlayers()) return;
 
         teleports.RemoveAll(candidate => candidate == null);
         teleportTargets.Clear();
@@ -586,14 +670,64 @@ public class TuningLab : MonoBehaviour
         if (teleportTargets.Count == 0) return;
 
         teleportSource = point;
+        teleportSourcePosition = point.transform.position;
         teleportSelectionIndex = 0;
-        point.SetHighlighted(true);
-        TeleportTarget?.SetHighlighted(true);
+        teleportVelocityA = PlayerA.Velocity;
+        teleportVelocityB = PlayerB.Velocity;
+        teleportFormA = PlayerA.CaptureForm();
+        teleportFormB = PlayerB.CaptureForm();
+        teleportPhase = TeleportPhase.Departing;
+        LabAudio.Play(LabAudio.Cue.PortalEnter);
 
-        PlayerA?.FreezeForTeleportSelection();
-        PlayerB?.FreezeForTeleportSelection();
+        PlayerA.FreezeForTeleportSelection();
+        PlayerB.FreezeForTeleportSelection();
+        if (teleportAnimation == null) teleportAnimation = new LabTeleportAnimation(this);
+        Cam?.GetComponent<LabCamera>()?.SnapFocus(teleportSourcePosition);
+        teleportRoutine = StartCoroutine(RunTeleportDeparture());
+    }
+
+    bool CanAnimateTeleportPlayers()
+    {
+        return PlayerA != null && PlayerB != null
+               && PlayerA.IsAlive && PlayerB.IsAlive
+               && !PlayerA.Suspended && !PlayerB.Suspended;
+    }
+
+    IEnumerator RunTeleportDeparture()
+    {
+        yield return teleportAnimation.PlayDeparture(PlayerA, PlayerB, Cam);
+        teleportRoutine = null;
+        if (teleportPhase != TeleportPhase.Departing) yield break;
+
+        if (!IsTeleportTargetValid())
+        {
+            BeginTeleportCancellation();
+            yield break;
+        }
+
+        teleportPhase = TeleportPhase.Selecting;
+        teleportSource?.SetHighlighted(true);
+        TeleportTarget?.SetHighlighted(true);
         if (Cam != null && TeleportTarget != null)
             Cam.GetComponent<LabCamera>()?.FocusOn(TeleportTarget.transform.position, TeleportCameraMoveSeconds);
+    }
+
+    IEnumerator RunTeleportArrival(Vector2 position, bool restoreVelocity)
+    {
+        LabAudio.Play(LabAudio.Cue.PortalEnter);
+        LabCamera labCamera = Cam != null ? Cam.GetComponent<LabCamera>() : null;
+        if (labCamera != null && !labCamera.IsFocusing
+            && Vector2.Distance(Cam.transform.position, position) > 0.001f)
+            labCamera.FocusOn(position, TeleportCameraMoveSeconds);
+        while (labCamera != null && labCamera.IsFocusing) yield return null;
+
+        yield return teleportAnimation.PlayArrival(PlayerA, PlayerB);
+        FinishTeleportAnimation(restoreVelocity);
+    }
+
+    void FocusTeleportCamera(Vector2 position)
+    {
+        Cam?.GetComponent<LabCamera>()?.FocusOn(position, TeleportCameraMoveSeconds);
     }
 
     void UpdateTeleportSelection(UnityEngine.InputSystem.Keyboard kb)
@@ -623,6 +757,7 @@ public class TuningLab : MonoBehaviour
         TeleportTarget?.SetHighlighted(false);
         teleportSelectionIndex = (teleportSelectionIndex + delta + teleportTargets.Count) % teleportTargets.Count;
         TeleportTarget?.SetHighlighted(true);
+        LabAudio.Play(LabAudio.Cue.PortalUi);
         if (Cam != null && TeleportTarget != null)
             Cam.GetComponent<LabCamera>()?.FocusOn(
                 TeleportTarget.transform.position, TeleportCameraMoveSeconds);
@@ -637,34 +772,159 @@ public class TuningLab : MonoBehaviour
         }
 
         LabTeleportPoint target = TeleportTarget;
-        EndTeleportSelection();
-        if (target == null) return;
+        Vector2 targetPosition = target.transform.position;
+        teleportPhase = TeleportPhase.Arriving;
+        LabAudio.Play(LabAudio.Cue.PortalUi);
+        ClearTeleportSelectionHighlights();
         target.TeleportPlayersHere(this);
+        PlayerA.ApplyForm(teleportFormA);
+        PlayerB.ApplyForm(teleportFormB);
+        teleportRoutine = StartCoroutine(RunTeleportArrival(targetPosition, true));
     }
 
     public void CancelTeleport()
     {
         if (!TeleportSelecting) return;
-        EndTeleportSelection();
+        BeginTeleportCancellation();
     }
 
-    void EndTeleportSelection()
+    void BeginTeleportCancellation()
+    {
+        teleportPhase = TeleportPhase.Cancelling;
+        LabAudio.Play(LabAudio.Cue.PortalUi);
+        ClearTeleportSelectionHighlights();
+        PlayerA.TeleportPreservingState(teleportSourcePosition + Vector2.left * 0.65f, Vector2.zero);
+        PlayerB.TeleportPreservingState(teleportSourcePosition + Vector2.right * 0.65f, Vector2.zero);
+        PlayerA.ApplyForm(teleportFormA);
+        PlayerB.ApplyForm(teleportFormB);
+        FocusTeleportCamera(teleportSourcePosition);
+        teleportRoutine = StartCoroutine(RunTeleportArrival(teleportSourcePosition, false));
+    }
+
+    void FinishTeleportAnimation(bool restoreVelocity)
+    {
+        ClearTeleportSelection();
+        teleportPhase = TeleportPhase.None;
+        PlayerA.ResumeFromTeleportSelection();
+        PlayerB.ResumeFromTeleportSelection();
+        PlayerA.ApplyForm(teleportFormA);
+        PlayerB.ApplyForm(teleportFormB);
+        PlayerA.SetVelocity(restoreVelocity ? teleportVelocityA : Vector2.zero);
+        PlayerB.SetVelocity(restoreVelocity ? teleportVelocityB : Vector2.zero);
+        Cam?.GetComponent<LabCamera>()?.ResumeFollowing();
+        teleportRoutine = null;
+    }
+
+    void AbortTeleport()
+    {
+        if (!TeleportBusy) return;
+        if (teleportRoutine != null) StopCoroutine(teleportRoutine);
+        teleportRoutine = null;
+        teleportAnimation?.Abort(PlayerA, PlayerB);
+        ClearTeleportSelection();
+        teleportPhase = TeleportPhase.None;
+        if (PlayerA != null && PlayerA.IsAlive)
+        {
+            PlayerA.ResumeFromTeleportSelection();
+            PlayerA.ApplyForm(teleportFormA);
+        }
+        if (PlayerB != null && PlayerB.IsAlive)
+        {
+            PlayerB.ResumeFromTeleportSelection();
+            PlayerB.ApplyForm(teleportFormB);
+        }
+        Cam?.GetComponent<LabCamera>()?.ResumeFollowing();
+    }
+
+    void ClearTeleportSelectionHighlights()
     {
         teleportSource?.SetHighlighted(false);
         for (int i = 0; i < teleportTargets.Count; i++)
             teleportTargets[i]?.SetHighlighted(false);
+    }
 
+    void ClearTeleportSelection()
+    {
+        ClearTeleportSelectionHighlights();
         teleportSource = null;
         teleportTargets.Clear();
         teleportSelectionIndex = 0;
-        PlayerA?.ResumeFromTeleportSelection();
-        PlayerB?.ResumeFromTeleportSelection();
-        if (Cam != null) Cam.GetComponent<LabCamera>()?.ResumeFollowing();
     }
 
     void OnGUI()
     {
-        if (!TeleportSelecting) return;
+        if (TeleportSelecting) DrawTeleportSelectionGui();
+        DrawDeathFlashGui();
+    }
+
+    /// <summary>死亡边框闪红：one-shot 重放，两人同死也只显示一次闪光。</summary>
+    void TriggerDeathFlash()
+    {
+        if (!deathFlashEnabled) return;
+        deathFlashLeft = Mathf.Max(0.01f, deathFlashDuration);
+    }
+
+    void DrawDeathFlashGui()
+    {
+        if (deathFlashLeft <= 0f) return;
+
+        float duration = Mathf.Max(0.05f, deathFlashDuration);
+        float progress = 1f - Mathf.Clamp01(deathFlashLeft / duration);
+
+        // 亮度闪烁：正弦脉动 × 整体衰减，中心频率由 deathFlashPulses 控制。
+        float pulses = Mathf.Max(0.5f, deathFlashPulses);
+        float envelope = 1f - progress;
+        float multiplier = envelope * Mathf.Max(0f, Mathf.Sin(progress * pulses * Mathf.PI));
+
+        Color c = deathFlashColor;
+        c.a *= multiplier;
+        if (c.a <= 0.004f) return;
+
+        Color previous = GUI.color;
+        GUI.color = c;
+        float depthH = Screen.height * Mathf.Clamp(deathFlashEdgeDepth, 0.05f, 0.5f);
+        float depthW = Screen.width * Mathf.Clamp(deathFlashEdgeDepth, 0.05f, 0.5f);
+        GUI.DrawTexture(new Rect(0f, 0f, Screen.width, depthH), VignetteBar((int)depthH));
+        GUI.DrawTexture(new Rect(0f, Screen.height - depthH, Screen.width, depthH), VignetteBar((int)depthH));
+        GUI.DrawTexture(new Rect(0f, 0f, depthW, Screen.height), VignetteBar((int)depthW));
+        GUI.DrawTexture(new Rect(Screen.width - depthW, 0f, depthW, Screen.height), VignetteBar((int)depthW));
+        GUI.color = previous;
+    }
+
+    static readonly System.Collections.Generic.Dictionary<int, Texture2D> vignetteBars =
+        new System.Collections.Generic.Dictionary<int, Texture2D>();
+
+    /// <summary>
+    /// 边缘渐晕条：1×H 渐变纹理，两端不透明、中心透明（smoothstep），
+    /// 双线性拉伸后整条带宽内没有硬边界；按高度缓存，运行时生成、不落资产。
+    /// </summary>
+    static Texture2D VignetteBar(int height)
+    {
+        int h = Mathf.Clamp(height, 16, 1024);
+        if (vignetteBars.TryGetValue(h, out var cached) && cached != null) return cached;
+
+        var tex = new Texture2D(1, h, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        var px = new Color32[h];
+        var white = new Color32(255, 255, 255, 255);
+        for (int y = 0; y < h; y++)
+        {
+            float t = y / (h - 1f);
+            float d = Mathf.Min(t, 1f - t) * 2f;             // 边缘 0 → 中心 1
+            px[y] = new Color32(255, 255, 255,
+                (byte)Mathf.RoundToInt((1f - d * d * (3f - 2f * d)) * 255f));
+        }
+        tex.SetPixels32(px);
+        tex.Apply();
+        vignetteBars[h] = tex;
+        return tex;
+    }
+
+    void DrawTeleportSelectionGui()
+    {
         Color previous = GUI.color;
         GUI.color = new Color(0f, 0f, 0f, 0.22f);
         GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
@@ -1063,6 +1323,10 @@ public class TuningLab : MonoBehaviour
         p.scheme = scheme;
         p.pixels = pixels;
         p.visual = LabVisual.Build(go.transform, pixels, wall > 0, color);
+
+        var fxGo = new GameObject("SpeedFx");
+        fxGo.transform.SetParent(go.transform, false);
+        fxGo.AddComponent<LabSpeedFeedback>().Bind(this, p);
         return p;
     }
 

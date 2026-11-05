@@ -115,6 +115,9 @@ public class LabPlayer : MonoBehaviour
     public float NetDescent => grounded ? LandedNetDescent : Mathf.Max(0f, LaunchFootY - FootY);
     public float ApexDescent => grounded ? LandedApexDescent : Mathf.Max(0f, ApexFootY - FootY);
 
+    /// <summary>本体基色（A 蓝 / B 红），速度反馈的残影和拖尾用它保持同色。</summary>
+    public Color BaseColor => visual != null ? visual.BaseColor : Color.white;
+
     public int SpeedTier => lab != null ? lab.TierOfSpeed(Speed) : 0;
     public int LaunchTier => lab != null ? lab.TierOfCells(NetDescent) : 0;
     public int ApexTier => lab != null ? lab.TierOfCells(ApexDescent) : 0;
@@ -128,9 +131,9 @@ public class LabPlayer : MonoBehaviour
     public LabForm Form => form;
     /// <summary>已装入身体、尚未被门消耗的钥匙数量。</summary>
     public int KeyCount { get; private set; }
-    /// <summary>A 只有普通态和灵体态可拾取；B 在所有形态下都可拾取。</summary>
-    public bool CanCollectKey => !Suspended &&
-        (!canBeRedHot || form == LabForm.Normal || form == LabForm.Spirit);
+    /// <summary>捡钥匙只看人在不在场外：碎边、形态都不拦。A 和 B 一样，
+    /// 只有被装进队友炮膛（<see cref="Suspended"/>）时捡不到；死亡是 Destroy，对象已经没了。</summary>
+    public bool CanCollectKey => !Suspended;
     /// <summary>形态读数，带朝向，给 HUD 用。</summary>
     public string FormLabel => LabForms.Label(spiritMask, form);
     /// <summary>炮口朝向 = 唯一（或最后）碎掉的那条边。</summary>
@@ -218,9 +221,8 @@ public class LabPlayer : MonoBehaviour
 
     void Update()
     {
-        if (IsDead) return;
+        if (IsDead || (lab != null && lab.TeleportBusy)) return;
         ReadInput();
-        if (lab != null && lab.TeleportSelecting) return;
 
         // 膛里的 B：移动无效，冲刺键改成给宿主开炮。
         if (phantomHost != null)
@@ -261,7 +263,7 @@ public class LabPlayer : MonoBehaviour
     {
         if (lab == null || IsDead) return;
 
-        if (teleportFrozen || lab.TeleportSelecting)
+        if (teleportFrozen || lab.TeleportBusy)
         {
             dashQueued = false;
             dashPhase = DashPhase.None;
@@ -443,6 +445,7 @@ public class LabPlayer : MonoBehaviour
             coyoteTimer = 0f;
             grounded = false;
             BeginAir();
+            LabAudio.Play(LabAudio.Cue.Jump);
         }
 
         if (v.y < -lab.maxFallSpeed) v.y = -lab.maxFallSpeed;
@@ -663,6 +666,7 @@ public class LabPlayer : MonoBehaviour
             {
                 ice.BreakOne();
                 SetEdge(edge, EdgeState.Normal);
+                LabAudio.Play(LabAudio.Cue.IceMelt);
             }
         }
 
@@ -678,6 +682,7 @@ public class LabPlayer : MonoBehaviour
         if (lab == null) return;
         if (impact < lab.ForgeSpeed) return;
         StrikeEdge(EdgeFor(-normal), impact >= lab.RedHotSpeed);
+        LabAudio.PlayImpact(LastImpactTier);
     }
 
     static bool IsPhantom(Collider2D collider) =>
@@ -750,7 +755,7 @@ public class LabPlayer : MonoBehaviour
         float a = Vector2.Dot(vA, axis);
         float b = Vector2.Dot(vB, axis);
 
-        // ---- 红热：双方都严格低于第一道门槛就不判 ----
+        // ---- 锻造与红热：双方都严格低于第一道门槛就不判 ----
         float cellsA = lab.CellsForSpeed(Mathf.Abs(a));
         float cellsB = lab.CellsForSpeed(Mathf.Abs(b));
         bool anyAboveV0 = Mathf.Max(cellsA, cellsB) >= lab.Boundary(0) - 0.0001f;
@@ -764,15 +769,21 @@ public class LabPlayer : MonoBehaviour
             bool sameDir = a * b > 0f;
             Vp = sameDir ? Mathf.Abs(a2 - b2) : a2 + b2;
 
-            float threshold = lab.RedHotSpeed;
-            threshold *= threshold;
+            float redHotV2 = lab.RedHotSpeed;
+            redHotV2 *= redHotV2;
+            float forgeV2 = lab.ForgeSpeed;
+            forgeV2 *= forgeV2;
 
-            redHot = Vp >= threshold;
-            if (redHot)
+            redHot = Vp >= redHotV2;
+
+            // 撞地形和双人撞击共用同一套门槛：够锻造、不够红热 = 冷撞击，
+            // 只把热二框砸成灵体，不给常态边加热。
+            // 对面静止时 b=0、Vp 就是自己那一记的 v²，所以 A 冲撞静止的 B 同样算一级碰撞。
+            if (redHot || Vp >= forgeV2)
             {
-                // 红热只在 A（大框）上判定：有"边"这个概念的只有它
-                StrikeEdge(EdgeFor(axis), true);
-                other.StrikeEdge(EdgeFor(-axis), true);
+                // 有"边"这个概念的只有 A（大框），B 那一路 StrikeEdge 自己会挡掉
+                StrikeEdge(EdgeFor(axis), redHot);
+                other.StrikeEdge(EdgeFor(-axis), redHot);
             }
         }
 
@@ -939,7 +950,12 @@ public class LabPlayer : MonoBehaviour
         if (prev == next) return;
         edgeStates[i] = next;
 
-        if (next == EdgeState.Spirit) spiritMask |= 1 << i;
+        if (next == EdgeState.Spirit)
+        {
+            spiritMask |= 1 << i;
+            // 掉成灵体 = 这一格的框脱落，掉落音在这里响（碰撞和调试砸边都走这条）。
+            LabAudio.Play(LabAudio.Cue.CrateFall);
+        }
         else spiritMask &= ~(1 << i);
 
         if (visual != null) visual.SetEdge(e, next);
@@ -1116,6 +1132,7 @@ public class LabPlayer : MonoBehaviour
 
         nextHitTime = Time.time + 0.18f;
         b.SetHitCooldown(Time.time + 0.18f);
+        LabAudio.Play(LabAudio.Cue.CannonLoad);
         return true;
     }
 
@@ -1175,6 +1192,7 @@ public class LabPlayer : MonoBehaviour
         Vector2 dir = -b.chamberDir;
         b.Wake(rb.position + dir * (HalfHeight + b.HalfHeight + 0.05f), dir * speed);
         b.gliding = Mathf.Abs(dir.x) > 0.5f;         // 只有水平射出才免重力
+        LabAudio.Play(LabAudio.Cue.CannonFire);
     }
 
     void FireConverter()

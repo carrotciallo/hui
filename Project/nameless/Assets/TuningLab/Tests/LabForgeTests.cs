@@ -405,6 +405,60 @@ public sealed class LabForgeTests
         Assert.AreEqual(LabPlayer.EdgeState.Normal, b.GetEdge(LabPlayer.Edge.Left), "B 没有边，不参与锻造");
     }
 
+    /// <summary>
+    /// Issue #65：A 撞向静止的 B，对面那一记的 v² 就是自己的 v²，
+    /// 一级带（锻造门槛 ≤ Vp &lt; 红热门槛）也是碰撞，冷撞击照旧把热二框砸成灵体。
+    /// </summary>
+    [UnityTest]
+    public IEnumerator TierOneHitOnStationaryPartnerDropsHot2Edge()
+    {
+        MakeFloor();
+        var a = MakeA("A_Box", true);
+        var b = MakeA("B_Chunk", false);
+
+        a.other = b;
+        b.other = a;
+        a.Teleport(new Vector2(0f, 0.5f));
+        b.Teleport(new Vector2(2f, 0.4f));
+
+        Heat(a, LabPlayer.Edge.Right);
+
+        // 24 落在一级带里：锻造门槛 20.0（下落 4 格）≤ v < 红热门槛 28.3（下落 8 格）。
+        // 关摩擦和刹车，否则撞到的时候已经掉出这一档，测的就不是门槛而是速度了。
+        lab.groundBrake = 0f;
+        lab.horizontalAirDrag = false;
+        a.SetVelocity(new Vector2(24f, 0f));
+
+        yield return WaitUntil(() => a.HorizontalSpeed < 1f, 3f);
+
+        Assert.AreEqual(LabPlayer.EdgeState.Spirit, a.GetEdge(LabPlayer.Edge.Right),
+                        "A 撞静止的 B 是一级冷撞击：热二框掉落");
+        Assert.Greater(b.HorizontalSpeed, 1f, "速度确实换了，说明这记碰撞结算过");
+    }
+
+    [UnityTest]
+    public IEnumerator TierOneHitOnStationaryPartnerDoesNotHeatNormalEdge()
+    {
+        MakeFloor();
+        var a = MakeA("A_Box", true);
+        var b = MakeA("B_Chunk", false);
+
+        a.other = b;
+        b.other = a;
+        a.Teleport(new Vector2(0f, 0.5f));
+        b.Teleport(new Vector2(2f, 0.4f));
+
+        lab.groundBrake = 0f;
+        lab.horizontalAirDrag = false;
+        a.SetVelocity(new Vector2(24f, 0f));
+
+        yield return WaitUntil(() => a.HorizontalSpeed < 1f, 3f);
+
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, a.GetEdge(LabPlayer.Edge.Right),
+                        "锻造门槛只砸已有热二框，不给常态边加热");
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, a.GetEdge(LabPlayer.Edge.Bottom), "另一条轴不参与");
+    }
+
     [UnityTest]
     public IEnumerator BHasNoForgableEdges()
     {

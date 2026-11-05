@@ -23,10 +23,17 @@ public static class LabLevelSelfCheck
 
     public static void RunBatch()
     {
-        int fails;
+        bool ok = RunBatchSilent(out int fails);
+        Debug.Log("[LabLevelSelfCheck] " + (ok ? "全部通过。" : ("失败 " + fails + " 项。")));
+        EditorApplication.Exit(ok ? 0 : 1);
+    }
+
+    /// <summary>无对话框版本：跑完整自检并输出报告，返回是否全部通过。</summary>
+    public static bool RunBatchSilent(out int fails)
+    {
         StringBuilder report = Check(out fails);
         Debug.Log("[LabLevelSelfCheck]\n" + report);
-        EditorApplication.Exit(fails == 0 ? 0 : 1);
+        return fails == 0;
     }
 
     static StringBuilder Check(out int fails)
@@ -624,14 +631,15 @@ public static class LabLevelSelfCheck
         captureLevel.spikes.Add(new LabSpikeSpec(new Vector2Int(3, 3), LabSpikeDir.Up));
         captureLevel.ices.Add(new LabIceSpec(new Vector2Int(3, 3), 1));
         captureLevel.magmas.Add(new LabMagmaSpec(new Vector2Int(3, 3), 1));
+        captureLevel.hiddenBlocks.Add(new LabHiddenBlockSpec(new Vector2Int(3, 3), 1));
         captureLevel.respawnPoints.Add(new LabRespawnPointSpec(new Vector2(3.5f, 3.5f)));
         captureLevel.teleports.Add(new LabTeleportSpec(new Vector2(3.5f, 3.5f)));
         var captureArea = new List<RectInt> { new RectInt(3, 3, 1, 1) };
         var allCapture = captureLevel.CaptureContents(captureArea);
-        Expect(sb, ref failures, allCapture.Count == 10,
-            "选区锁定地形 + 9 种摆放物件，实际 " + allCapture.Count);
-        Expect(sb, ref failures, captureLevel.MoveCapturedContents(allCapture, new Vector2Int(1, 0)) == 10,
-            "锁定内容一次平移到 10 条");
+        Expect(sb, ref failures, allCapture.Count == 11,
+            "选区锁定地形 + 10 种摆放物件，实际 " + allCapture.Count);
+        Expect(sb, ref failures, captureLevel.MoveCapturedContents(allCapture, new Vector2Int(1, 0)) == 11,
+            "锁定内容一次平移到 11 条");
         Expect(sb, ref failures,
             captureLevel.HasCell(new Vector2Int(4, 3)) &&
             SamePoint(captureLevel.ropes[0].center, new Vector2(4.5f, 3.5f)) &&
@@ -641,9 +649,10 @@ public static class LabLevelSelfCheck
             captureLevel.spikes[0].cell == new Vector2Int(4, 3) &&
             captureLevel.ices[0].cell == new Vector2Int(4, 3) &&
             captureLevel.magmas[0].cell == new Vector2Int(4, 3) &&
+            captureLevel.hiddenBlocks[0].cell == new Vector2Int(4, 3) &&
             SamePoint(captureLevel.respawnPoints[0].position, new Vector2(4.5f, 3.5f)) &&
             SamePoint(captureLevel.teleports[0].position, new Vector2(4.5f, 3.5f)),
-            "地形 + 9 种摆放物件都跟着选区框平移");
+            "地形 + 10 种摆放物件都跟着选区框平移");
 
         sb.AppendLine();
         sb.AppendLine("=== 13. 传送点：全互联数据 / 去重 / 随分区移动与删除 ===");
@@ -775,7 +784,72 @@ public static class LabLevelSelfCheck
         Object.DestroyImmediate(tierProbeGo);
 
         sb.AppendLine();
-        sb.AppendLine("=== 15. 召回道具：几何 / 去重 / 随分区移动与删除 / 全队解锁 ===");
+        sb.AppendLine("=== 15. 隐藏方块：几何 / 编组 / 同格多组 / 去重 / 随分区移动与删除 ===");
+        Expect(sb, ref failures, data.hiddenBlocks.Count == 0,
+            "基准房间没有隐藏方块，实际 " + data.hiddenBlocks.Count);
+
+        var hiddenSpec = new LabHiddenBlockSpec(new Vector2Int(5, 3), 2);
+        Expect(sb, ref failures,
+            SamePoint(hiddenSpec.Center, new Vector2(5.5f, 3.5f))
+            && hiddenSpec.Cells() == new RectInt(5, 3, 1, 1),
+            "隐藏方块落点与占地和岩浆同构");
+
+        var hiddenLevel = new LabLevelData();
+        hiddenLevel.partitions.Add(new LabLevelPartition { name = "A", bounds = new RectInt(0, 0, 10, 10) });
+        hiddenLevel.partitions.Add(new LabLevelPartition { name = "B", bounds = new RectInt(20, 0, 10, 10) });
+        hiddenLevel.PlaceHiddenBlock(new Vector2Int(2, 1), 7);
+        hiddenLevel.PlaceHiddenBlock(new Vector2Int(22, 1), 7);
+        Expect(sb, ref failures, hiddenLevel.hiddenBlocks.Count == 2, "两格各一条");
+        Expect(sb, ref failures, !hiddenLevel.PlaceHiddenBlock(new Vector2Int(2, 1), 7),
+            "同格同组重复放 = 无变化");
+        Expect(sb, ref failures, hiddenLevel.PlaceHiddenBlock(new Vector2Int(2, 1), 9),
+            "同格另一组可以共存（嵌套组）");
+        Expect(sb, ref failures,
+            hiddenLevel.HasHiddenBlock(new Vector2Int(2, 1)) &&
+            hiddenLevel.HasHiddenBlock(new Vector2Int(2, 1), 7) &&
+            hiddenLevel.HasHiddenBlock(new Vector2Int(2, 1), 9) &&
+            !hiddenLevel.HasHiddenBlock(new Vector2Int(2, 1), 11),
+            "按格 / 按 (格, 组) 两种查询都正确");
+        Expect(sb, ref failures, !hiddenLevel.HasHiddenBlock(new Vector2Int(7, 7)), "没放过的格没有隐藏方块");
+        Expect(sb, ref failures, hiddenLevel.GroupHiddenBlocks(7).Count == 2, "组 7 跨两个分区共 2 条");
+        Expect(sb, ref failures, hiddenLevel.NextHiddenGroupId() == 10, "下一组号 = 最大组号 + 1");
+
+        Expect(sb, ref failures, !hiddenLevel.RemoveHiddenBlock(new Vector2Int(2, 1), 9)
+                || hiddenLevel.HasHiddenBlock(new Vector2Int(2, 1), 7),
+            "从一组摘掉后另一组还在");
+        Expect(sb, ref failures, hiddenLevel.RemoveHiddenBlock(new Vector2Int(2, 1), 7),
+            "再摘掉组 7 的这格");
+        Expect(sb, ref failures, !hiddenLevel.HasHiddenBlock(new Vector2Int(2, 1)),
+            "两组都摘干净后这格不再隐藏");
+        hiddenLevel.PlaceHiddenBlock(new Vector2Int(2, 1), 7);
+
+        hiddenLevel.hiddenBlocks.Add(new LabHiddenBlockSpec(new Vector2Int(2, 1), 7));
+        hiddenLevel.hiddenBlocks.Add(new LabHiddenBlockSpec(new Vector2Int(2, 1), 3));
+        hiddenLevel.Normalize();
+        Expect(sb, ref failures, hiddenLevel.hiddenBlocks.Count == 3,
+            "Normalize 只按 (格, 组) 去重，实际 " + hiddenLevel.hiddenBlocks.Count);
+
+        var hiddenClone = hiddenLevel.Clone();
+        Expect(sb, ref failures, hiddenClone.hiddenBlocks.Count == 3, "Clone 带上隐藏方块");
+        hiddenClone.hiddenBlocks[0] = new LabHiddenBlockSpec(new Vector2Int(99, 99), 0);
+        Expect(sb, ref failures,
+            hiddenLevel.HasHiddenBlock(new Vector2Int(2, 1)) || hiddenLevel.HasHiddenBlock(new Vector2Int(22, 1)),
+            "Clone 是深拷贝");
+
+        Expect(sb, ref failures, hiddenLevel.MovePartition(0, new Vector2Int(3, 4), true),
+            "移动分区 A");
+        Expect(sb, ref failures,
+            hiddenLevel.HasHiddenBlock(new Vector2Int(5, 5)) && !hiddenLevel.HasHiddenBlock(new Vector2Int(2, 1)),
+            "A 里的隐藏方块跟着移动，旧位置不残留");
+        Expect(sb, ref failures, hiddenLevel.HasHiddenBlock(new Vector2Int(22, 1)),
+            "分区 B 的隐藏方块不动");
+
+        Expect(sb, ref failures, hiddenLevel.DeletePartition(0, true), "删除分区 A（带内容）");
+        Expect(sb, ref failures,
+            hiddenLevel.hiddenBlocks.Count == 1 && hiddenLevel.HasHiddenBlock(new Vector2Int(22, 1)),
+            "A 里的隐藏方块被删，B 的留下");
+
+        sb.AppendLine("=== 16. 召回道具：几何 / 去重 / 随分区移动与删除 / 全队解锁 ===");
         Expect(sb, ref failures, data.recalls.Count == 0,
             "基准房间没有召回道具，实际 " + data.recalls.Count);
 
