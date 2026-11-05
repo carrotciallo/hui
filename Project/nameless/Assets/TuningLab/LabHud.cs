@@ -119,6 +119,7 @@ public class LabHud : MonoBehaviour
         GUILayout.Label("膛里装了 B 时：B 的移动无效，句号 . 变成开炮", small);
         GUILayout.Label("向下冲刺只允许在空中（站在地上按下去无效，不耗充能）", small);
         GUILayout.Label("冲刺方向 竖直输入 > 水平输入 > 空中的竖直速度 > 朝向", small);
+        GUILayout.Label("召回  A: Q   B: 右Shift（拾取道具后解锁；头顶需 1 格空位）", small);
         GUILayout.Label("R 重置    P 像素网格    F1 碎一条边（演示形态）    F2 恢复边框", small);
         GUILayout.Space(6f);
 
@@ -200,6 +201,12 @@ public class LabHud : MonoBehaviour
         if (lab.PlayerB == null) GUILayout.Label("P2 已销毁：相机改绑 P1", WarnStyle());
         else if (!lab.PlayerB.IsAlive) GUILayout.Label("P2 死亡：隐藏等待队友", WarnStyle());
         else DrawPlayer(lab.PlayerB, "P2");
+
+        GUILayout.Space(6f);
+        GUILayout.Label(lab.RecallUnlocked
+            ? "召回 已解锁   A: Q   B: 右Shift"
+            : "召回 未解锁（拾取召回道具）", small);
+        GUILayout.Label(string.Format("幻影 {0}/{1}", LabPhantom.All.Count, LabPhantom.MaxPhantoms), small);
 
         GUILayout.Space(10f);
         GUILayout.Label("诊断", title);

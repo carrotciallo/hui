@@ -37,30 +37,47 @@ public class LabVisual : MonoBehaviour
         var go = new GameObject("Visual");
         go.transform.SetParent(root, false);
         var v = go.AddComponent<LabVisual>();
-        v.Create(pixels, hasFrame, baseColor);
+        v.Create(pixels, hasFrame, baseColor, false);
         return v;
     }
 
-    void Create(int pixels, bool hasFrame, Color color)
+    /// <summary>
+    /// 幻影用：只保留身体/边框，不画速度外圈和眼睛，整体压到玩家下面。
+    /// 语义和玩家的 <see cref="Build"/> 共用同一套部件生成，避免第二套视觉。
+    /// </summary>
+    public static LabVisual BuildGhost(Transform root, int pixels, bool hasFrame, Color baseColor)
+    {
+        var go = new GameObject("GhostVisual");
+        go.transform.SetParent(root, false);
+        var v = go.AddComponent<LabVisual>();
+        v.Create(pixels, hasFrame, baseColor, true);
+        return v;
+    }
+
+    void Create(int pixels, bool hasFrame, Color color, bool ghost)
     {
         this.hasFrame = hasFrame;
         baseColor = color;
+        int sort = ghost ? -2 : 0;
 
         float px = TuningLab.CellPixels;                 // 每格像素
         float halfBox = pixels / px * 0.5f;              // 碰撞箱半边长（世界单位）
 
         // ---- 外圈：四个方向各一段，显示该方向的速度等级 ----
         // 段中心在碰撞箱边缘外 RingThickness/2 处；上下段占满整宽，左右段缩短以避开四角。
-        int ringSize = pixels + RingGap * 2;
-        float ringOff = (pixels * 0.5f + RingThickness * 0.5f) / px;
-        int sideLen = pixels;                 // 左右段高度，避开上下段
+        if (!ghost)
+        {
+            int ringSize = pixels + RingGap * 2;
+            float ringOff = (pixels * 0.5f + RingThickness * 0.5f) / px;
+            int sideLen = pixels;                 // 左右段高度，避开上下段
 
-        ring = new SpriteRenderer[4];
-        ring[0] = Part("Ring_Top", Solid(ringSize, RingThickness), new Vector2(0f, ringOff), 19);
-        ring[1] = Part("Ring_Bottom", Solid(ringSize, RingThickness), new Vector2(0f, -ringOff), 19);
-        ring[2] = Part("Ring_Left", Solid(RingThickness, sideLen), new Vector2(-ringOff, 0f), 19);
-        ring[3] = Part("Ring_Right", Solid(RingThickness, sideLen), new Vector2(ringOff, 0f), 19);
-        for (int i = 0; i < 4; i++) ring[i].color = TierColor(0);
+            ring = new SpriteRenderer[4];
+            ring[0] = Part("Ring_Top", Solid(ringSize, RingThickness), new Vector2(0f, ringOff), 19 + sort);
+            ring[1] = Part("Ring_Bottom", Solid(ringSize, RingThickness), new Vector2(0f, -ringOff), 19 + sort);
+            ring[2] = Part("Ring_Left", Solid(RingThickness, sideLen), new Vector2(-ringOff, 0f), 19 + sort);
+            ring[3] = Part("Ring_Right", Solid(RingThickness, sideLen), new Vector2(ringOff, 0f), 19 + sort);
+            for (int i = 0; i < 4; i++) ring[i].color = TierColor(0);
+        }
 
         // ---- 中间：碰撞箱 + 红热态 ----
         if (hasFrame)
@@ -70,25 +87,28 @@ public class LabVisual : MonoBehaviour
             float innerLen = pixels / px - wall * 2f;    // 去掉两端墙之后的长度
 
             edges = new SpriteRenderer[4];
-            edges[0] = Part("Edge_Top", Solid(pixels, 2), new Vector2(0f, off), 20);
-            edges[1] = Part("Edge_Bottom", Solid(pixels, 2), new Vector2(0f, -off), 20);
-            edges[2] = Part("Edge_Left", Solid(2, Mathf.RoundToInt(innerLen * px)), new Vector2(-off, 0f), 20);
-            edges[3] = Part("Edge_Right", Solid(2, Mathf.RoundToInt(innerLen * px)), new Vector2(off, 0f), 20);
+            edges[0] = Part("Edge_Top", Solid(pixels, 2), new Vector2(0f, off), 20 + sort);
+            edges[1] = Part("Edge_Bottom", Solid(pixels, 2), new Vector2(0f, -off), 20 + sort);
+            edges[2] = Part("Edge_Left", Solid(2, Mathf.RoundToInt(innerLen * px)), new Vector2(-off, 0f), 20 + sort);
+            edges[3] = Part("Edge_Right", Solid(2, Mathf.RoundToInt(innerLen * px)), new Vector2(off, 0f), 20 + sort);
         }
         else
         {
             // 没有边的角色：整个碰撞箱一块实心
-            Part("Body", Solid(pixels, pixels), Vector2.zero, 20).color = baseColor;
+            Part("Body", Solid(pixels, pixels), Vector2.zero, 20 + sort).color = baseColor;
         }
 
-        // ---- 白眼睛：朝向 ----
-        eye = Part("Eye", Solid(EyePixels, EyePixels), Vector2.zero, 21);
-        eye.color = Color.white;
-        eyeT = eye.transform;
-        eyeOffset = halfBox - (hasFrame ? 2f / px : 0f) - EyePixels / px * 0.5f;
+        // ---- 白眼睛：朝向（幻影不画）----
+        if (!ghost)
+        {
+            eye = Part("Eye", Solid(EyePixels, EyePixels), Vector2.zero, 21 + sort);
+            eye.color = Color.white;
+            eyeT = eye.transform;
+            eyeOffset = halfBox - (hasFrame ? 2f / px : 0f) - EyePixels / px * 0.5f;
+        }
 
         SetAllEdges(LabPlayer.EdgeState.Normal);   // 四条边先上常态色，否则是默认白
-        SetAim(Vector2.right);
+        if (!ghost) SetAim(Vector2.right);
     }
 
     SpriteRenderer Part(string name, Sprite sprite, Vector2 localPos, int sortingOrder)

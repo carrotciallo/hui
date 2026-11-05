@@ -127,6 +127,9 @@ public class TuningLab : MonoBehaviour
     /// <summary>召回能力：任一玩家拾取道具后全队永久解锁，地图重置不清空。</summary>
     public bool RecallUnlocked { get; private set; }
     public void UnlockRecall() => RecallUnlocked = true;
+
+    /// <summary>摩擦 0 的共用材质；幻影等运行时实体也用它。</summary>
+    internal PhysicsMaterial2D SlickMaterial => slick;
     public bool TeleportSelecting => teleportSource != null;
     /// <summary>选择界面里当前选中的终点；没有在选终点时为 null。</summary>
     public LabTeleportPoint TeleportTarget =>
@@ -363,6 +366,7 @@ public class TuningLab : MonoBehaviour
     void OnDestroy()
     {
         Time.timeScale = 1f;
+        LabPhantom.ClearAll();
     }
 
     void Update()
@@ -485,7 +489,51 @@ public class TuningLab : MonoBehaviour
 
     public void ResetMap()
     {
+        LabPhantom.ClearAll();
         MapReset?.Invoke();
+    }
+
+    /// <summary>
+    /// 召回：施法者头顶有 1 格空位时，把另一名玩家传送到头顶，并在其旧位置留下幻影。
+    /// 能力是全队、永久的；判定集中在这里，输入层只负责读键。
+    /// </summary>
+    public bool TryRecall(LabPlayer caster)
+    {
+        if (!RecallUnlocked || caster == null) return false;
+
+        LabPlayer recalled = caster.other;
+        if (recalled == null || !caster.IsAlive || !recalled.IsAlive) return false;
+        if (caster.Suspended || recalled.Suspended) return false;
+
+        Bounds body = caster.BodyBounds;
+        float headTop = body.max.y;
+        Vector2 probeCenter = new Vector2(caster.transform.position.x, headTop + 0.5f);
+        var hits = Physics2D.OverlapBoxAll(probeCenter, Vector2.one, 0f);
+        var casterCollider = caster.GetComponent<Collider2D>();
+        for (int i = 0; i < hits.Length; i++)
+        {
+            var hit = hits[i];
+            if (hit == null || hit == casterCollider) continue;
+            if (hit.isTrigger) continue;
+            return false;      // 头顶被实体占住：拒绝，不生成幻影
+        }
+
+        Vector2 before = recalled.transform.position;
+        int spiritMask = recalled.SpiritMask;
+        int pixels = recalled.pixels;
+        bool framed = recalled.canBeRedHot;
+
+        Vector2 target = new Vector2(
+            caster.transform.position.x,
+            headTop + recalled.HalfHeight + 0.01f);
+        // 保留被召回者的碎边/形态：普通 Teleport 会 ResetEdges。
+        recalled.TeleportPreservingState(target, Vector2.zero);
+
+        var cell = new Vector2Int(
+            Mathf.FloorToInt(before.x),
+            Mathf.FloorToInt(before.y));
+        LabPhantom.Spawn(this, recalled, caster, cell, spiritMask, pixels, framed);
+        return true;
     }
 
     public void RegisterTeleport(LabTeleportPoint point)

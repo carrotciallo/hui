@@ -199,6 +199,7 @@ public class LabPlayer : MonoBehaviour
     bool jumpHeld;
     bool dashDownThisFrame;
     bool dashQueued;
+    bool recallDownThisFrame;
 
     void Awake()
     {
@@ -225,6 +226,8 @@ public class LabPlayer : MonoBehaviour
             if (dashDownThisFrame) host.Fire();
             return;
         }
+
+        if (recallDownThisFrame && lab != null && lab.TryRecall(this)) return;
 
         if (jumpDownThisFrame && lab != null) jumpBuffer = lab.jumpBufferTime;
         else jumpBuffer = Mathf.Max(0f, jumpBuffer - Time.deltaTime);
@@ -1344,6 +1347,7 @@ public class LabPlayer : MonoBehaviour
         jumpDownThisFrame = false;
         jumpHeld = false;
         dashDownThisFrame = false;
+        recallDownThisFrame = false;
 
         var kb = Keyboard.current;
         if (kb == null) return;
@@ -1359,6 +1363,7 @@ public class LabPlayer : MonoBehaviour
             jumpHeld = kb.spaceKey.isPressed;
             jumpDownThisFrame = kb.spaceKey.wasPressedThisFrame;
             dashDownThisFrame = kb.leftShiftKey.wasPressedThisFrame;
+            recallDownThisFrame = kb.qKey.wasPressedThisFrame;
         }
         else
         {
@@ -1370,6 +1375,7 @@ public class LabPlayer : MonoBehaviour
             jumpHeld = kb.slashKey.isPressed;
             jumpDownThisFrame = kb.slashKey.wasPressedThisFrame;
             dashDownThisFrame = kb.periodKey.wasPressedThisFrame;
+            recallDownThisFrame = kb.rightShiftKey.wasPressedThisFrame;
         }
 
         moveX = (right ? 1f : 0f) - (left ? 1f : 0f);
