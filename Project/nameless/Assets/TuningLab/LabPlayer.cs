@@ -447,7 +447,7 @@ public class LabPlayer : MonoBehaviour
         if (host != null) return;      // 膛里的人没有碰撞箱，这里的回调只能是进膛那一刻的残留
         bool isPlayer = c.collider != null && c.collider.GetComponent<LabPlayer>() != null;
         if (isPlayer) playerContactTimer = 0.12f;
-        else ForgeFromTerrain(c);         // 只有进入的那一帧锻造，贴墙摩擦不算
+        else if (!ResolveMagmaContact(c, true)) ForgeFromTerrain(c);   // 只有进入的那一帧锻造，贴墙摩擦不算
 
         TryResolveHit(c);
     }
@@ -457,8 +457,45 @@ public class LabPlayer : MonoBehaviour
         if (host != null) return;
         bool isPlayer = c.collider != null && c.collider.GetComponent<LabPlayer>() != null;
         if (isPlayer) playerContactTimer = 0.12f;
+        else ResolveMagmaContact(c, false);   // 贴着岩浆块时持续保证接触边是热二
 
         TryResolveHit(c);
+    }
+
+    /// <summary>
+    /// 岩浆块接触：任意方向的表面都强制把 A 的接触边点到热二，不经过 StrikeEdge 的
+    /// 状态机——所以热二不会因此塌框，灵体边也不会被修回来。
+    /// 只有碰撞进入那一帧沿法线撞进去的分量到 v3 才整组破坏；红热边不会融掉岩浆块。
+    /// 返回 false 表示这个碰撞体不是岩浆块，交给普通地形锻造。
+    /// </summary>
+    bool ResolveMagmaContact(Collision2D c, bool entering)
+    {
+        var magma = c.collider != null ? c.collider.GetComponentInParent<LabMagma>() : null;
+        if (magma == null) return false;
+        if (lab == null || c.contactCount == 0) return true;
+
+        Vector2 n = ContactNormal(c);
+        if (entering)
+        {
+            float impact = Mathf.Abs(Vector2.Dot(lastFixedVelocity, n));
+            if (lab.TierOfSpeed(impact) >= LabMagma.BreakTier)
+            {
+                magma.BreakGroup();
+                return true;
+            }
+        }
+
+        ForceEdgeHot(EdgeFor(-n));
+        return true;
+    }
+
+    /// <summary>接触法线归到单轴；方块不旋转，永不产生斜向。</summary>
+    static Vector2 ContactNormal(Collision2D c)
+    {
+        Vector2 n = c.GetContact(0).normal;
+        return Mathf.Abs(n.x) >= Mathf.Abs(n.y)
+            ? new Vector2(Mathf.Sign(n.x), 0f)
+            : new Vector2(0f, Mathf.Sign(n.y));
     }
 
     /// <summary>
@@ -470,11 +507,7 @@ public class LabPlayer : MonoBehaviour
     {
         if (lab == null || c.contactCount == 0) return;
 
-        Vector2 n = c.GetContact(0).normal;
-        // 方块不旋转，接触法线必定是轴；取绝对值大的那根轴，杜绝斜向
-        n = Mathf.Abs(n.x) >= Mathf.Abs(n.y)
-            ? new Vector2(Mathf.Sign(n.x), 0f)
-            : new Vector2(0f, Mathf.Sign(n.y));
+        Vector2 n = ContactNormal(c);
 
         // 用上一帧 FixedUpdate 写进去的速度：碰撞回调里速度已经被解算改掉了
         float impact = Mathf.Abs(Vector2.Dot(lastFixedVelocity, n));
@@ -803,6 +836,17 @@ public class LabPlayer : MonoBehaviour
                 }
                 break;
         }
+    }
+
+    /// <summary>
+    /// 把一条边强制点到热二。岩浆块用：这是设定，不经过 StrikeEdge 的状态机，
+    /// 所以已经热二的边不会塌框，灵体边也不会被修好。
+    /// </summary>
+    public void ForceEdgeHot(Edge e)
+    {
+        if (!canBeRedHot) return;
+        if (edgeStates[(int)e] != EdgeState.Normal) return;
+        SetEdge(e, EdgeState.Hot2);
     }
 
     /// <summary>

@@ -16,7 +16,7 @@ public sealed class LabLevelInspector : Editor
 
         EditorGUILayout.HelpBox(
             "关卡数据由 GameJam → Tuning Lab Level Editor 维护。\n" +
-            "这里的场地、绳、钥匙、门、出生点、重生点和传送点都会在 Play 时按 Tuning Lab 的同一套脚本生成。",
+            "这里的场地、绳、钥匙、门、出生点、重生点、传送点、冰块和岩浆块都会在 Play 时按 Tuning Lab 的同一套脚本生成。",
             MessageType.Info);
 
         EditorGUILayout.LabelField("实心格", level.SolidCellCount.ToString());
@@ -25,6 +25,7 @@ public sealed class LabLevelInspector : Editor
         EditorGUILayout.LabelField("钥匙 / 门", level.KeyCount + " / " + level.DoorCount);
         EditorGUILayout.LabelField("地刺", level.SpikeCount + "（16×6，碰到即死）");
         EditorGUILayout.LabelField("冰块", level.IceCount + "（1×1，可编组）");
+        EditorGUILayout.LabelField("岩浆块", level.MagmaCount + "（1×1，强制红热 / v3 破坏）");
         EditorGUILayout.LabelField("重生点", level.RespawnPointCount + "（3×3，接触触发）");
         EditorGUILayout.LabelField("传送点", level.TeleportCount + "（3×3，全互联）");
         EditorGUILayout.LabelField("相机范围", data.bounds.ToString());

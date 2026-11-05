@@ -31,6 +31,8 @@ public sealed class LabLevelData
     public List<LabSpikeSpec> spikes = new List<LabSpikeSpec>();
     /// <summary>冰块（1×1，可编组；红热边接触融一块，v2 碰撞碎整组）。</summary>
     public List<LabIceSpec> ices = new List<LabIceSpec>();
+    /// <summary>岩浆块（1×1，可编组；任意面接触强制红热，v3 碰撞碎整组，红热接触不融）。</summary>
+    public List<LabMagmaSpec> magmas = new List<LabMagmaSpec>();
     /// <summary>重生点（3×3 触发区，中心坐标）。</summary>
     public List<LabRespawnPointSpec> respawnPoints = new List<LabRespawnPointSpec>();
     /// <summary>传送点（3×3 触发区，中心坐标）。所有传送点互为终点，进入后由玩家选择。</summary>
@@ -84,6 +86,12 @@ public sealed class LabLevelData
     {
         if (ices == null) ices = new List<LabIceSpec>();
         else ices.Clear();
+    }
+
+    public void ClearMagmas()
+    {
+        if (magmas == null) magmas = new List<LabMagmaSpec>();
+        else magmas.Clear();
     }
 
     public void ClearTeleports()
@@ -162,6 +170,41 @@ public sealed class LabLevelData
         return ices.RemoveAll(ice => ice.cell == cell) > 0;
     }
 
+    /// <summary>这一格的岩浆块；没有返回 null。</summary>
+    public LabMagmaSpec? FindMagma(Vector2Int cell)
+    {
+        if (magmas == null) return null;
+        for (int i = 0; i < magmas.Count; i++)
+            if (magmas[i].cell == cell) return magmas[i];
+        return null;
+    }
+
+    public bool HasMagma(Vector2Int cell) => FindMagma(cell).HasValue;
+
+    /// <summary>放一块岩浆，或把这一格已有岩浆块改到新组。组号也相同则什么都不做。</summary>
+    public bool PlaceMagma(Vector2Int cell, int groupId)
+    {
+        if (magmas == null) magmas = new List<LabMagmaSpec>();
+        for (int i = 0; i < magmas.Count; i++)
+        {
+            var magma = magmas[i];
+            if (magma.cell != cell) continue;
+            if (magma.groupId == groupId) return false;
+            magma.groupId = groupId;
+            magmas[i] = magma;
+            return true;
+        }
+
+        magmas.Add(new LabMagmaSpec(cell, groupId));
+        return true;
+    }
+
+    public bool RemoveMagma(Vector2Int cell)
+    {
+        if (magmas == null) return false;
+        return magmas.RemoveAll(magma => magma.cell == cell) > 0;
+    }
+
     public bool PlaceRespawnPoint(Vector2Int cell)
     {
         if (respawnPoints == null) respawnPoints = new List<LabRespawnPointSpec>();
@@ -236,6 +279,27 @@ public sealed class LabLevelData
         return list;
     }
 
+    /// <summary>编辑器新建组用：当前最大组号 + 1；没有岩浆块时从 1 开始。0 是合法组，不作为默认。</summary>
+    public int NextMagmaGroupId()
+    {
+        int max = 0;
+        if (magmas != null)
+            for (int i = 0; i < magmas.Count; i++)
+                if (magmas[i].groupId > max) max = magmas[i].groupId;
+        return max + 1;
+    }
+
+    /// <summary>同一组的所有岩浆块（深拷贝，按格排序），给校验和测试用。</summary>
+    public List<LabMagmaSpec> GroupMagmas(int groupId)
+    {
+        var list = new List<LabMagmaSpec>();
+        if (magmas == null) return list;
+        for (int i = 0; i < magmas.Count; i++)
+            if (magmas[i].groupId == groupId) list.Add(magmas[i]);
+        list.Sort((a, b) => CompareCells(a.cell, b.cell));
+        return list;
+    }
+
     public bool ContainsCell(Vector2Int cell)
     {
         return cell.x >= bounds.x && cell.x < bounds.x + bounds.width
@@ -257,6 +321,7 @@ public sealed class LabLevelData
         if (doors == null) doors = new List<LabDoorSpec>();
         if (spikes == null) spikes = new List<LabSpikeSpec>();
         if (ices == null) ices = new List<LabIceSpec>();
+        if (magmas == null) magmas = new List<LabMagmaSpec>();
         if (respawnPoints == null) respawnPoints = new List<LabRespawnPointSpec>();
         if (teleports == null) teleports = new List<LabTeleportSpec>();
         if (partitions == null) partitions = new List<LabLevelPartition>();
@@ -356,6 +421,16 @@ public sealed class LabLevelData
             ices[iceWrite++] = ices[read];
         }
         if (iceWrite < ices.Count) ices.RemoveRange(iceWrite, ices.Count - iceWrite);
+
+        // 一格只留一块岩浆：规则同冰块，组号随保留项。
+        magmas.Sort((a, b) => CompareCells(a.cell, b.cell));
+        int magmaWrite = 0;
+        for (int read = 0; read < magmas.Count; read++)
+        {
+            if (magmaWrite > 0 && magmas[read].cell == magmas[magmaWrite - 1].cell) continue;
+            magmas[magmaWrite++] = magmas[read];
+        }
+        if (magmaWrite < magmas.Count) magmas.RemoveRange(magmaWrite, magmas.Count - magmaWrite);
     }
 
     public void CopyFrom(LabLevelData other)
@@ -373,6 +448,7 @@ public sealed class LabLevelData
             doors = new List<LabDoorSpec>();
             spikes = new List<LabSpikeSpec>();
             ices = new List<LabIceSpec>();
+            magmas = new List<LabMagmaSpec>();
             respawnPoints = new List<LabRespawnPointSpec>();
             teleports = new List<LabTeleportSpec>();
             partitions = new List<LabLevelPartition>();
@@ -390,6 +466,7 @@ public sealed class LabLevelData
         doors = new List<LabDoorSpec>(other.doors ?? new List<LabDoorSpec>());
         spikes = new List<LabSpikeSpec>(other.spikes ?? new List<LabSpikeSpec>());
         ices = new List<LabIceSpec>(other.ices ?? new List<LabIceSpec>());
+        magmas = new List<LabMagmaSpec>(other.magmas ?? new List<LabMagmaSpec>());
         respawnPoints = new List<LabRespawnPointSpec>(
             other.respawnPoints ?? new List<LabRespawnPointSpec>());
         teleports = new List<LabTeleportSpec>(
@@ -568,6 +645,17 @@ public sealed class LabLevelData
             }
         }
 
+        if (magmas != null)
+        {
+            for (int i = 0; i < magmas.Count; i++)
+            {
+                var magma = magmas[i];
+                if (!oldRect.Contains(new Vector2(magma.cell.x + 0.5f, magma.cell.y + 0.5f))) continue;
+                magma.cell += delta;
+                magmas[i] = magma;
+            }
+        }
+
         if (respawnPoints != null)
         {
             for (int i = 0; i < respawnPoints.Count; i++)
@@ -647,6 +735,8 @@ public sealed class LabLevelData
                 spikes.RemoveAll(spike => rect.Contains(new Vector2(spike.cell.x + 0.5f, spike.cell.y + 0.5f)));
             if (ices != null)
                 ices.RemoveAll(ice => rect.Contains(new Vector2(ice.cell.x + 0.5f, ice.cell.y + 0.5f)));
+            if (magmas != null)
+                magmas.RemoveAll(magma => rect.Contains(new Vector2(magma.cell.x + 0.5f, magma.cell.y + 0.5f)));
             if (respawnPoints != null)
                 respawnPoints.RemoveAll(point => rect.Contains(point.position));
             if (teleports != null)
@@ -684,12 +774,13 @@ public sealed class LabLevelData
         internal readonly List<int> doors = new List<int>();
         internal readonly List<int> spikes = new List<int>();
         internal readonly List<int> ices = new List<int>();
+        internal readonly List<int> magmas = new List<int>();
         internal readonly List<int> respawnPoints = new List<int>();
         internal readonly List<int> teleports = new List<int>();
 
         /// <summary>锁定的条目数（地形格也算一条）。</summary>
         public int Count => solids.Count + ropes.Count + keys.Count + doors.Count
-            + spikes.Count + ices.Count + respawnPoints.Count + teleports.Count;
+            + spikes.Count + ices.Count + magmas.Count + respawnPoints.Count + teleports.Count;
     }
 
     /// <summary>
@@ -723,6 +814,10 @@ public sealed class LabLevelData
         if (ices != null)
             for (int i = 0; i < ices.Count; i++)
                 if (InAnyArea(areas, CellCenter(ices[i].cell))) capture.ices.Add(i);
+
+        if (magmas != null)
+            for (int i = 0; i < magmas.Count; i++)
+                if (InAnyArea(areas, CellCenter(magmas[i].cell))) capture.magmas.Add(i);
 
         if (respawnPoints != null)
             for (int i = 0; i < respawnPoints.Count; i++)
@@ -797,6 +892,15 @@ public sealed class LabLevelData
                 moved++;
             }
 
+        if (magmas != null)
+            foreach (int i in capture.magmas)
+            {
+                var magma = magmas[i];
+                magma.cell += delta;
+                magmas[i] = magma;
+                moved++;
+            }
+
         if (respawnPoints != null)
             foreach (int i in capture.respawnPoints)
             {
@@ -843,6 +947,7 @@ public sealed class LabLevelData
         if (doors != null) removed += doors.RemoveAll(door => InAnyArea(areas, door.position));
         if (spikes != null) removed += spikes.RemoveAll(spike => InAnyArea(areas, CellCenter(spike.cell)));
         if (ices != null) removed += ices.RemoveAll(ice => InAnyArea(areas, CellCenter(ice.cell)));
+        if (magmas != null) removed += magmas.RemoveAll(magma => InAnyArea(areas, CellCenter(magma.cell)));
         if (respawnPoints != null)
             removed += respawnPoints.RemoveAll(point => InAnyArea(areas, point.position));
         if (teleports != null)
@@ -876,6 +981,9 @@ public sealed class LabLevelData
         if (ices != null)
             for (int i = 0; i < ices.Count; i++)
                 if (InAnyArea(areas, CellCenter(ices[i].cell))) count++;
+        if (magmas != null)
+            for (int i = 0; i < magmas.Count; i++)
+                if (InAnyArea(areas, CellCenter(magmas[i].cell))) count++;
         if (respawnPoints != null)
             for (int i = 0; i < respawnPoints.Count; i++)
                 if (InAnyArea(areas, respawnPoints[i].position)) count++;
@@ -1018,6 +1126,22 @@ public sealed class LabLevelData
                     x1 = Mathf.Max(x1, cx1); y1 = Mathf.Max(y1, cy1);
                 }
 
+            }
+        }
+
+        if (magmas != null)
+        {
+            for (int i = 0; i < magmas.Count; i++)
+            {
+                var magma = magmas[i];
+                int cx0 = magma.cell.x, cx1 = magma.cell.x + 1;
+                int cy0 = magma.cell.y, cy1 = magma.cell.y + 1;
+                if (!any) { x0 = cx0; y0 = cy0; x1 = cx1; y1 = cy1; any = true; }
+                else
+                {
+                    x0 = Mathf.Min(x0, cx0); y0 = Mathf.Min(y0, cy0);
+                    x1 = Mathf.Max(x1, cx1); y1 = Mathf.Max(y1, cy1);
+                }
             }
         }
 
@@ -1219,6 +1343,30 @@ public struct LabIceSpec
     public Vector2 Center => new Vector2(cell.x + 0.5f, cell.y + 0.5f);
 
     /// <summary>冰块盖住的格子（1×1）。</summary>
+    public RectInt Cells() => new RectInt(cell.x, cell.y, 1, 1);
+}
+
+/// <summary>
+/// 一块岩浆：1×1 格，实体碰撞，可以站立，走动规则和普通地面相同。
+/// groupId 和冰块共用同一套整数编组语义；0 也是普通组。
+/// 任意方向接触强制 A 的对应边红热；只有 v3 撞击才整组破坏。
+/// </summary>
+[System.Serializable]
+public struct LabMagmaSpec
+{
+    public Vector2Int cell;
+    public int groupId;
+
+    public LabMagmaSpec(Vector2Int cell, int groupId)
+    {
+        this.cell = cell;
+        this.groupId = groupId;
+    }
+
+    /// <summary>物件落点（格中心）。</summary>
+    public Vector2 Center => new Vector2(cell.x + 0.5f, cell.y + 0.5f);
+
+    /// <summary>岩浆块盖住的格子（1×1）。</summary>
     public RectInt Cells() => new RectInt(cell.x, cell.y, 1, 1);
 }
 

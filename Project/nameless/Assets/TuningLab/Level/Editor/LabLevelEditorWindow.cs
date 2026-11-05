@@ -29,10 +29,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Door = 9,
         Spike = 10,
         Ice = 11,
-        RespawnPoint = 12,
-        TeleportPoint = 13,
-        Marquee = 14,
-        Move = 15
+        Magma = 12,
+        RespawnPoint = 13,
+        TeleportPoint = 14,
+        Marquee = 15,
+        Move = 16
     }
 
     /// <summary>下一次拉选区时怎么处理当前选区。</summary>
@@ -53,8 +54,9 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Door = 4,
         Spike = 5,
         Ice = 6,
-        RespawnPoint = 7,
-        TeleportPoint = 8
+        Magma = 7,
+        RespawnPoint = 8,
+        TeleportPoint = 9
     }
 
     struct Pick
@@ -69,7 +71,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
     static readonly string[] ToolLabels =
     {
-        "铺地形", "擦地形", "矩形", "竖绳", "横绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺", "冰块", "重生点", "传送点",
+        "铺地形", "擦地形", "矩形", "竖绳", "横绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺", "冰块", "岩浆块", "重生点", "传送点",
         "选区", "选择"
     };
 
@@ -91,6 +93,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     Color newDoorColor = LabDoor.DefaultClosedColor;
     LabSpikeDir newSpikeDir = LabSpikeDir.Up;
     int iceGroupId = 1;
+    int magmaGroupId = 1;
     bool showGrid = true;
     bool showSpawns = true;
     bool showCameraFrames = true;
@@ -99,6 +102,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     Vector2 keyDoorScroll;
     Vector2 spikeScroll;
     Vector2 iceScroll;
+    Vector2 magmaScroll;
     Vector2 respawnScroll;
     Vector2 teleportScroll;
 
@@ -267,6 +271,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawSpikes();
         EditorGUILayout.Space();
         DrawIces();
+        EditorGUILayout.Space();
+        DrawMagmas();
         EditorGUILayout.Space();
         DrawRespawnPoints();
         EditorGUILayout.Space();
@@ -440,6 +446,20 @@ public sealed class LabLevelEditorWindow : EditorWindow
                         iceGroupId = level.Data.NextIceGroupId();
                 }
                 break;
+            case Tool.Magma:
+                EditorGUILayout.HelpBox(
+                    "左键放一块 1×1 岩浆块，按住拖可以连续铺。任意方向接触都会把 A 的对应边强制点到热二，\n" +
+                    "但不会塌框；红热边接触不会融掉岩浆块；只有法线撞击到 v3 才整组破坏。\n" +
+                    "在上面走动和普通地面相同。同格再点 = 删除，换组号再点 = 改组。\n" +
+                    "0 也是普通组；「新建组」会给一个当前最大组号 + 1 的新组。",
+                    MessageType.None);
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    magmaGroupId = EditorGUILayout.IntField("组号", magmaGroupId);
+                    if (GUILayout.Button("新建组", GUILayout.Width(64f)))
+                        magmaGroupId = level.Data.NextMagmaGroupId();
+                }
+                break;
             case Tool.RespawnPoint:
                 EditorGUILayout.HelpBox(
                     "左键放置 3×3 重生点；同一格再次点击删除。重生点由 LabLevel 数据生成，" +
@@ -511,7 +531,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             "同一时间只有一个选区，它只是编辑器的状态，不存进关卡数据。\n" +
             "拖动时选区框和里面的物件一起移动；删除作用在选区覆盖的物件上。\n" +
             "增加选区会把新拖出的矩形并进当前选区，所以选区可以是不规则形状。\n" +
-            "地形格、绳、钥匙、门、地刺、冰块、重生点、传送点都算物件；出生点和关卡分区不算。",
+            "地形格、绳、钥匙、门、地刺、冰块、岩浆块、重生点、传送点都算物件；出生点和关卡分区不算。",
             MessageType.None);
     }
 
@@ -900,6 +920,56 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 if (!EditorUtility.DisplayDialog("清空冰块", "删掉所有冰块？", "清空", "取消")) return;
                 Record("清空冰块");
                 level.Data.ClearIces();
+                AfterStructuralEdit();
+            }
+        }
+    }
+
+    void DrawMagmas()
+    {
+        EditorGUILayout.LabelField("岩浆块", EditorStyles.boldLabel);
+        var data = level.Data;
+        if (data.magmas == null) data.magmas = new List<LabMagmaSpec>();
+        EditorGUILayout.LabelField("岩浆块", level.MagmaCount + "（1×1，任意面接触强制红热，v3 整组破坏）");
+
+        magmaScroll = EditorGUILayout.BeginScrollView(magmaScroll, GUILayout.MaxHeight(120f));
+        for (int i = 0; i < data.magmas.Count; i++)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                var magma = data.magmas[i];
+                EditorGUILayout.LabelField(
+                    string.Format("岩 ({0}, {1})", magma.cell.x, magma.cell.y),
+                    EditorStyles.miniLabel, GUILayout.Width(110f));
+
+                EditorGUI.BeginChangeCheck();
+                int next = EditorGUILayout.IntField(magma.groupId, GUILayout.Width(48f));
+                if (EditorGUI.EndChangeCheck())
+                {
+                    Record("改岩浆块组号");
+                    magma.groupId = next;
+                    data.magmas[i] = magma;
+                    MarkDirty(true);
+                }
+
+                if (GUILayout.Button("×", GUILayout.Width(24f)))
+                {
+                    Record("删岩浆块");
+                    data.magmas.RemoveAt(i);
+                    AfterStructuralEdit();
+                    break;
+                }
+            }
+        }
+        EditorGUILayout.EndScrollView();
+
+        using (new EditorGUI.DisabledScope(level.MagmaCount == 0))
+        {
+            if (GUILayout.Button("清空岩浆块"))
+            {
+                if (!EditorUtility.DisplayDialog("清空岩浆块", "删掉所有岩浆块？", "清空", "取消")) return;
+                Record("清空岩浆块");
+                level.Data.ClearMagmas();
                 AfterStructuralEdit();
             }
         }
@@ -1404,6 +1474,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     issues.Add("第 " + i + " 块冰和地形重叠：" + ice.cell);
                 if (data.HasSpike(ice.cell))
                     issues.Add("第 " + i + " 块冰和地刺在同一格：" + ice.cell);
+                if (data.HasMagma(ice.cell))
+                    issues.Add("第 " + i + " 块冰和岩浆块在同一格：" + ice.cell);
                 if (ice.groupId < 0)
                     issues.Add("第 " + i + " 块冰的组号不能是负数：" + ice.groupId);
 
@@ -1421,6 +1493,39 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     for (int d = 0; d < data.doors.Count; d++)
                         if (data.doors[d].Cells().Contains(ice.cell))
                             issues.Add("第 " + i + " 块冰在第 " + d + " 扇门里：" + ice.cell);
+            }
+        }
+
+        if (data.magmas != null)
+        {
+            for (int i = 0; i < data.magmas.Count; i++)
+            {
+                var magma = data.magmas[i];
+                if (!data.ContainsCell(magma.cell))
+                    issues.Add("第 " + i + " 块岩浆不在编辑范围内：" + magma.cell);
+                if (data.HasCell(magma.cell))
+                    issues.Add("第 " + i + " 块岩浆和地形重叠：" + magma.cell);
+                if (data.HasSpike(magma.cell))
+                    issues.Add("第 " + i + " 块岩浆和地刺在同一格：" + magma.cell);
+                if (data.HasIce(magma.cell))
+                    issues.Add("第 " + i + " 块岩浆和冰块在同一格：" + magma.cell);
+                if (magma.groupId < 0)
+                    issues.Add("第 " + i + " 块岩浆的组号不能是负数：" + magma.groupId);
+
+                if (SpawnTouchesCell(data.spawnA, TuningLab.A_Pixels / (float)TuningLab.CellPixels, magma.cell))
+                    issues.Add("第 " + i + " 块岩浆压在 A 的出生点上：" + magma.cell);
+                if (SpawnTouchesCell(data.spawnB, TuningLab.B_Pixels / (float)TuningLab.CellPixels, magma.cell))
+                    issues.Add("第 " + i + " 块岩浆压在 B 的出生点上：" + magma.cell);
+
+                if (data.keys != null)
+                    for (int k = 0; k < data.keys.Count; k++)
+                        if (data.keys[k].Cells().Contains(magma.cell))
+                            issues.Add("第 " + i + " 块岩浆和第 " + k + " 把钥匙在同一格：" + magma.cell);
+
+                if (data.doors != null)
+                    for (int d = 0; d < data.doors.Count; d++)
+                        if (data.doors[d].Cells().Contains(magma.cell))
+                            issues.Add("第 " + i + " 块岩浆在第 " + d + " 扇门里：" + magma.cell);
             }
         }
 
@@ -1480,9 +1585,9 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
         if (issues.Count == 0)
         {
-            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 根刺，{6} 块冰，{7} 个重生点，{8} 个传送点，{9} 个关卡分区。",
+            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 根刺，{6} 块冰，{7} 块岩浆，{8} 个重生点，{9} 个传送点，{10} 个关卡分区。",
                 level.SolidCellCount, level.MergedRectCount, level.RopeCount, level.KeyCount, level.DoorCount,
-                level.SpikeCount, level.IceCount, level.RespawnPointCount, level.TeleportCount,
+                level.SpikeCount, level.IceCount, level.MagmaCount, level.RespawnPointCount, level.TeleportCount,
                 data.partitions != null ? data.partitions.Count : 0), level);
         }
         else
@@ -1571,6 +1676,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawKeyDoorHandles(data);
         DrawSpikeHandles(data);
         DrawIceHandles(data);
+        DrawMagmaHandles(data);
         DrawRespawnPointHandles(data);
         DrawTeleportHandles(data);
         DrawSelectionRegion();
@@ -1754,6 +1860,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     Notify(view, "冰块不能放在实心格里：" + cell);
                     return;
                 }
+                if (level.Data.HasMagma(cell))
+                {
+                    Notify(view, "冰块不能和岩浆块放在同一格：" + cell);
+                    return;
+                }
 
                 var existingIce = level.Data.FindIce(cell);
                 if (existingIce.HasValue && existingIce.Value.groupId == iceGroupId)
@@ -1765,6 +1876,37 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 {
                     Record(existingIce.HasValue ? "改冰块组号" : "放冰块");
                     level.Data.PlaceIce(cell, iceGroupId);
+                }
+                AfterStructuralEdit();
+                break;
+
+            case Tool.Magma:
+                if (!inBounds)
+                {
+                    Notify(view, "岩浆块必须放在相机范围里。");
+                    return;
+                }
+                if (level.Data.HasCell(cell))
+                {
+                    Notify(view, "岩浆块不能放在实心格里：" + cell);
+                    return;
+                }
+                if (level.Data.HasIce(cell))
+                {
+                    Notify(view, "岩浆块不能和冰块放在同一格：" + cell);
+                    return;
+                }
+
+                var existingMagma = level.Data.FindMagma(cell);
+                if (existingMagma.HasValue && existingMagma.Value.groupId == magmaGroupId)
+                {
+                    Record("删岩浆块");
+                    level.Data.RemoveMagma(cell);
+                }
+                else
+                {
+                    Record(existingMagma.HasValue ? "改岩浆块组号" : "放岩浆块");
+                    level.Data.PlaceMagma(cell, magmaGroupId);
                 }
                 AfterStructuralEdit();
                 break;
@@ -2110,6 +2252,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         if (data.doors != null) data.doors.RemoveAll(door => door.Cells().Contains(cell));
         if (data.spikes != null) data.spikes.RemoveAll(spike => spike.cell == cell);
         if (data.ices != null) data.ices.RemoveAll(ice => ice.cell == cell);
+        if (data.magmas != null) data.magmas.RemoveAll(magma => magma.cell == cell);
         if (data.respawnPoints != null)
             data.respawnPoints.RemoveAll(point => point.Cells().Contains(cell));
         if (data.teleports != null)
@@ -2176,6 +2319,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.HorizontalRope:
             case Tool.Spike:
             case Tool.Ice:
+            case Tool.Magma:
             case Tool.RespawnPoint:
             case Tool.TeleportPoint:
                 return true;
@@ -2199,6 +2343,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
             {
                 var existing = data.FindIce(cell);
                 return !(existing.HasValue && existing.Value.groupId == iceGroupId);
+            }
+            case Tool.Magma:
+            {
+                var existing = data.FindMagma(cell);
+                return !(existing.HasValue && existing.Value.groupId == magmaGroupId);
             }
             case Tool.RespawnPoint:
                 return !data.HasRespawnPoint(cell);
@@ -2257,8 +2406,13 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
             case Tool.Ice:
                 if (!add) return data.RemoveIce(cell);
-                if (!data.ContainsCell(cell) || data.HasCell(cell)) return false;
+                if (!data.ContainsCell(cell) || data.HasCell(cell) || data.HasMagma(cell)) return false;
                 return data.PlaceIce(cell, iceGroupId);
+
+            case Tool.Magma:
+                if (!add) return data.RemoveMagma(cell);
+                if (!data.ContainsCell(cell) || data.HasCell(cell) || data.HasIce(cell)) return false;
+                return data.PlaceMagma(cell, magmaGroupId);
 
             case Tool.RespawnPoint:
                 if (!add) return data.RemoveRespawnPoint(cell);
@@ -2309,7 +2463,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     static RectInt CellRect(Vector2 point)
         => new RectInt(Mathf.FloorToInt(point.x), Mathf.FloorToInt(point.y), 1, 1);
 
-    /// <summary>这一格上最上层的物件。优先级：传送点 &gt; 重生点 &gt; 钥匙 &gt; 冰块 &gt; 地刺 &gt; 门 &gt; 绳 &gt; 地形。</summary>
+    /// <summary>这一格上最上层的物件。优先级：传送点 &gt; 重生点 &gt; 钥匙 &gt; 冰块/岩浆块 &gt; 地刺 &gt; 门 &gt; 绳 &gt; 地形。</summary>
     Pick PickAt(Vector2Int cell)
     {
         var data = level.Data;
@@ -2333,6 +2487,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
             for (int i = 0; i < data.ices.Count; i++)
                 if (data.ices[i].cell == cell)
                     return new Pick { kind = PickKind.Ice, index = i };
+
+        if (data.magmas != null)
+            for (int i = 0; i < data.magmas.Count; i++)
+                if (data.magmas[i].cell == cell)
+                    return new Pick { kind = PickKind.Magma, index = i };
 
         if (data.spikes != null)
             for (int i = 0; i < data.spikes.Count; i++)
@@ -2369,6 +2528,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Door: return pick.index >= 0 && pick.index < data.doors.Count;
             case PickKind.Spike: return pick.index >= 0 && pick.index < data.spikes.Count;
             case PickKind.Ice: return pick.index >= 0 && pick.index < data.ices.Count;
+            case PickKind.Magma: return pick.index >= 0 && pick.index < data.magmas.Count;
             case PickKind.RespawnPoint: return pick.index >= 0 && pick.index < data.respawnPoints.Count;
             case PickKind.TeleportPoint: return pick.index >= 0 && pick.index < data.teleports.Count;
             default: return false;
@@ -2386,6 +2546,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Door: return CellRect(data.doors[pick.index].position);
             case PickKind.Spike: return new RectInt(data.spikes[pick.index].cell, Vector2Int.one);
             case PickKind.Ice: return new RectInt(data.ices[pick.index].cell, Vector2Int.one);
+            case PickKind.Magma: return new RectInt(data.magmas[pick.index].cell, Vector2Int.one);
             case PickKind.RespawnPoint: return CellRect(data.respawnPoints[pick.index].position);
             case PickKind.TeleportPoint: return CellRect(data.teleports[pick.index].position);
             default: return new RectInt(0, 0, 0, 0);
@@ -2402,6 +2563,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Door: return "门 #" + pick.index;
             case PickKind.Spike: return "地刺 #" + pick.index;
             case PickKind.Ice: return "冰块 #" + pick.index;
+            case PickKind.Magma: return "岩浆块 #" + pick.index;
             case PickKind.RespawnPoint: return "重生点 #" + pick.index;
             case PickKind.TeleportPoint: return "传送点 #" + pick.index;
             default: return "（无）";
@@ -2888,11 +3050,23 @@ public sealed class LabLevelEditorWindow : EditorWindow
         for (int i = 0; i < data.ices.Count; i++)
         {
             var ice = data.ices[i];
-            bool blocked = data.HasCell(ice.cell);
+            bool blocked = data.HasCell(ice.cell) || data.HasMagma(ice.cell);
             Handles.color = blocked ? new Color(1f, 0.35f, 0.3f, 0.95f) : IceGroupColor(ice.groupId);
             Handles.DrawWireCube(CellCenter(ice.cell), Vector3.one);
         }
 
+    }
+
+    void DrawMagmaHandles(LabLevelData data)
+    {
+        if (data.magmas == null) return;
+        for (int i = 0; i < data.magmas.Count; i++)
+        {
+            var magma = data.magmas[i];
+            bool blocked = data.HasCell(magma.cell) || data.HasIce(magma.cell);
+            Handles.color = blocked ? new Color(1f, 0.35f, 0.3f, 0.95f) : MagmaGroupColor(magma.groupId);
+            Handles.DrawWireCube(CellCenter(magma.cell), Vector3.one);
+        }
     }
 
     void DrawRespawnPointHandles(LabLevelData data)
@@ -2934,6 +3108,14 @@ public sealed class LabLevelEditorWindow : EditorWindow
     {
         float hue = Mathf.Repeat(groupId * 0.37f, 1f);
         return Color.HSVToRGB(hue, 0.55f, 1f);
+    }
+
+    /// <summary>岩浆块用暖色区分组号，和冰块的冷色调分开。</summary>
+    static Color MagmaGroupColor(int groupId)
+    {
+        float hue = Mathf.Lerp(0f, 0.14f, Mathf.Repeat(groupId * 0.37f, 1f));
+        float value = 0.72f + 0.28f * Mathf.Repeat(groupId * 0.53f, 1f);
+        return Color.HSVToRGB(hue, 0.85f, value);
     }
 
     void DrawHover(Vector2Int cell, bool inArea, bool inBounds, LabLevelData data)
@@ -3077,13 +3259,25 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
         if (tool == Tool.Ice)
         {
-            bool blocked = !inBounds || data.HasCell(cell) || data.HasSpike(cell);
+            bool blocked = !inBounds || data.HasCell(cell) || data.HasSpike(cell) || data.HasMagma(cell);
             Handles.color = blocked
                 ? new Color(1f, 0.3f, 0.25f, 0.9f)
                 : new Color(IceGroupColor(iceGroupId).r, IceGroupColor(iceGroupId).g,
                             IceGroupColor(iceGroupId).b, 0.9f);
             Handles.DrawWireCube(CellCenter(cell), Vector3.one);
             Handles.Label(CellCenter(cell) + Vector3.up * 0.6f, "冰 组 " + iceGroupId);
+            return;
+        }
+
+        if (tool == Tool.Magma)
+        {
+            bool blocked = !inBounds || data.HasCell(cell) || data.HasSpike(cell) || data.HasIce(cell);
+            Handles.color = blocked
+                ? new Color(1f, 0.3f, 0.25f, 0.9f)
+                : new Color(MagmaGroupColor(magmaGroupId).r, MagmaGroupColor(magmaGroupId).g,
+                            MagmaGroupColor(magmaGroupId).b, 0.9f);
+            Handles.DrawWireCube(CellCenter(cell), Vector3.one);
+            Handles.Label(CellCenter(cell) + Vector3.up * 0.6f, "岩浆 组 " + magmaGroupId);
             return;
         }
 
@@ -3150,6 +3344,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Door: return new Color(newDoorColor.r, newDoorColor.g, newDoorColor.b, 0.95f);
             case Tool.Spike: return new Color(0.75f, 0.82f, 0.92f, 0.95f);
             case Tool.Ice: return new Color(0.42f, 0.75f, 1f, 0.95f);
+            case Tool.Magma: return new Color(1f, 0.34f, 0.12f, 0.95f);
             case Tool.RespawnPoint: return new Color(0.35f, 1f, 0.65f, 0.95f);
             case Tool.TeleportPoint: return new Color(0.8f, 0.5f, 1f, 0.95f);
             case Tool.Marquee: return new Color(0.35f, 0.9f, 1f, 0.95f);

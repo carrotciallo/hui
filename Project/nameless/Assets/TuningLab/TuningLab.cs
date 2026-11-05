@@ -161,6 +161,8 @@ public class TuningLab : MonoBehaviour
     public int IceBreakTier => Mathf.Clamp(iceBreakTierIndex, 0, MaxTier);
     /// <summary>冰块整组破坏的碰撞门槛（该等级的下边界速度）。</summary>
     public float IceBreakSpeed => SpeedForCells(Boundary(Mathf.Max(0, IceBreakTier - 1)));
+    /// <summary>岩浆块整组破坏的碰撞门槛：固定三级（该等级的下边界速度）。</summary>
+    public float MagmaBreakSpeed => SpeedForCells(Boundary(Mathf.Max(0, LabMagma.BreakTier - 1)));
     /// <summary>冰面加速的上限：最高等级的名义顶端（默认 v4 ≈ 44.72）。</summary>
     public float IceMaxSpeed => SpeedForCells(Boundary(MaxTier - 1) + Mathf.Max(0.01f, tierSpacingCells));
     /// <summary>大炮发射的增量 = 一个等级间距的 v²（= 2·g·间距格数）。v' = √(Vb² + 这个数)。</summary>

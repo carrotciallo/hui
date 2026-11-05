@@ -35,14 +35,16 @@ public sealed class LabLevel : MonoBehaviour
     public int DoorCount => Data.doors != null ? Data.doors.Count : 0;
     public int SpikeCount => Data.spikes != null ? Data.spikes.Count : 0;
     public int IceCount => Data.ices != null ? Data.ices.Count : 0;
+    public int MagmaCount => Data.magmas != null ? Data.magmas.Count : 0;
     public int RespawnPointCount => Data.respawnPoints != null ? Data.respawnPoints.Count : 0;
     public int TeleportCount => Data.teleports != null ? Data.teleports.Count : 0;
 
     Transform generatedRoot;
-    // 运行时生成的钥匙/门/冰；地图重置时要关回去、把捡走的钥匙长回来、把碎掉的冰恢复。
+    // 运行时生成的钥匙/门/冰/岩浆；地图重置时要关回去、把捡走的钥匙长回来、把碎掉的块恢复。
     readonly System.Collections.Generic.List<LabKey> runtimeKeys = new System.Collections.Generic.List<LabKey>();
     readonly System.Collections.Generic.List<LabDoor> runtimeDoors = new System.Collections.Generic.List<LabDoor>();
     readonly System.Collections.Generic.List<LabIce> runtimeIces = new System.Collections.Generic.List<LabIce>();
+    readonly System.Collections.Generic.List<LabMagma> runtimeMagmas = new System.Collections.Generic.List<LabMagma>();
     TuningLab resetLab;
 
     void OnEnable()
@@ -92,6 +94,7 @@ public sealed class LabLevel : MonoBehaviour
         resetLab = lab;
         lab.MapReset += ResetKeyDoors;
         lab.MapReset += ResetIces;
+        lab.MapReset += ResetMagmas;
     }
 
     /// <summary>地图重置（复活 / 传送）时门关回去，被捡走的钥匙重新长出来。</summary>
@@ -116,6 +119,13 @@ public sealed class LabLevel : MonoBehaviour
             if (runtimeIces[i] != null) runtimeIces[i].ResetIce();
     }
 
+    /// <summary>地图重置（复活 / 传送）时把所有被破坏的岩浆块恢复。</summary>
+    void ResetMagmas()
+    {
+        for (int i = 0; i < runtimeMagmas.Count; i++)
+            if (runtimeMagmas[i] != null) runtimeMagmas[i].ResetMagma();
+    }
+
     void Build(Transform parent, PhysicsMaterial2D material, bool preview)
     {
         if (data == null) data = new LabLevelData();
@@ -135,6 +145,7 @@ public sealed class LabLevel : MonoBehaviour
         for (int i = 0; i < data.doors.Count; i++) AddDoor(root.transform, data.doors[i], preview);
         for (int i = 0; i < data.spikes.Count; i++) AddSpike(root.transform, data.spikes[i]);
         for (int i = 0; i < data.ices.Count; i++) AddIce(root.transform, data.ices[i], material, preview);
+        for (int i = 0; i < data.magmas.Count; i++) AddMagma(root.transform, data.magmas[i], material, preview);
         for (int i = 0; i < data.respawnPoints.Count; i++)
             AddRespawnPoint(root.transform, data.respawnPoints[i]);
         for (int i = 0; i < data.teleports.Count; i++)
@@ -221,6 +232,24 @@ public sealed class LabLevel : MonoBehaviour
         if (!preview) runtimeIces.Add(ice);
     }
 
+    /// <summary>把一格岩浆块摆进场景：物件落在格中心，碰撞箱正好 1×1。</summary>
+    void AddMagma(Transform parent, LabMagmaSpec spec, PhysicsMaterial2D material, bool preview)
+    {
+        var go = new GameObject("Magma");
+        go.transform.SetParent(parent, false);
+        go.transform.position = spec.Center;
+
+        var magma = go.AddComponent<LabMagma>();
+        magma.cell = spec.cell;
+        magma.groupId = spec.groupId;
+
+        var body = go.GetComponent<BoxCollider2D>();
+        if (body != null && material != null) body.sharedMaterial = material;
+
+        magma.ApplyShape();
+        if (!preview) runtimeMagmas.Add(magma);
+    }
+
     static void AddRespawnPoint(Transform parent, LabRespawnPointSpec spec)
     {
         var go = new GameObject("RespawnPoint");
@@ -272,6 +301,7 @@ public sealed class LabLevel : MonoBehaviour
         runtimeKeys.Clear();
         runtimeDoors.Clear();
         runtimeIces.Clear();
+        runtimeMagmas.Clear();
 
         Transform existing = generatedRoot;
         if (existing == null && transform != null) existing = transform.Find(GeneratedRootName);
@@ -288,6 +318,7 @@ public sealed class LabLevel : MonoBehaviour
         if (resetLab == null) return;
         resetLab.MapReset -= ResetKeyDoors;
         resetLab.MapReset -= ResetIces;
+        resetLab.MapReset -= ResetMagmas;
         resetLab = null;
     }
 

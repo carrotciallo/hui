@@ -622,14 +622,15 @@ public static class LabLevelSelfCheck
         captureLevel.doors.Add(new LabDoorSpec(new Vector2(3.5f, 3.5f), Color.white));
         captureLevel.spikes.Add(new LabSpikeSpec(new Vector2Int(3, 3), LabSpikeDir.Up));
         captureLevel.ices.Add(new LabIceSpec(new Vector2Int(3, 3), 1));
+        captureLevel.magmas.Add(new LabMagmaSpec(new Vector2Int(3, 3), 1));
         captureLevel.respawnPoints.Add(new LabRespawnPointSpec(new Vector2(3.5f, 3.5f)));
         captureLevel.teleports.Add(new LabTeleportSpec(new Vector2(3.5f, 3.5f)));
         var captureArea = new List<RectInt> { new RectInt(3, 3, 1, 1) };
         var allCapture = captureLevel.CaptureContents(captureArea);
-        Expect(sb, ref failures, allCapture.Count == 8,
-            "选区锁定地形 + 7 种摆放物件，实际 " + allCapture.Count);
-        Expect(sb, ref failures, captureLevel.MoveCapturedContents(allCapture, new Vector2Int(1, 0)) == 8,
-            "锁定内容一次平移到 8 条");
+        Expect(sb, ref failures, allCapture.Count == 9,
+            "选区锁定地形 + 8 种摆放物件，实际 " + allCapture.Count);
+        Expect(sb, ref failures, captureLevel.MoveCapturedContents(allCapture, new Vector2Int(1, 0)) == 9,
+            "锁定内容一次平移到 9 条");
         Expect(sb, ref failures,
             captureLevel.HasCell(new Vector2Int(4, 3)) &&
             SamePoint(captureLevel.ropes[0].center, new Vector2(4.5f, 3.5f)) &&
@@ -637,9 +638,10 @@ public static class LabLevelSelfCheck
             SamePoint(captureLevel.doors[0].position, new Vector2(4.5f, 3.5f)) &&
             captureLevel.spikes[0].cell == new Vector2Int(4, 3) &&
             captureLevel.ices[0].cell == new Vector2Int(4, 3) &&
+            captureLevel.magmas[0].cell == new Vector2Int(4, 3) &&
             SamePoint(captureLevel.respawnPoints[0].position, new Vector2(4.5f, 3.5f)) &&
             SamePoint(captureLevel.teleports[0].position, new Vector2(4.5f, 3.5f)),
-            "地形 + 7 种摆放物件都跟着选区框平移");
+            "地形 + 8 种摆放物件都跟着选区框平移");
 
         sb.AppendLine();
         sb.AppendLine("=== 13. 传送点：全互联数据 / 去重 / 随分区移动与删除 ===");
@@ -700,6 +702,75 @@ public static class LabLevelSelfCheck
         Expect(sb, ref failures,
             teleportLevel.teleports.Count == 1 && teleportLevel.HasTeleport(new Vector2Int(22, 1)),
             "A 里的传送点被删，B 的留下");
+
+        sb.AppendLine();
+        sb.AppendLine("=== 14. 岩浆块：几何 / 编组 / 去重 / 随分区移动与删除 / v3 门槛 ===");
+        Expect(sb, ref failures, data.magmas.Count == 0,
+            "基准房间没有岩浆块，实际 " + data.magmas.Count);
+
+        var magmaSpec = new LabMagmaSpec(new Vector2Int(5, 3), 2);
+        Expect(sb, ref failures,
+            SamePoint(magmaSpec.Center, new Vector2(5.5f, 3.5f))
+            && magmaSpec.Cells() == new RectInt(5, 3, 1, 1),
+            "岩浆块占 1×1 格，落点是格中心");
+
+        var magmaLevel = new LabLevelData();
+        magmaLevel.partitions.Add(new LabLevelPartition { name = "A", bounds = new RectInt(0, 0, 10, 10) });
+        magmaLevel.partitions.Add(new LabLevelPartition { name = "B", bounds = new RectInt(20, 0, 10, 10) });
+        magmaLevel.PlaceMagma(new Vector2Int(2, 1), 7);
+        magmaLevel.PlaceMagma(new Vector2Int(22, 1), 7);
+        Expect(sb, ref failures, magmaLevel.magmas.Count == 2, "两格各一块岩浆");
+        Expect(sb, ref failures, !magmaLevel.PlaceMagma(new Vector2Int(2, 1), 7),
+            "同格同组重复放 = 无变化");
+        Expect(sb, ref failures, magmaLevel.PlaceMagma(new Vector2Int(2, 1), 9),
+            "同格换组 = 有变化");
+        Expect(sb, ref failures,
+            magmaLevel.magmas.Count == 2 &&
+            magmaLevel.FindMagma(new Vector2Int(2, 1)).Value.groupId == 9,
+            "换组只有一块岩浆，组号已更新");
+        Expect(sb, ref failures, !magmaLevel.HasMagma(new Vector2Int(7, 7)), "没放过的格没有岩浆");
+        Expect(sb, ref failures, magmaLevel.NextMagmaGroupId() == 10,
+            "新建组 = 当前最大组号 + 1");
+        Expect(sb, ref failures, magmaLevel.GroupMagmas(7).Count == 1,
+            "按组查询只返回同组岩浆");
+
+        magmaLevel.magmas.Add(new LabMagmaSpec(new Vector2Int(2, 1), 3));
+        magmaLevel.Normalize();
+        Expect(sb, ref failures, magmaLevel.magmas.Count == 2,
+            "Normalize 同格去重，实际 " + magmaLevel.magmas.Count);
+
+        var magmaClone = magmaLevel.Clone();
+        Expect(sb, ref failures, magmaClone.magmas.Count == 2, "Clone 带上岩浆块");
+        magmaClone.magmas[0] = new LabMagmaSpec(new Vector2Int(99, 99), 0);
+        Expect(sb, ref failures,
+            magmaLevel.HasMagma(new Vector2Int(2, 1)) || magmaLevel.HasMagma(new Vector2Int(22, 1)),
+            "Clone 是深拷贝");
+
+        Expect(sb, ref failures, magmaLevel.MovePartition(0, new Vector2Int(3, 4), true),
+            "移动分区 A");
+        Expect(sb, ref failures, magmaLevel.HasMagma(new Vector2Int(5, 5)),
+            "A 里的岩浆块跟着移动");
+        Expect(sb, ref failures, !magmaLevel.HasMagma(new Vector2Int(2, 1)),
+            "旧位置的岩浆块没有留下");
+        Expect(sb, ref failures, magmaLevel.HasMagma(new Vector2Int(22, 1)),
+            "分区 B 的岩浆块不动");
+
+        Expect(sb, ref failures, magmaLevel.DeletePartition(0, true), "删除分区 A（带内容）");
+        Expect(sb, ref failures,
+            magmaLevel.magmas.Count == 1 && magmaLevel.HasMagma(new Vector2Int(22, 1)),
+            "A 里的岩浆块被删，B 的留下");
+
+        var tierProbeGo = new GameObject("MagmaTierProbe");
+        tierProbeGo.SetActive(false);
+        var tierProbe = tierProbeGo.AddComponent<TuningLab>();
+        tierProbe.autoBuild = false;
+        tierProbeGo.SetActive(true);
+        Expect(sb, ref failures, LabMagma.BreakTier == 3, "岩浆块固定按 v3 破坏");
+        Expect(sb, ref failures, tierProbe.TierOfSpeed(tierProbe.MagmaBreakSpeed + 0.01f) == 3,
+            "岩浆块门槛刚过就是 v3");
+        Expect(sb, ref failures, tierProbe.TierOfSpeed(tierProbe.MagmaBreakSpeed - 0.01f) == 2,
+            "低于岩浆块门槛还是 v2");
+        Object.DestroyImmediate(tierProbeGo);
 
         sb.AppendLine();
         fails = failures;
