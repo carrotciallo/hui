@@ -24,6 +24,7 @@ public sealed class LabPhantom : MonoBehaviour
     public bool Leaving { get; private set; }
 
     public bool Loaded => loaded != null;
+    public bool ConverterLoaded => loaded != null && Form == LabForm.Converter;
 
     TuningLab lab;
     BoxCollider2D body;
@@ -31,6 +32,7 @@ public sealed class LabPhantom : MonoBehaviour
     LabPlayer loaded;
     Vector2 entryVelocity = Vector2.zero;
     Vector2 entryDir = Vector2.zero;
+    LabPlayer.DashState entryDash;
     float converterTimer;
     Collider2D ignoredCollider;
     bool ignoredWasEnabled;
@@ -59,6 +61,17 @@ public sealed class LabPhantom : MonoBehaviour
     /// </summary>
     void FixedUpdate()
     {
+        RefreshIgnorePair();
+
+        if (loaded != null && Form == LabForm.Converter)
+        {
+            converterTimer -= Time.fixedDeltaTime;
+            if (converterTimer <= 0f) FireConverter();
+        }
+    }
+
+    void RefreshIgnorePair()
+    {
         Collider2D current = Source != null ? Source.GetComponent<Collider2D>() : null;
         bool enabledNow = current != null && current.enabled;
         if (current == ignoredCollider && enabledNow == ignoredWasEnabled) return;
@@ -70,6 +83,52 @@ public sealed class LabPhantom : MonoBehaviour
         ignoredWasEnabled = enabledNow;
         if (current != null && body != null)
             Physics2D.IgnoreCollision(body, current, true);
+    }
+
+    void OnCollisionEnter2D(Collision2D c) => TryAbsorbCollision(c);
+    void OnCollisionStay2D(Collision2D c) => TryAbsorbCollision(c);
+
+    void TryAbsorbCollision(Collision2D c)
+    {
+        if (loaded != null || c.collider == null) return;
+        var player = c.collider.GetComponentInParent<LabPlayer>();
+        if (player != null) TryAbsorb(player);
+    }
+
+    /// <summary>
+    /// 从幻影底面进入。大炮要冲刺向上；L 只要求向上速度高于 v0。
+    /// 判定不看幻影自己的开口，底面永远可以进 —— 这是幻影相对真人 A 的额外入口。
+    /// </summary>
+    public bool TryAbsorb(LabPlayer player)
+    {
+        if (loaded != null || player == null || player != Target) return false;
+        if (player.Suspended || lab == null) return false;
+        if (Form != LabForm.Cannon && Form != LabForm.Converter) return false;
+
+        Vector2 to = (Vector2)player.transform.position - (Vector2)transform.position;
+        LabPlayer.Edge struck = LabPlayer.EdgeFor(
+            Mathf.Abs(to.x) >= Mathf.Abs(to.y)
+                ? new Vector2(Mathf.Sign(to.x), 0f)
+                : new Vector2(0f, Mathf.Sign(to.y)));
+        if (struck != LabPlayer.Edge.Bottom) return false;
+
+        if (Form == LabForm.Cannon)
+        {
+            if (!player.InDashState) return false;
+            if (Vector2.Dot(player.DashDirection, Vector2.up) <= 0.5f) return false;
+        }
+        else
+        {
+            if (player.PreImpactVelocity.y <= lab.V0Speed) return false;
+            converterTimer = 1f;
+        }
+
+        loaded = player;
+        entryVelocity = player.PreImpactVelocity;
+        entryDir = player.DashDirection;
+        entryDash = player.CaptureDash();
+        player.SuspendInPhantom(this);
+        return true;
     }
 
     /// <summary>
@@ -130,11 +189,56 @@ public sealed class LabPhantom : MonoBehaviour
         }
     }
 
-    /// <summary>开炮（大炮幻影）。具体弹道在幻影炮实装时结算；这里先保证膛里的人不会卡住。</summary>
+    /// <summary>
+    /// 开炮（大炮幻影）：v' = √(V前² + 一个等级间距的 v²)，方向取幻影原本的炮口。
+    /// L 幻影不响应手动开炮，1 秒后自动等速射出。
+    /// </summary>
     public void Fire()
     {
         if (loaded == null) return;
-        EjectLoaded(loaded);
+        if (Form == LabForm.Converter) return;
+        if (Form != LabForm.Cannon || lab == null)
+        {
+            EjectLoaded(loaded);
+            return;
+        }
+
+        var b = loaded;
+        loaded = null;
+        entryDash = default(LabPlayer.DashState);
+
+        float speed = Mathf.Sqrt(Mathf.Max(0f, entryVelocity.sqrMagnitude + lab.CannonBoostV2));
+        Vector2 dir = LabForms.EdgeNormal(LabForms.MouthEdge(SpiritMask));
+        Vector2 position = (Vector2)transform.position
+            + dir * (HalfHeight + b.HalfHeight + 0.05f);
+        b.WakeFromHost(position, dir * speed, Mathf.Abs(dir.x) > 0.5f);
+    }
+
+    /// <summary>
+    /// L 幻影自动出射：从水平那条 Spirit 边（左优先，否则右）等速转出。
+    /// 四种相邻灵体组合里水平 Spirit 边恰好只有一条，所以出口是确定的。
+    /// </summary>
+    void FireConverter()
+    {
+        if (loaded == null) return;
+
+        var b = loaded;
+        loaded = null;
+        converterTimer = 0f;
+
+        LabPlayer.Edge exit = (SpiritMask & LabForms.LeftBit) != 0
+            ? LabPlayer.Edge.Left
+            : LabPlayer.Edge.Right;
+        Vector2 dir = LabForms.EdgeNormal(exit);
+        Vector2 position = (Vector2)transform.position
+            + dir * (HalfHeight + b.HalfHeight + 0.05f);
+        b.WakeFromHost(position, dir * entryVelocity.magnitude, Mathf.Abs(dir.x) > 0.5f);
+        if (entryDash.active)
+        {
+            entryDash.dir = dir;
+            b.ApplyDash(entryDash);
+        }
+        entryDash = default(LabPlayer.DashState);
     }
 
     /// <summary>把膛里的玩家放回幻影外侧，恢复进入时的速度。</summary>
@@ -144,6 +248,7 @@ public sealed class LabPhantom : MonoBehaviour
         var b = loaded;
         loaded = null;
         converterTimer = 0f;
+        entryDash = default(LabPlayer.DashState);
 
         Vector2 dir = entryDir.sqrMagnitude > 0.0001f ? -entryDir : Vector2.down;
         Vector2 position = (Vector2)transform.position
