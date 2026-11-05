@@ -2,13 +2,14 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// 3×3 传送点：两人同时进入后打开终点选择。所有传送点互为终点，
+/// 3×3 传送点：两人同时进入后标记该点；至少两个已标记点时才打开终点选择。
 /// 选择列表由 <see cref="TuningLab"/> 在进入时收集，数据里不保存配对。
 /// </summary>
 [RequireComponent(typeof(BoxCollider2D), typeof(SpriteRenderer))]
 public sealed class LabTeleportPoint : MonoBehaviour
 {
     public Color inactiveColor = new Color(0.65f, 0.35f, 1f);
+    public Color markedColor = new Color(0.45f, 0.9f, 0.8f);
     public Color activeColor = new Color(1f, 0.7f, 0.25f);
 
     BoxCollider2D trigger;
@@ -17,6 +18,8 @@ public sealed class LabTeleportPoint : MonoBehaviour
     bool aInside;
     bool bInside;
     static Sprite cachedSprite;
+
+    public bool IsMarked { get; private set; }
 
     void Awake() => ApplyShape();
 
@@ -63,6 +66,7 @@ public sealed class LabTeleportPoint : MonoBehaviour
         bInside = IsInside(lab.PlayerB);
         if (!aInside || !bInside) return;
 
+        if (!IsMarked) lab.MarkTeleportPoint(this);
         var kb = Keyboard.current;
         if (kb == null) return;
         if (kb.leftShiftKey.wasPressedThisFrame || kb.periodKey.wasPressedThisFrame)
@@ -76,14 +80,21 @@ public sealed class LabTeleportPoint : MonoBehaviour
     /// <summary>选择界面里当前选中的终点会亮起来；离开选择界面时由 TuningLab 熄灭。</summary>
     public void SetHighlighted(bool highlighted)
     {
-        if (renderer != null) renderer.color = highlighted ? activeColor : inactiveColor;
+        if (renderer != null)
+            renderer.color = highlighted ? activeColor : (IsMarked ? markedColor : inactiveColor);
+    }
+
+    public void SetMarked(bool marked)
+    {
+        IsMarked = marked;
+        SetHighlighted(false);
     }
 
     /// <summary>
-    /// 把两名玩家放到这个传送点两侧，保留速度和形态。传送会重置地图并吞掉钥匙；
+    /// 把两名玩家放到这个传送点两侧，保留形态并清零速度。传送会重置地图并吞掉钥匙；
     /// 重生点记录不受影响（地图重置不会清 ActiveRespawnPoint）。
     /// </summary>
-    public void TeleportPlayersHere(TuningLab owner, Vector2 velocityA, Vector2 velocityB)
+    public void TeleportPlayersHere(TuningLab owner)
     {
         if (owner == null) return;
         owner.PlayerA?.ResumeFromTeleportSelection();
@@ -91,8 +102,8 @@ public sealed class LabTeleportPoint : MonoBehaviour
         owner.ResetMap();
 
         Vector2 center = transform.position;
-        owner.PlayerA?.TeleportPreservingState(center + Vector2.left * 0.65f, velocityA);
-        owner.PlayerB?.TeleportPreservingState(center + Vector2.right * 0.65f, velocityB);
+        owner.PlayerA?.TeleportPreservingState(center + Vector2.left * 0.65f, Vector2.zero);
+        owner.PlayerB?.TeleportPreservingState(center + Vector2.right * 0.65f, Vector2.zero);
         owner.PlayerA?.ClearKeys();
         owner.PlayerB?.ClearKeys();
     }

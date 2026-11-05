@@ -168,7 +168,6 @@ MonoBehaviour:
   dashCooldown: 0.8
   groundOnlyDash: 0
   redHotTierIndex: 1
-  redHotDuration: 2.25
   forgeTierIndex: 0
   verticalHitEnabled: 1
   iceBreakTierIndex: 2
@@ -290,6 +289,8 @@ MonoBehaviour:
     teleports:
     - position: {x: -11.5, y: 1.5}
     - position: {x: -5.5, y: 1.5}
+    - position: {x: -0.5, y: 1.5}
+    - position: {x: 4.5, y: 1.5}
     partitions: []
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

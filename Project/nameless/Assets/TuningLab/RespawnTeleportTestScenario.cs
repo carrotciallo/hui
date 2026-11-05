@@ -26,7 +26,7 @@ public sealed class RespawnTeleportTestScenario : MonoBehaviour
 
     public void Build()
     {
-        // 所有传送点互为终点，不需要在场景里手工连 destination。
+        // 双人进入后传送点运行时标记；已标记点互为终点，不需要手工连 destination。
         CreateTeleport("Teleport_A", teleportA);
         CreateTeleport("Teleport_B", teleportB);
         CreateRespawn();

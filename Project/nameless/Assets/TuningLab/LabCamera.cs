@@ -79,8 +79,16 @@ public sealed class LabCamera : MonoBehaviour
                 : Mathf.Clamp01((Time.unscaledTime - focusStarted) / focusDuration);
             Vector3 focused = Vector3.Lerp(focusFrom, focusTo, progress);
             focused.z = transform.position.z;
-            transform.position = Clamp(focused, cam.orthographicSize);
+            transform.position = focused;
             if (progress >= 1f) focusActive = false;
+            return;
+        }
+
+        if (lab != null && lab.TeleportSelecting)
+        {
+            Vector3 held = focusTo;
+            held.z = transform.position.z;
+            transform.position = held;
             return;
         }
 
