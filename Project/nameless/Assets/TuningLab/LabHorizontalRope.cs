@@ -92,6 +92,7 @@ public sealed class LabHorizontalRope : MonoBehaviour
         }
 
         player.ApplyBounce(Vector2.up, BounceSpeed(player));
+        LabAudio.Play(LabAudio.Cue.RopeBounce);
         Raise(player, tier, false, true);
     }
 

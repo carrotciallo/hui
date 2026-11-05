@@ -154,6 +154,49 @@ public sealed class LabIceTests
         yield return null;
     }
 
+    [UnityTest]
+    public IEnumerator StandingOnLevelIceIsDetected()
+    {
+        MakeIceLevel(3);
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(0.5f, 1f + a.HalfHeight));
+
+        yield return WaitUntil(() => a.Grounded, 2f);
+        Assert.IsTrue(a.OnIce, "合并地形里脚下是冰也应识别为冰面");
+        yield return null;
+    }
+
+    [UnityTest]
+    public IEnumerator SlidingOnLevelIceAtV2DoesNotBreakOrSnag()
+    {
+        MakeIceLevel(30);
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(0.5f, 1f + a.HalfHeight));
+        yield return WaitUntil(() => a.Grounded && a.OnIce, 2f);
+
+        float startSpeed = lab.IceBreakSpeed + 4f;
+        float startX = a.transform.position.x;
+        a.SetVelocity(new Vector2(startSpeed, 0f));
+        float minSpeed = startSpeed;
+        for (int i = 0; i < 30; i++)
+        {
+            yield return new WaitForFixedUpdate();
+            minSpeed = Mathf.Min(minSpeed, a.Velocity.x);
+        }
+
+        var ices = root.GetComponentsInChildren<LabIce>();
+        for (int i = 0; i < ices.Length; i++)
+            Assert.IsFalse(ices[i].Broken, "冰面 v2 滑行不应碎冰，第 " + i + " 块碎了");
+
+        Assert.Greater(a.transform.position.x, startX + 10f,
+            "冰面 v2 滑行不应卡脚；实际位移 " + (a.transform.position.x - startX));
+        Assert.Greater(minSpeed, startSpeed - 1f,
+            "冰面接缝不应吃掉横向速度，最低 " + minSpeed);
+        Assert.IsTrue(a.OnIce, "滑行后仍应判定在冰面");
+    }
+
     // 参数 ---------------------------------------------------------------
 
     [Test]
@@ -358,6 +401,45 @@ public sealed class LabIceTests
             "融化后该边回普通");
     }
 
+    [UnityTest]
+    public IEnumerator SideImpactOnLevelIceAtV2BreaksGroup()
+    {
+        MakeIceOnFloorLevel();
+        var ices = root.GetComponentsInChildren<LabIce>();
+        Assert.AreEqual(2, ices.Length);
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(0.5f, a.HalfHeight));
+        yield return WaitUntil(() => a.Grounded, 2f);
+
+        a.SetVelocity(new Vector2(lab.IceBreakSpeed + 4f, 0f));
+        yield return WaitUntil(() => ices[0].Broken, 2f);
+
+        Assert.IsTrue(ices[0].Broken, "合并地形里的侧面 v2 撞击也应碎冰");
+        Assert.IsTrue(ices[1].Broken, "同组一起碎");
+    }
+
+    [UnityTest]
+    public IEnumerator HotEdgeOnLevelIceMeltsOneBlock()
+    {
+        MakeIceOnFloorLevel();
+        var ices = root.GetComponentsInChildren<LabIce>();
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(0.5f, a.HalfHeight));
+        yield return WaitUntil(() => a.Grounded, 2f);
+
+        a.StrikeEdge(LabPlayer.Edge.Right, true);
+        a.SetVelocity(new Vector2(15f, 0f));
+        yield return WaitUntil(() => ices[0].Broken, 2f);
+        for (int i = 0; i < 5; i++) yield return new WaitForFixedUpdate();
+
+        Assert.IsTrue(ices[0].Broken, "红热边侧撞应融掉被接触的一块");
+        Assert.IsFalse(ices[1].Broken, "只融一块，不整组");
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, a.GetEdge(LabPlayer.Edge.Right),
+            "融化后该边回普通");
+    }
+
     // 工具 ---------------------------------------------------------------
 
     void MakeFloor()
@@ -385,6 +467,30 @@ public sealed class LabIceTests
 
         ice.ApplyShape();
         return ice;
+    }
+
+    /// <summary>用正式生成路径铺一排冰，走 LabLevel 的合并碰撞。</summary>
+    LabLevel MakeIceLevel(int count)
+    {
+        var level = root.AddComponent<LabLevel>();
+        lab.level = level;
+        for (int x = 0; x < count; x++) level.Data.PlaceIce(new Vector2Int(x, 0), 1);
+        level.Data.Normalize();
+        level.BuildRuntime(root.transform, slick);
+        return level;
+    }
+
+    /// <summary>实心地板上放两块同组冰，用来测合并地形里的侧面撞击和红热融冰。</summary>
+    LabLevel MakeIceOnFloorLevel()
+    {
+        var level = root.AddComponent<LabLevel>();
+        lab.level = level;
+        for (int x = 0; x < 11; x++) level.Data.AddCell(new Vector2Int(x, -1));
+        level.Data.PlaceIce(new Vector2Int(2, 0), 1);
+        level.Data.PlaceIce(new Vector2Int(3, 0), 1);
+        level.Data.Normalize();
+        level.BuildRuntime(root.transform, slick);
+        return level;
     }
 
     LabPlayer MakePlayer(string name, int pixels, bool isFrame)

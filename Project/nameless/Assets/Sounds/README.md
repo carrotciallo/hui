@@ -10,7 +10,22 @@
 
 ## 播放接线
 
-接线表和 Cue→触发点对照随实装 commit 一起补（`Assets/TuningLab/LabAudio.cs`，当前在工作区未提交）。
+运行时由 `Assets/TuningLab/LabAudio.cs` 挂载（`TuningLab.BuildAll` 里 `AddComponent`，不进场景、不进 prefab）。各目录整批加载后按顺序轮换播放，同 Cue 有 0.05s 冷却（用 `Time.unscaledTime`，HUD 能把 timeScale 压到 0.05），音量/音高抖动见 `LabAudio` 里的 `Volumes` / `PitchJitter` 表。
+
+| Cue | 触发点 | 位置 |
+| --- | --- | --- |
+| `Jump` | 起跳 `BeginAir()` 之后 | [LabPlayer.cs:432](../TuningLab/LabPlayer.cs) |
+| `ImpactLight/Medium/Heavy` | 地形撞击按 `LastImpactTier` 分挡：0–1 轻、2 中、3+ 重；另外 HUD 调试砸边走 `TuningLab.PlayerHit` 订阅 | [LabPlayer.cs:586](../TuningLab/LabPlayer.cs)、[LabAudio.cs](../TuningLab/LabAudio.cs) |
+| `CrateFall` | `SetEdge` 把边缘打成 `Spirit`（框脱落），碰撞和调试砸边都走这条 | [LabPlayer.cs:908](../TuningLab/LabPlayer.cs) |
+| `IceMelt` | 冰融化回普通地形 | [LabPlayer.cs:649](../TuningLab/LabPlayer.cs) |
+| `IceBreak` | `BreakGroup()` 整组碎裂（同 Cue 冷却会把逐块 `BreakOne` 的重复请求并成一声） | [LabIce.cs:91](../TuningLab/LabIce.cs) |
+| `PortalEnter` | 启动传送（`Departing`）和返场落地 | [TuningLab.cs:628](../TuningLab/TuningLab.cs)、[TuningLab.cs:665](../TuningLab/TuningLab.cs) |
+| `PortalUi` | 选择界面：切换 / 确认 / 取消 | [TuningLab.cs:708](../TuningLab/TuningLab.cs)、[TuningLab.cs:725](../TuningLab/TuningLab.cs)、[TuningLab.cs:742](../TuningLab/TuningLab.cs) |
+| `CannonLoad` | `TryAbsorb()` 把队友吞入膛内装填 | [LabPlayer.cs:1085](../TuningLab/LabPlayer.cs) |
+| `CannonFire` | `Fire()` 开炮 | [LabPlayer.cs:1145](../TuningLab/LabPlayer.cs) |
+| `RopeBounce` | 横绳反弹（仅 `tier >= 3` 那次弹起） | [LabHorizontalRope.cs:95](../TuningLab/LabHorizontalRope.cs) |
+
+有意留静的两处：转换器装填（`TryAbsorbConverter`）不发声——它和开炮不是同一件事；冰的逐块碎裂不单独出声，见上表。静音开关是 `LabAudio.Muted`（静态字段，HUD 没做按钮，代码里设）。
 
 ## `01_Jump` — 跳跃（LabPlayer 起跳）
 
