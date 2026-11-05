@@ -53,7 +53,7 @@ public sealed class LabMagma : MonoBehaviour
             body.isTrigger = false;
             body.size = Vector2.one;
             body.offset = Vector2.zero;
-            // 关卡生成时所有岩浆块共用一个 CompositeCollider2D，把相邻 1×1 方块之间的
+            // 关卡生成时地形和岩浆共用一个 CompositeCollider2D，把相邻 1×1 方块之间的
             // 内侧竖面焊掉；测试或手摆的独立方块没有父级 composite，仍用自身碰撞箱。
             body.compositeOperation = composite != null
                 ? Collider2D.CompositeOperation.Merge
@@ -94,33 +94,31 @@ public sealed class LabMagma : MonoBehaviour
     }
 
     /// <summary>地图重置 / 复活时恢复：碰撞和渲染都回来。</summary>
-    public void ResetMagma()
+    public void ResetMagma(bool rebuildCollision = true)
     {
         Broken = false;
         ApplyShape();
-        RebuildComposite();
+        if (rebuildCollision) RebuildComposite();
     }
+
+    /// <summary>整组恢复后只重建一次合并几何。</summary>
+    public void RebuildCollision() => RebuildComposite();
 
     void RebuildComposite()
     {
         if (composite != null) composite.GenerateGeometry();
     }
 
-    /// <summary>离给定点最近的未破坏岩浆块；合并碰撞体需要靠接触点找回是哪一块。</summary>
-    public static LabMagma NearestActive(Vector2 point)
+    /// <summary>这个点落在哪一块未破坏的岩浆上；合并地形需要靠接触点找回是哪一格。</summary>
+    public static LabMagma AtCell(Vector2 point)
     {
-        LabMagma best = null;
-        float bestDistance = float.MaxValue;
+        var cell = new Vector2Int(Mathf.FloorToInt(point.x), Mathf.FloorToInt(point.y));
         for (int i = 0; i < All.Count; i++)
         {
             var magma = All[i];
-            if (magma == null || magma.Broken) continue;
-            float distance = ((Vector2)magma.transform.position - point).sqrMagnitude;
-            if (distance >= bestDistance) continue;
-            bestDistance = distance;
-            best = magma;
+            if (magma != null && !magma.Broken && magma.cell == cell) return magma;
         }
-        return best;
+        return null;
     }
 
     /// <summary>当前 Play 里同一组的岩浆块；返回新列表，避免遍历时被回调修改。</summary>
@@ -137,11 +135,12 @@ public sealed class LabMagma : MonoBehaviour
 }
 
 /// <summary>
-/// 一个关卡里所有岩浆块共享的合并碰撞体。
-/// 相邻的 1×1 方块如果各有自己的 BoxCollider2D，接缝处的内侧竖面会卡住横走的玩家，
-/// 也会把侧面误判成"接触岩浆"。合并成一块几何后，接缝只在视觉和数据里存在。
+/// 一个关卡里所有静态地形和岩浆块共享的合并碰撞体。
+/// 相邻的 1×1 方块（岩浆—岩浆、岩浆—地形）如果各有自己的 BoxCollider2D，
+/// 接缝处的内侧竖面会卡住横走的玩家，也会把上表面行走误判成侧面接触。
+/// 合并成一块几何后，接缝只存在于视觉和数据里。
 /// </summary>
 [RequireComponent(typeof(Rigidbody2D), typeof(CompositeCollider2D))]
-public sealed class LabMagmaField : MonoBehaviour
+public sealed class LabTerrainField : MonoBehaviour
 {
 }

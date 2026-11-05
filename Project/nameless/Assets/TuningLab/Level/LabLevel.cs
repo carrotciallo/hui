@@ -122,8 +122,17 @@ public sealed class LabLevel : MonoBehaviour
     /// <summary>地图重置（复活 / 传送）时把所有被破坏的岩浆块恢复。</summary>
     void ResetMagmas()
     {
+        LabMagma any = null;
         for (int i = 0; i < runtimeMagmas.Count; i++)
-            if (runtimeMagmas[i] != null) runtimeMagmas[i].ResetMagma();
+        {
+            var magma = runtimeMagmas[i];
+            if (magma == null) continue;
+            magma.ResetMagma(false);
+            if (any == null) any = magma;
+        }
+
+        // 恢复整组后只重建一次地形合并几何。
+        if (any != null) any.RebuildCollision();
     }
 
     void Build(Transform parent, PhysicsMaterial2D material, bool preview)
@@ -137,33 +146,30 @@ public sealed class LabLevel : MonoBehaviour
         generatedRoot = root.transform;
 
         data.Normalize();
+
+        // 地形和岩浆共用一个合并碰撞体：相邻 1×1 方块（岩浆—岩浆、岩浆—地形）的
+        // 内侧竖面会在接缝处卡住横走的玩家，也会把上表面行走误判成侧面接触。
+        var fieldGo = new GameObject("TerrainField");
+        fieldGo.transform.SetParent(root.transform, false);
+        var fieldBody = fieldGo.AddComponent<Rigidbody2D>();
+        fieldBody.bodyType = RigidbodyType2D.Static;
+        var fieldComposite = fieldGo.AddComponent<CompositeCollider2D>();
+        fieldComposite.geometryType = CompositeCollider2D.GeometryType.Polygons;
+        fieldComposite.generationType = CompositeCollider2D.GenerationType.Synchronous;
+        fieldComposite.offsetDistance = 0f;
+        if (material != null) fieldComposite.sharedMaterial = material;
+        fieldGo.AddComponent<LabTerrainField>();
+
+        Transform terrain = fieldGo.transform;
         var rects = data.MergedRects();
-        for (int i = 0; i < rects.Count; i++) AddSolid(root.transform, rects[i], material);
+        for (int i = 0; i < rects.Count; i++) AddSolid(terrain, rects[i], material);
 
         for (int i = 0; i < data.ropes.Count; i++) AddRope(root.transform, data.ropes[i], material);
         for (int i = 0; i < data.keys.Count; i++) AddKey(root.transform, data.keys[i], preview);
         for (int i = 0; i < data.doors.Count; i++) AddDoor(root.transform, data.doors[i], preview);
         for (int i = 0; i < data.spikes.Count; i++) AddSpike(root.transform, data.spikes[i]);
         for (int i = 0; i < data.ices.Count; i++) AddIce(root.transform, data.ices[i], material, preview);
-
-        // 所有岩浆块共用一个合并碰撞体：相邻方块的内侧竖面会在接缝处卡住横走的玩家，
-        // 也会把上表面行走误判成侧面接触。视觉/破坏仍然是逐块的 LabMagma。
-        Transform magmaParent = root.transform;
-        if (data.magmas.Count > 0)
-        {
-            var fieldGo = new GameObject("MagmaField");
-            fieldGo.transform.SetParent(root.transform, false);
-            var fieldBody = fieldGo.AddComponent<Rigidbody2D>();
-            fieldBody.bodyType = RigidbodyType2D.Static;
-            var fieldComposite = fieldGo.AddComponent<CompositeCollider2D>();
-            fieldComposite.geometryType = CompositeCollider2D.GeometryType.Polygons;
-            fieldComposite.generationType = CompositeCollider2D.GenerationType.Synchronous;
-            fieldComposite.offsetDistance = 0f;
-            if (material != null) fieldComposite.sharedMaterial = material;
-            fieldGo.AddComponent<LabMagmaField>();
-            magmaParent = fieldGo.transform;
-        }
-        for (int i = 0; i < data.magmas.Count; i++) AddMagma(magmaParent, data.magmas[i], material, preview);
+        for (int i = 0; i < data.magmas.Count; i++) AddMagma(terrain, data.magmas[i], material, preview);
         for (int i = 0; i < data.respawnPoints.Count; i++)
             AddRespawnPoint(root.transform, data.respawnPoints[i]);
         for (int i = 0; i < data.teleports.Count; i++)
@@ -187,6 +193,8 @@ public sealed class LabLevel : MonoBehaviour
 
         var bc = go.AddComponent<BoxCollider2D>();
         bc.size = Vector2.one;
+        // 所有实心矩形并入同一个 LabTerrainField 的合并几何。
+        bc.compositeOperation = Collider2D.CompositeOperation.Merge;
         if (material != null) bc.sharedMaterial = material;
     }
 

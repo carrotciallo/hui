@@ -482,24 +482,28 @@ public class LabPlayer : MonoBehaviour
     {
         if (c.collider == null) return false;
 
-        // 关卡里所有岩浆块共用一个 CompositeCollider2D，接触回调拿到的是整块合并体；
+        // 关卡里地形和岩浆共用一个 CompositeCollider2D，接触回调拿到的是整块合并体；
         // 测试/手摆的独立岩浆块则直接是自身的 BoxCollider2D。
-        var field = c.collider.GetComponent<LabMagmaField>();
+        var field = c.collider.GetComponent<LabTerrainField>();
         var magma = field != null ? null : c.collider.GetComponentInParent<LabMagma>();
         if (field == null && magma == null) return false;
         if (lab == null || c.contactCount == 0) return true;
 
         Vector2 n = ContactNormal(c);
+        if (field != null)
+        {
+            // 合并体没有单块身份：接触点沿法线退回一点，落在被撞的那一格。
+            // 落在普通地形上就交回 ForgeFromTerrain，不能把整片地形都当岩浆。
+            magma = LabMagma.AtCell(c.GetContact(0).point - n * 0.02f);
+            if (magma == null) return false;
+        }
+
         if (entering)
         {
             float impact = Mathf.Abs(Vector2.Dot(lastFixedVelocity, n));
             if (lab.TierOfSpeed(impact) >= LabMagma.BreakTier)
             {
-                // 合并碰撞体没有单块身份：接触点沿法线退回一点，落到被撞的那一格。
-                LabMagma hit = field != null
-                    ? LabMagma.NearestActive(c.GetContact(0).point - n * 0.02f)
-                    : magma;
-                if (hit != null) hit.BreakGroup();
+                magma.BreakGroup();
                 return true;
             }
         }

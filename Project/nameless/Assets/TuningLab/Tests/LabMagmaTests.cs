@@ -231,7 +231,7 @@ public sealed class LabMagmaTests
     }
 
     [UnityTest]
-    public IEnumerator MergedMagmaFieldForcesSideHot()
+    public IEnumerator MergedTerrainForcesMagmaSideHot()
     {
         MakeFloor();
         MakeMagmaLevel(2, 1, 1);
@@ -250,7 +250,7 @@ public sealed class LabMagmaTests
     }
 
     [UnityTest]
-    public IEnumerator MergedMagmaFieldBreaksGroupAtV3()
+    public IEnumerator MergedTerrainBreaksMagmaGroupAtV3()
     {
         MakeFloor();
         MakeMagmaLevel(3, 1, 1);
@@ -270,7 +270,7 @@ public sealed class LabMagmaTests
     }
 
     [UnityTest]
-    public IEnumerator MergedMagmaFieldStopsSupportingAfterBreak()
+    public IEnumerator MergedTerrainStopsSupportingAfterMagmaBreak()
     {
         MakeFloor();
         MakeMagmaLevel(3, 1);
@@ -314,6 +314,56 @@ public sealed class LabMagmaTests
             "走上表面不应把右边加热");
     }
 
+    [UnityTest]
+    public IEnumerator WalkingFromSolidOntoMagmaAtSameHeightDoesNotStopOrHeatSide()
+    {
+        MakeMixedLevel(6, 8);
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(0.5f, 1f + a.HalfHeight));
+        yield return WaitUntil(() => a.Grounded, 2f);
+
+        float startX = a.transform.position.x;
+        for (int i = 0; i < 60; i++)
+        {
+            a.SetVelocity(new Vector2(lab.walkSpeed, a.Velocity.y));
+            yield return new WaitForFixedUpdate();
+        }
+
+        Assert.Greater(a.transform.position.x, startX + 5f,
+            "从地形走上同高度的岩浆不应卡住；实际位移 " + (a.transform.position.x - startX));
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, a.GetEdge(LabPlayer.Edge.Bottom),
+            "走上岩浆后底边应强制热二");
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, a.GetEdge(LabPlayer.Edge.Left),
+            "地形和岩浆的接缝不应把左边加热");
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, a.GetEdge(LabPlayer.Edge.Right),
+            "地形和岩浆的接缝不应把右边加热");
+    }
+
+    [UnityTest]
+    public IEnumerator WalkingFromMagmaOntoSolidAtSameHeightDoesNotStopOrHeatSide()
+    {
+        MakeMixedLevel(6, 8);
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(7.5f, 1f + a.HalfHeight));
+        yield return WaitUntil(() => a.Grounded, 2f);
+
+        float startX = a.transform.position.x;
+        for (int i = 0; i < 50; i++)
+        {
+            a.SetVelocity(new Vector2(-lab.walkSpeed, a.Velocity.y));
+            yield return new WaitForFixedUpdate();
+        }
+
+        Assert.Less(a.transform.position.x, startX - 5f,
+            "从岩浆走回同高度的地形不应卡住；实际位移 " + (a.transform.position.x - startX));
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, a.GetEdge(LabPlayer.Edge.Left),
+            "岩浆和地形的接缝不应把左边加热");
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, a.GetEdge(LabPlayer.Edge.Right),
+            "岩浆和地形的接缝不应把右边加热");
+    }
+
     // 工具 ---------------------------------------------------------------
 
     void MakeFloor()
@@ -350,6 +400,19 @@ public sealed class LabMagmaTests
         lab.level = level;
         for (int x = 0; x < count; x++)
             level.Data.PlaceMagma(new Vector2Int(startX + x, 0), groupId);
+        level.Data.Normalize();
+        level.BuildRuntime(root.transform, slick);
+        return level;
+    }
+
+    /// <summary>用正式生成路径铺一排地形再接一排同高度的岩浆。</summary>
+    LabLevel MakeMixedLevel(int solidCells, int magmaCells)
+    {
+        var level = root.AddComponent<LabLevel>();
+        lab.level = level;
+        for (int x = 0; x < solidCells; x++) level.Data.AddCell(new Vector2Int(x, 0));
+        for (int x = 0; x < magmaCells; x++)
+            level.Data.PlaceMagma(new Vector2Int(solidCells + x, 0), 1);
         level.Data.Normalize();
         level.BuildRuntime(root.transform, slick);
         return level;
