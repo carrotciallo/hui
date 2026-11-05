@@ -20,25 +20,46 @@ public static class HiddenBlockDemoLevel
     public static void Build()
     {
         if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-        if (!LabLevelScene.CreateSilent(DemoScenePath)) return;
+        if (!BuildSilent()) return;
+
+        Debug.Log(
+            "[HiddenBlockDemo] 演示关卡已生成：" + DemoScenePath + "\n" +
+            "Play 后从左侧出生点向右走，穿过 x=6..7 和 x=9..10 两段\"墙\"：\n" +
+            "完全进入一组后该组永久变半透明，露出藏在墙里的钥匙；按 R 重置地图不会让它恢复。");
+    }
+
+    /// <summary>不弹对话框，直接生成演示关卡并保存。场景已存在会覆盖。</summary>
+    public static bool BuildSilent()
+    {
+        if (!LabLevelScene.CreateSilent(DemoScenePath)) return false;
 
         Scene scene = EditorSceneManager.GetActiveScene();
         LabLevel level = FindLevel(scene);
         if (level == null)
         {
             Debug.LogError("[HiddenBlockDemo] 生成的场景里找不到 LabLevel。");
-            return;
+            return false;
         }
 
         level.CopyFrom(BuildDemoData());
         EditorUtility.SetDirty(level);
         EditorSceneManager.MarkSceneDirty(scene);
-        if (!EditorSceneManager.SaveScene(scene, DemoScenePath)) return;
+        return EditorSceneManager.SaveScene(scene, DemoScenePath);
+    }
 
-        Debug.Log(
-            "[HiddenBlockDemo] 演示关卡已生成：" + DemoScenePath + "\n" +
-            "Play 后从左侧出生点向右走，穿过 x=6..7 和 x=9..10 两段\"墙\"：\n" +
-            "完全进入一组后该组永久变半透明，露出藏在墙里的钥匙；按 R 重置地图不会让它恢复。");
+    /// <summary>
+    /// 命令行入口（多任务并行时无人值守验证用）：
+    ///   -executeMethod HiddenBlockDemoLevel.RunBatch
+    /// 先跑关卡基准自检（含隐藏方块数据模型一节），再生成演示关卡；
+    /// 自检有失败或关卡生成失败则退出码 1。
+    /// </summary>
+    public static void RunBatch()
+    {
+        bool selfCheckOk = LabLevelSelfCheck.RunBatchSilent(out int fails);
+        Debug.Log("[HiddenBlockDemo] 关卡基准自检 " + (selfCheckOk ? "通过" : ("失败 " + fails + " 项")));
+        bool demoOk = BuildSilent();
+        Debug.Log("[HiddenBlockDemo] 演示关卡生成 " + (demoOk ? ("成功：" + DemoScenePath) : "失败"));
+        EditorApplication.Exit(selfCheckOk && demoOk ? 0 : 1);
     }
 
     static LabLevelData BuildDemoData()

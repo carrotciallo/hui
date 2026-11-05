@@ -23,10 +23,17 @@ public static class LabLevelSelfCheck
 
     public static void RunBatch()
     {
-        int fails;
+        bool ok = RunBatchSilent(out int fails);
+        Debug.Log("[LabLevelSelfCheck] " + (ok ? "全部通过。" : ("失败 " + fails + " 项。")));
+        EditorApplication.Exit(ok ? 0 : 1);
+    }
+
+    /// <summary>无对话框版本：跑完整自检并输出报告，返回是否全部通过。</summary>
+    public static bool RunBatchSilent(out int fails)
+    {
         StringBuilder report = Check(out fails);
         Debug.Log("[LabLevelSelfCheck]\n" + report);
-        EditorApplication.Exit(fails == 0 ? 0 : 1);
+        return fails == 0;
     }
 
     static StringBuilder Check(out int fails)
