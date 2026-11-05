@@ -228,6 +228,16 @@ public class LabPlayer : MonoBehaviour
     void FixedUpdate()
     {
         if (lab == null) return;
+        if (teleportFrozen || lab.TeleportSelecting)
+        {
+            dashQueued = false;
+            dashPhase = DashPhase.None;
+            dashTimer = 0f;
+            gliding = false;
+            rb.linearVelocity = Vector2.zero;
+            return;
+        }
+
         float dt = Time.fixedDeltaTime;
         var v = rb.linearVelocity;
 
@@ -1041,6 +1051,10 @@ public class LabPlayer : MonoBehaviour
         teleportPreviousBodyType = rb.bodyType;
         teleportPreviousGravityScale = rb.gravityScale;
         teleportFrozen = true;
+        dashQueued = false;
+        dashPhase = DashPhase.None;
+        dashTimer = 0f;
+        gliding = false;
         rb.bodyType = RigidbodyType2D.Kinematic;
         rb.gravityScale = 0f;
         rb.linearVelocity = Vector2.zero;

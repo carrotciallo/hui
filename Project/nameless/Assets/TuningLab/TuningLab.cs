@@ -131,6 +131,16 @@ public class TuningLab : MonoBehaviour
             : null;
     /// <summary>当前可选的终点数量（不含进入的那个传送点）。</summary>
     public int TeleportTargetCount => teleportTargets.Count;
+    public int MarkedTeleportPointCount
+    {
+        get
+        {
+            int count = 0;
+            for (int i = 0; i < teleports.Count; i++)
+                if (teleports[i] != null && teleports[i].IsMarked) count++;
+            return count;
+        }
+    }
     /// <summary>已注册的传送点数量；用来区分"没生成"和"生成了但没注册"。</summary>
     public int TeleportPointCount => teleports.Count;
 
@@ -138,8 +148,6 @@ public class TuningLab : MonoBehaviour
     readonly List<LabTeleportPoint> teleportTargets = new List<LabTeleportPoint>();
     LabTeleportPoint teleportSource;
     int teleportSelectionIndex;
-    Vector2 teleportSelectionVelocityA;
-    Vector2 teleportSelectionVelocityB;
     const float TeleportCameraMoveSeconds = 0.25f;
     readonly List<LabRespawnPoint> respawnPoints = new List<LabRespawnPoint>();
 
@@ -445,24 +453,43 @@ public class TuningLab : MonoBehaviour
         if (point == null) return;
         teleports.Remove(point);
         teleportTargets.Remove(point);
+        if (teleportSource == point || !IsTeleportTargetValid())
+            CancelTeleport();
+    }
+
+    public void MarkTeleportPoint(LabTeleportPoint point)
+    {
+        if (point == null) return;
+        RegisterTeleport(point);
+        point.SetMarked(true);
+    }
+
+    bool IsTeleportTargetValid()
+    {
+        return TeleportTarget != null && TeleportTarget.IsMarked;
     }
 
     /// <summary>
-    /// 进入传送点后打开终点选择：所有其它传送点都是候选，按 A/D 切换，Enter 确认。
-    /// 没有其它传送点时什么都不做，避免把自己传送到自己。
+    /// 已标记传送点达到两个后进入终点选择：其它已标记传送点是候选，按 A/D 切换，Enter 确认。
+    /// 候选不足时什么都不做，避免冻结玩家或把自己传送到自己。
     /// </summary>
     public void EnterTeleportSelection(LabTeleportPoint point)
     {
-        if (point == null || TeleportSelecting) return;
+        if (point == null || TeleportSelecting || !point.IsMarked) return;
 
         teleports.RemoveAll(candidate => candidate == null);
         teleportTargets.Clear();
         for (int i = 0; i < teleports.Count; i++)
         {
             var candidate = teleports[i];
-            if (candidate == point) continue;
+            if (candidate == point || !candidate.IsMarked) continue;
             teleportTargets.Add(candidate);
         }
+        teleportTargets.Sort((left, right) =>
+        {
+            int x = left.transform.position.x.CompareTo(right.transform.position.x);
+            return x != 0 ? x : left.transform.position.y.CompareTo(right.transform.position.y);
+        });
         if (teleportTargets.Count == 0) return;
 
         teleportSource = point;
@@ -470,8 +497,6 @@ public class TuningLab : MonoBehaviour
         point.SetHighlighted(true);
         TeleportTarget?.SetHighlighted(true);
 
-        teleportSelectionVelocityA = PlayerA != null ? PlayerA.Velocity : Vector2.zero;
-        teleportSelectionVelocityB = PlayerB != null ? PlayerB.Velocity : Vector2.zero;
         PlayerA?.FreezeForTeleportSelection();
         PlayerB?.FreezeForTeleportSelection();
         if (Cam != null && TeleportTarget != null)
@@ -482,7 +507,11 @@ public class TuningLab : MonoBehaviour
     {
         if (!TeleportSelecting) return;
 
-        if (kb.aKey.wasPressedThisFrame)
+        if (!IsTeleportTargetValid())
+            CancelTeleport();
+        else if (kb.escapeKey.wasPressedThisFrame)
+            CancelTeleport();
+        else if (kb.aKey.wasPressedThisFrame)
             SelectTeleport(-1);
         else if (kb.dKey.wasPressedThisFrame)
             SelectTeleport(1);
@@ -493,6 +522,11 @@ public class TuningLab : MonoBehaviour
     public void SelectTeleport(int delta)
     {
         if (!TeleportSelecting || teleportTargets.Count == 0) return;
+        if (!IsTeleportTargetValid())
+        {
+            CancelTeleport();
+            return;
+        }
         TeleportTarget?.SetHighlighted(false);
         teleportSelectionIndex = (teleportSelectionIndex + delta + teleportTargets.Count) % teleportTargets.Count;
         TeleportTarget?.SetHighlighted(true);
@@ -503,14 +537,22 @@ public class TuningLab : MonoBehaviour
 
     public void ConfirmTeleport()
     {
-        if (!TeleportSelecting) return;
+        if (!TeleportSelecting || !IsTeleportTargetValid())
+        {
+            if (TeleportSelecting) CancelTeleport();
+            return;
+        }
 
         LabTeleportPoint target = TeleportTarget;
-        Vector2 velocityA = teleportSelectionVelocityA;
-        Vector2 velocityB = teleportSelectionVelocityB;
         EndTeleportSelection();
         if (target == null) return;
-        target.TeleportPlayersHere(this, velocityA, velocityB);
+        target.TeleportPlayersHere(this);
+    }
+
+    public void CancelTeleport()
+    {
+        if (!TeleportSelecting) return;
+        EndTeleportSelection();
     }
 
     void EndTeleportSelection()

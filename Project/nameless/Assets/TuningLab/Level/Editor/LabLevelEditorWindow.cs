@@ -447,7 +447,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 break;
             case Tool.TeleportPoint:
                 EditorGUILayout.HelpBox(
-                    "左键放置 3×3 传送点；同一格再次点击删除。所有传送点互为终点：\n" +
+                    "左键放置 3×3 传送点；同一格再次点击删除。运行时双人进入后标记，已标记点互为终点：\n" +
                     "Play 中两人同时进入后按冲刺键，A/D 选终点、Enter 确认。",
                     MessageType.None);
                 break;
@@ -990,13 +990,13 @@ public sealed class LabLevelEditorWindow : EditorWindow
     {
         EditorGUILayout.LabelField("传送点", EditorStyles.boldLabel);
         var data = level.Data;
-        EditorGUILayout.LabelField("传送点", level.TeleportCount + "（3×3，所有传送点互为终点）");
+        EditorGUILayout.LabelField("传送点", level.TeleportCount + "（3×3，运行时标记后互为终点）");
         if (data.teleports == null) data.teleports = new List<LabTeleportSpec>();
 
         if (data.teleports.Count == 1)
         {
             EditorGUILayout.HelpBox(
-                "只有一个传送点：进入后没有可选终点，不会打开选择界面。至少放两个。",
+                "只有一个传送点：运行时最多只能标记一个，进入后没有可选终点。至少放置两个并让双人进入标记。",
                 MessageType.Warning);
         }
 
@@ -1483,7 +1483,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         }
 
         if (data.teleports != null && data.teleports.Count == 1)
-            issues.Add("只有一个传送点：进入后没有可选终点，无法打开选择界面。");
+            issues.Add("只有一个传送点：运行时最多只能标记一个，无法打开选择界面。至少放置两个并让双人进入标记。");
 
         validated = true;
 
