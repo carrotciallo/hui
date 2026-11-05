@@ -357,6 +357,12 @@ public class LabHud : MonoBehaviour
             GUILayout.Label("　形态  " + p.FormLabel, small);
             GUILayout.Label("　大炮  " + ChamberText(p), small);
         }
+        else if (p.PhantomHost != null)
+        {
+            GUILayout.Label(
+                "　幻影膛内  跟着幻影，移动无效，句号开炮（大炮 / L 转向器）。",
+                small);
+        }
         else if (p.Suspended)
         {
             GUILayout.Label(string.Format("　膛内  跟着 {0}，移动无效，句号开炮。存速 {1:0.0} → 出膛 {2:0.0}",

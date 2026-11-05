@@ -23,9 +23,18 @@ public sealed class LabPhantom : MonoBehaviour
     public Vector2Int Cell { get; private set; }
     public bool Leaving { get; private set; }
 
+    public bool Loaded => loaded != null;
+
     TuningLab lab;
     BoxCollider2D body;
     LabVisual visual;
+    LabPlayer loaded;
+    Vector2 entryVelocity = Vector2.zero;
+    Vector2 entryDir = Vector2.zero;
+    float converterTimer;
+
+    /// <summary>幻影半高，用来把出膛的玩家放到表面外侧。</summary>
+    float HalfHeight => body != null ? body.size.y * 0.5f : Pixels / (2f * TuningLab.CellPixels);
 
     void Awake() => body = GetComponent<BoxCollider2D>();
 
@@ -85,11 +94,33 @@ public sealed class LabPhantom : MonoBehaviour
         }
     }
 
+    /// <summary>开炮（大炮幻影）。具体弹道在幻影炮实装时结算；这里先保证膛里的人不会卡住。</summary>
+    public void Fire()
+    {
+        if (loaded == null) return;
+        EjectLoaded(loaded);
+    }
+
+    /// <summary>把膛里的玩家放回幻影外侧，恢复进入时的速度。</summary>
+    public void EjectLoaded(LabPlayer player)
+    {
+        if (loaded == null) return;
+        var b = loaded;
+        loaded = null;
+        converterTimer = 0f;
+
+        Vector2 dir = entryDir.sqrMagnitude > 0.0001f ? -entryDir : Vector2.down;
+        Vector2 position = (Vector2)transform.position
+            + dir * (HalfHeight + b.HalfHeight + 0.05f);
+        b.WakeFromHost(position, entryVelocity, false);
+    }
+
     /// <summary>销毁幻影。立即从静态表移除，避免同一帧的 FIFO 读到已销毁对象。</summary>
     public void DestroyPhantom()
     {
         if (Leaving) return;
         Leaving = true;
+        if (loaded != null) EjectLoaded(loaded);
         All.Remove(this);
         Destroy(gameObject);
     }

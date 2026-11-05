@@ -141,9 +141,10 @@ public class LabPlayer : MonoBehaviour
     /// <summary>L 形转向器正在等待自动出射。</summary>
     public bool ConverterLoaded => loaded != null && loadedConverter;
     public float ConverterTimeLeft => ConverterLoaded ? Mathf.Max(0f, converterLoadTimer) : 0f;
-    /// <summary>我被装在大炮膛里（B 侧）：不移动、不充能、不算地面。</summary>
-    public bool Suspended => host != null;
+    /// <summary>我被装在大炮 / 幻影膛里（B 侧）：不移动、不充能、不算地面。</summary>
+    public bool Suspended => host != null || phantomHost != null;
     public LabPlayer Host => host;
+    public LabPhantom PhantomHost => phantomHost;
     /// <summary>大炮形态且膛空 = 可以装填，但还要求 B 处于冲刺态。</summary>
     public bool CanLoad => canBeRedHot && form == LabForm.Cannon && loaded == null;
     /// <summary>进入时记下的速度 V前；膛空时是零。</summary>
@@ -181,6 +182,7 @@ public class LabPlayer : MonoBehaviour
 
     LabPlayer loaded;               // 膛里的 B（只有 A 有）
     LabPlayer host;                 // 我在谁的膛里（只有 B 有）
+    LabPhantom phantomHost;         // 我在哪个幻影的膛里
     Vector2 chamberVelocity;        // B 进入时的速度 V前
     Vector2 chamberDir;             // B 进入时的冲刺轴，射出取它的反向
     bool gliding;                   // 水平射出：速度降到零级之前不受重力
@@ -221,6 +223,11 @@ public class LabPlayer : MonoBehaviour
         if (lab != null && lab.TeleportSelecting) return;
 
         // 膛里的 B：移动无效，冲刺键改成给宿主开炮。
+        if (phantomHost != null)
+        {
+            if (dashDownThisFrame) phantomHost.Fire();
+            return;
+        }
         if (host != null)
         {
             if (dashDownThisFrame) host.Fire();
@@ -272,6 +279,12 @@ public class LabPlayer : MonoBehaviour
         var v = rb.linearVelocity;
 
         // 膛内：既不算地面、也不回复充能，只是被宿主带着走。
+        if (phantomHost != null)
+        {
+            rb.position = phantomHost.transform.position;
+            transform.position = phantomHost.transform.position;
+            return;
+        }
         if (host != null)
         {
             rb.position = host.rb.position;
@@ -472,7 +485,8 @@ public class LabPlayer : MonoBehaviour
 
     void OnCollisionEnter2D(Collision2D c)
     {
-        if (host != null) return;      // 膛里的人没有碰撞箱，这里的回调只能是进膛那一刻的残留
+        if (Suspended) return;         // 膛里的人没有碰撞箱，这里的回调只能是进膛那一刻的残留
+        if (IsPhantom(c.collider)) return;   // 幻影只由 LabPhantom 自己结算
         bool isPlayer = c.collider != null && c.collider.GetComponent<LabPlayer>() != null;
         if (isPlayer) playerContactTimer = 0.12f;
         else if (!ResolveMagmaContact(c)) ForgeFromTerrain(c);   // 只有进入的那一帧锻造，贴墙摩擦不算
@@ -482,7 +496,8 @@ public class LabPlayer : MonoBehaviour
 
     void OnCollisionStay2D(Collision2D c)
     {
-        if (host != null) return;
+        if (Suspended) return;
+        if (IsPhantom(c.collider)) return;
         bool isPlayer = c.collider != null && c.collider.GetComponent<LabPlayer>() != null;
         if (isPlayer) playerContactTimer = 0.12f;
         else
@@ -664,6 +679,9 @@ public class LabPlayer : MonoBehaviour
         if (impact < lab.ForgeSpeed) return;
         StrikeEdge(EdgeFor(-normal), impact >= lab.RedHotSpeed);
     }
+
+    static bool IsPhantom(Collider2D collider) =>
+        collider != null && collider.GetComponentInParent<LabPhantom>() != null;
 
     /// <summary>绳子只负责反弹，不参与地形锻造；见 <see cref="ForgeFromTerrain"/>。</summary>
     static bool IsRope(Collider2D collider)
@@ -983,6 +1001,7 @@ public class LabPlayer : MonoBehaviour
 
         Eject();
         if (host != null) host.Eject();
+        if (phantomHost != null) phantomHost.EjectLoaded(this);
         if (lab == null) { Destroy(gameObject); return; }
 
         SuspendDead();
@@ -1195,6 +1214,20 @@ public class LabPlayer : MonoBehaviour
         b.Wake(rb.position + dir * (HalfHeight + b.HalfHeight + 0.05f), b.chamberVelocity);
     }
 
+    /// <summary>被吸进幻影的膛：和真人炮膛共用同一套隐藏/冻结逻辑，只是宿主换成幻影。</summary>
+    internal void SuspendInPhantom(LabPhantom phantom)
+    {
+        phantomHost = phantom;
+        SuspendIn();
+    }
+
+    /// <summary>从幻影膛里出来：恢复碰撞和动力学，由幻影决定落点和速度。</summary>
+    internal void WakeFromHost(Vector2 position, Vector2 velocity, bool horizontalGlide)
+    {
+        Wake(position, velocity);
+        gliding = horizontalGlide;
+    }
+
     /// <summary>进膛：不可视、无碰撞箱、运动学跟随宿主，各种逻辑在 Update/FixedUpdate 里早退。</summary>
     void SuspendIn()
     {
@@ -1218,6 +1251,7 @@ public class LabPlayer : MonoBehaviour
     void Wake(Vector2 position, Vector2 velocity)
     {
         host = null;
+        phantomHost = null;
         chamberVelocity = Vector2.zero;
         chamberDir = Vector2.zero;
 
@@ -1249,6 +1283,7 @@ public class LabPlayer : MonoBehaviour
     public void Teleport(Vector2 position)
     {
         if (host != null) host.Eject();      // 我在别人膛里：先把我放出去
+        if (phantomHost != null) phantomHost.EjectLoaded(this);
 
         rb.position = position;
         rb.linearVelocity = Vector2.zero;
