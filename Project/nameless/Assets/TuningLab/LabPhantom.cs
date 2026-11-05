@@ -32,6 +32,8 @@ public sealed class LabPhantom : MonoBehaviour
     Vector2 entryVelocity = Vector2.zero;
     Vector2 entryDir = Vector2.zero;
     float converterTimer;
+    Collider2D ignoredCollider;
+    bool ignoredWasEnabled;
 
     /// <summary>幻影半高，用来把出膛的玩家放到表面外侧。</summary>
     float HalfHeight => body != null ? body.size.y * 0.5f : Pixels / (2f * TuningLab.CellPixels);
@@ -44,6 +46,31 @@ public sealed class LabPhantom : MonoBehaviour
     }
 
     void OnDisable() => All.Remove(this);
+
+    void OnDestroy()
+    {
+        if (ignoredCollider != null && body != null)
+            Physics2D.IgnoreCollision(body, ignoredCollider, false);
+    }
+
+    /// <summary>
+    /// 幻影只忽略来源玩家：来源可以穿过去，另一名玩家保持实体碰撞。
+    /// 来源进膛时 collider 会被关掉，出膛后重建引用，所以每物理步核对一次。
+    /// </summary>
+    void FixedUpdate()
+    {
+        Collider2D current = Source != null ? Source.GetComponent<Collider2D>() : null;
+        bool enabledNow = current != null && current.enabled;
+        if (current == ignoredCollider && enabledNow == ignoredWasEnabled) return;
+
+        if (ignoredCollider != null && body != null)
+            Physics2D.IgnoreCollision(body, ignoredCollider, false);
+
+        ignoredCollider = current;
+        ignoredWasEnabled = enabledNow;
+        if (current != null && body != null)
+            Physics2D.IgnoreCollision(body, current, true);
+    }
 
     /// <summary>
     /// 在指定格中心生成一个幻影。生成前先按 FIFO 淘汰最旧的，保证场上永远不超过上限。
@@ -91,6 +118,15 @@ public sealed class LabPhantom : MonoBehaviour
             var edge = (LabPlayer.Edge)i;
             bool spirit = (spiritMask & (1 << i)) != 0;
             visual.SetEdge(edge, spirit ? LabPlayer.EdgeState.Spirit : LabPlayer.EdgeState.Normal);
+        }
+
+        // 第一次也要立刻生效，不能等下一个物理步。
+        Collider2D sourceCollider = source != null ? source.GetComponent<Collider2D>() : null;
+        if (sourceCollider != null)
+        {
+            Physics2D.IgnoreCollision(body, sourceCollider, true);
+            ignoredCollider = sourceCollider;
+            ignoredWasEnabled = sourceCollider.enabled;
         }
     }
 
