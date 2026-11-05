@@ -9,6 +9,7 @@ using UnityEngine.TestTools;
 /// 两条症状：判定箱比绳本身左右各多出 7 格；三级以上撞绳弹回不保留入射速度。
 /// 绳一律走关卡数据（LabLevelData → LabLevel.BuildRuntime），和关卡编辑器里摆出来的是同一条几何。
 /// 竖绳另按“零/一级当墙、二级穿过、三级以上按横绳公式弹回”验收。
+/// 绳不参与地形锻造：接触 / 下落 / 穿过都不改边态，只有三级以上的弹回按正常红热撞击结算。
 /// </summary>
 public sealed class LabRopeTests
 {
@@ -251,7 +252,7 @@ public sealed class LabRopeTests
     }
 
     IEnumerator RunIntoVerticalRope(Vector2 start, Vector2 velocity, float duration, VerticalRopeRun run,
-        int ropeCells = 4)
+        int ropeCells = 4, bool canBeRedHot = false, System.Action<LabPlayer> prepare = null)
     {
         // 关闭水平空气制动，让碰撞前的入射速度就是测试给的挡位。
         lab.horizontalAirDrag = false;
@@ -261,7 +262,9 @@ public sealed class LabRopeTests
         run.rope = level.GetComponentInChildren<LabVerticalRope>();
         Assert.IsNotNull(run.rope, "关卡数据里的竖绳没生成");
 
-        run.player = MakePlayer(start);
+        run.player = MakePlayer(start, canBeRedHot);
+        if (prepare != null) prepare(run.player);
+
         run.rope.Contacted += contact =>
         {
             run.contacts.Add(contact);
@@ -270,6 +273,100 @@ public sealed class LabRopeTests
         };
 
         yield return null;      // 等 LabVerticalRope.Start 抓到 lab
+
+        run.player.SetVelocity(velocity);
+
+        float deadline = Time.time + duration;
+        while (Time.time < deadline) yield return new WaitForFixedUpdate();
+    }
+
+    // 绳不参与地形锻造：除反弹外不改边态 --------------------------------
+
+    [UnityTest]
+    public IEnumerator VerticalRopePassDoesNotHeatPlayer()
+    {
+        var run = new VerticalRopeRun();
+        yield return RunIntoVerticalRope(new Vector2(-3f, 0.6f), new Vector2(31f, 0f), 0.45f, run,
+            canBeRedHot: true);
+
+        Assert.AreEqual(1, run.contacts.Count);
+        Assert.AreEqual(2, run.contacts[0].tier);
+        Assert.IsTrue(run.contacts[0].passed);
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, run.player.GetEdge(LabPlayer.Edge.Right),
+            "二级穿过竖绳不该把右边缘加热");
+    }
+
+    [UnityTest]
+    public IEnumerator VerticalRopeBounceStillHeatsPlayer()
+    {
+        var run = new VerticalRopeRun();
+        yield return RunIntoVerticalRope(new Vector2(-3f, 0.6f), new Vector2(37f, 0f), 0.35f, run,
+            canBeRedHot: true);
+
+        Assert.AreEqual(1, run.contacts.Count);
+        Assert.AreEqual(3, run.contacts[0].tier);
+        Assert.IsTrue(run.contacts[0].bounced);
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, run.player.GetEdge(LabPlayer.Edge.Right),
+            "三级反弹仍按红热撞击结算右边缘");
+    }
+
+    [UnityTest]
+    public IEnumerator VerticalRopePassDoesNotCollapseHotEdge()
+    {
+        var run = new VerticalRopeRun();
+        yield return RunIntoVerticalRope(new Vector2(-3f, 0.6f), new Vector2(31f, 0f), 0.45f, run,
+            canBeRedHot: true,
+            prepare: p => p.SetEdge(LabPlayer.Edge.Right, LabPlayer.EdgeState.Hot2));
+
+        Assert.IsTrue(run.player != null, "热二边穿过竖绳不该塌框销毁玩家");
+        Assert.IsTrue(run.player.IsAlive);
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, run.player.GetEdge(LabPlayer.Edge.Right),
+            "二级穿过竖绳不该让热二边碎成灵体或塌框");
+    }
+
+    sealed class HorizontalRopeRun
+    {
+        public LabPlayer player;
+        public LabHorizontalRope rope;
+        public readonly List<LabHorizontalRope.RopeContact> contacts = new List<LabHorizontalRope.RopeContact>();
+    }
+
+    [UnityTest]
+    public IEnumerator HorizontalRopePassDoesNotHeatPlayer()
+    {
+        var run = new HorizontalRopeRun();
+        yield return RunIntoHorizontalRope(new Vector2(0f, 4.5f), new Vector2(0f, -31f), 0.4f, run);
+
+        Assert.AreEqual(1, run.contacts.Count);
+        Assert.AreEqual(2, run.contacts[0].tier);
+        Assert.IsTrue(run.contacts[0].passed);
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, run.player.GetEdge(LabPlayer.Edge.Bottom),
+            "二级下落穿过横绳不该把底边加热");
+    }
+
+    [UnityTest]
+    public IEnumerator HorizontalRopeBounceStillHeatsPlayer()
+    {
+        var run = new HorizontalRopeRun();
+        yield return RunIntoHorizontalRope(new Vector2(0f, 4.5f), new Vector2(0f, -37f), 0.3f, run);
+
+        Assert.AreEqual(1, run.contacts.Count);
+        Assert.AreEqual(3, run.contacts[0].tier);
+        Assert.IsTrue(run.contacts[0].bounced);
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, run.player.GetEdge(LabPlayer.Edge.Bottom),
+            "三级落在横绳上反弹仍按红热撞击结算底边");
+    }
+
+    IEnumerator RunIntoHorizontalRope(Vector2 start, Vector2 velocity, float duration, HorizontalRopeRun run)
+    {
+        var level = BuildLevel(new LabRopeSpec(new Vector2(0f, 3f), 6, 0, LabRopeOrientation.Horizontal));
+        run.rope = level.GetComponentInChildren<LabHorizontalRope>();
+        Assert.IsNotNull(run.rope, "关卡数据里的横绳没生成");
+
+        run.player = MakePlayer(start, true);
+        run.rope.Contacted += contact => run.contacts.Add(contact);
+
+        yield return null;      // 等 LabHorizontalRope.Start 抓到 lab
 
         run.player.SetVelocity(velocity);
 
@@ -292,7 +389,7 @@ public sealed class LabRopeTests
         return level;
     }
 
-    LabPlayer MakePlayer(Vector2 position)
+    LabPlayer MakePlayer(Vector2 position, bool canBeRedHot = false)
     {
         var go = new GameObject("B_Chunk");
         go.transform.SetParent(labGo.transform, false);
@@ -306,6 +403,7 @@ public sealed class LabRopeTests
         p.lab = lab;
         p.pixels = 10;
         p.scheme = LabPlayer.Scheme.P2;
+        p.canBeRedHot = canBeRedHot;
         return p;
     }
 }

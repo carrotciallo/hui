@@ -573,8 +573,30 @@ public class LabPlayer : MonoBehaviour
             return;
         }
 
+        // 绳不是锻造面：接触 / 下落 / 穿过都不动边态。
+        // 唯一的例外是绳自己判定反弹（三级以上），由绳组件调 ApplyTerrainImpact 结算。
+        if (IsRope(c.collider)) return;
+
+        ApplyTerrainImpact(n, impact);
+    }
+
+    /// <summary>
+    /// 结算一次场景撞击。普通地形和绳反弹共用；冰和岩浆有自己的结算，不走这里。
+    /// normal 从物件指向玩家，impact 是碰撞前沿 normal 的分量。
+    /// </summary>
+    public void ApplyTerrainImpact(Vector2 normal, float impact)
+    {
+        if (lab == null) return;
         if (impact < lab.ForgeSpeed) return;
-        StrikeEdge(EdgeFor(-n), impact >= lab.RedHotSpeed);
+        StrikeEdge(EdgeFor(-normal), impact >= lab.RedHotSpeed);
+    }
+
+    /// <summary>绳子只负责反弹，不参与地形锻造；见 <see cref="ForgeFromTerrain"/>。</summary>
+    static bool IsRope(Collider2D collider)
+    {
+        if (collider == null) return false;
+        return collider.GetComponentInParent<LabVerticalRope>() != null
+            || collider.GetComponentInParent<LabHorizontalRope>() != null;
     }
 
     /// <summary>
