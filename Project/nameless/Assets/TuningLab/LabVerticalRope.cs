@@ -4,10 +4,12 @@ using UnityEngine;
 /// <summary>
 /// 竖绳。每一格是居中的 6×16 棕色素条。
 ///
-/// 碰撞规则（按玩家当前挡位）：
+/// 碰撞规则（挡位按碰撞前沿接触法线撞进去的分量算）：
 ///   零级 / 一级  →  当墙，挡死
-///   二级         →  穿过（临时忽略碰撞，让玩家滑过去）
-///   三级及以上   →  弹回，挡位 +1
+///   二级         →  沿法线穿过：只判一次，恢复入射速度，忽略碰撞直到离开绳体
+///   三级及以上   →  沿法线弹回，弹回速度 = 入射速度 + 一个等级间距（和横绳一致）
+///
+/// 绳接触不参与地形锻造；只有弹回这一种情况会按红热撞击结算边态。
 ///
 /// 相邻的竖绳可以用 chainId 归成一个"长绳"，长绳逻辑通过 <see cref="Contacted"/> 事件接入。
 /// </summary>
@@ -25,7 +27,7 @@ public class LabVerticalRope : MonoBehaviour
 
     public Color color = new Color(0.55f, 0.38f, 0.22f);
 
-    [Tooltip("二级穿过时忽略碰撞的时长（秒）。")]
+    [Tooltip("二级穿过时至少忽略碰撞的时长（秒）。玩家还没离开绳体时会继续忽略，避免卡在绳里。")]
     public float passWindow = 0.22f;
 
     /// <summary>所有竖绳，供长绳逻辑统一查询。</summary>
@@ -38,7 +40,7 @@ public class LabVerticalRope : MonoBehaviour
         public LabPlayer player;
         public int tier;
         public Vector2 normal;     // 绳 → 玩家
-        public bool passed;        // 穿过去了 / 被弹回 / 被挡住
+        public bool passed;        // true = 穿过；false = 被挡住或弹回
         public bool bounced;
     }
 
@@ -60,7 +62,11 @@ public class LabVerticalRope : MonoBehaviour
         if (Application.isPlaying) All.Add(this);
     }
 
-    void OnDisable() => All.Remove(this);
+    void OnDisable()
+    {
+        All.Remove(this);
+        ReleasePassThrough();
+    }
 
     void Start()
     {
@@ -85,53 +91,121 @@ public class LabVerticalRope : MonoBehaviour
 
     void Update()
     {
-        // 穿过窗口到期就把碰撞恢复回来
+        // 穿过窗口到期、并且玩家已经离开绳体之后，才把碰撞恢复回来。
+        // 忽略期间不会再次触发 OnCollisionEnter2D，所以一次穿过只判一次，也不会被反复弹回/卡住。
         for (int i = passThrough.Count - 1; i >= 0; i--)
         {
+            Collider2D other = passThrough[i];
+            if (other == null)
+            {
+                passThrough.RemoveAt(i);
+                passUntil.RemoveAt(i);
+                continue;
+            }
+
             if (Time.time < passUntil[i]) continue;
-            if (passThrough[i] != null) Physics2D.IgnoreCollision(passThrough[i], body, false);
+            if (Overlaps(other)) continue;
+
+            Physics2D.IgnoreCollision(other, body, false);
             passThrough.RemoveAt(i);
             passUntil.RemoveAt(i);
         }
     }
 
+    /// <summary>玩家是否还压在绳体上。忽略碰撞期间没有 contact，只能靠包围盒判断。</summary>
+    bool Overlaps(Collider2D other)
+    {
+        if (body == null || !other.enabled || !other.gameObject.activeInHierarchy) return false;
+
+        Bounds a = body.bounds;
+        Bounds b = other.bounds;
+        const float margin = 0.01f;
+        return a.min.x < b.max.x - margin && a.max.x > b.min.x + margin
+            && a.min.y < b.max.y - margin && a.max.y > b.min.y + margin;
+    }
+
+    void ReleasePassThrough()
+    {
+        if (body != null)
+        {
+            for (int i = 0; i < passThrough.Count; i++)
+                if (passThrough[i] != null) Physics2D.IgnoreCollision(passThrough[i], body, false);
+        }
+
+        passThrough.Clear();
+        passUntil.Clear();
+    }
+
     void OnCollisionEnter2D(Collision2D c)
     {
         if (!c.collider.TryGetComponent(out LabPlayer player)) return;
-        Resolve(player);
+        Resolve(player, c);
     }
 
-    void Resolve(LabPlayer player)
+    void Resolve(LabPlayer player, Collision2D collision)
     {
-        Vector2 normal = (Vector2)player.transform.position - (Vector2)transform.position;
-        normal = Mathf.Abs(normal.x) >= Mathf.Abs(normal.y)
-            ? new Vector2(Mathf.Sign(normal.x), 0f)
-            : new Vector2(0f, Mathf.Sign(normal.y));
-        int tier = lab != null
-            ? lab.TierOfSpeed(Mathf.Abs(Vector2.Dot(player.PreImpactVelocity, normal)))
-            : player.SpeedTier;
+        Collider2D playerCollider = collision.collider;
+        if (playerCollider == null || body == null) return;
 
-        // 零级 / 一级：当墙，什么都不做
+        Vector2 normal = ContactNormal(player, collision);
+        float impact = Mathf.Abs(Vector2.Dot(player.PreImpactVelocity, normal));
+        int tier = lab != null ? lab.TierOfSpeed(impact) : player.SpeedTier;
+
+        // 零级 / 一级：和普通墙一样，交给物理解算挡住
         if (tier < 2)
         {
             Raise(player, tier, normal, false, false);
             return;
         }
 
-        // 二级：放行
+        // 二级：沿法线穿过。只判一次，忽略到玩家离开绳体，避免反复触发卡在绳里。
         if (tier == 2)
         {
-            Physics2D.IgnoreCollision(player.GetComponent<Collider2D>(), body, true);
-            passThrough.Add(player.GetComponent<Collider2D>());
-            passUntil.Add(Time.time + passWindow);
+            Physics2D.IgnoreCollision(playerCollider, body, true);
+            if (!passThrough.Contains(playerCollider))
+            {
+                passThrough.Add(playerCollider);
+                passUntil.Add(Time.time + passWindow);
+            }
+
+            // 进入回调时碰撞已经把法线方向的速度解算掉了；把入射分量还回去，
+            // 玩家才会真正穿过去，而不是贴着绳面停住。
+            player.ApplyAxisVelocity(normal, Vector2.Dot(player.PreImpactVelocity, normal));
             Raise(player, tier, normal, true, false);
             return;
         }
 
-        // 三级及以上：弹回 + 挡位 +1
+        // 三级及以上：沿法线弹回，弹回速度和横绳共用同一套算法
         float speed = BounceSpeed(player, normal);
         player.ApplyBounce(normal, speed);
+        // 绳接触不锻造；只有反弹这一种情况按正常红热撞击结算。
+        player.ApplyTerrainImpact(normal, impact);
         Raise(player, tier, normal, false, true);
+    }
+
+    /// <summary>
+    /// 接触法线，方向统一为“绳 → 玩家”。
+    /// 回调挂在绳上，contact.normal 的正负号跟着 this/other 的约定走；
+    /// 这里只取轴向，再用玩家中心相对绳中心的方位定朝外，避免依赖回调方向。
+    /// </summary>
+    Vector2 ContactNormal(LabPlayer player, Collision2D collision)
+    {
+        Vector2 delta = (Vector2)player.transform.position - (Vector2)transform.position;
+
+        if (collision == null || collision.contactCount == 0)
+        {
+            return Mathf.Abs(delta.x) >= Mathf.Abs(delta.y)
+                ? new Vector2(Mathf.Sign(delta.x), 0f)
+                : new Vector2(0f, Mathf.Sign(delta.y));
+        }
+
+        Vector2 contact = collision.GetContact(0).normal;
+        Vector2 axis = Mathf.Abs(contact.x) >= Mathf.Abs(contact.y)
+            ? new Vector2(Mathf.Sign(contact.x), 0f)
+            : new Vector2(0f, Mathf.Sign(contact.y));
+
+        if (Vector2.Dot(axis, delta) < 0f) axis = -axis;
+        return axis;
     }
 
     /// <summary>弹回速度：保留碰撞前速度，并增加一个等级间距。</summary>

@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -7,6 +8,8 @@ using UnityEngine.TestTools;
 /// 绳子规格（Issue #40）。
 /// 两条症状：判定箱比绳本身左右各多出 7 格；三级以上撞绳弹回不保留入射速度。
 /// 绳一律走关卡数据（LabLevelData → LabLevel.BuildRuntime），和关卡编辑器里摆出来的是同一条几何。
+/// 竖绳另按“零/一级当墙、二级穿过、三级以上按横绳公式弹回”验收。
+/// 绳不参与地形锻造：接触 / 下落 / 穿过都不改边态，只有三级以上的弹回按正常红热撞击结算。
 /// </summary>
 public sealed class LabRopeTests
 {
@@ -154,6 +157,223 @@ public sealed class LabRopeTests
             "弹回速度 = 入射速度折算格数 + 一个等级间距");
     }
 
+    // 竖绳：零/一级当墙、二级穿过、三级以上按横绳公式弹回 -------------
+
+    sealed class VerticalRopeRun
+    {
+        public LabPlayer player;
+        public LabVerticalRope rope;
+        public readonly List<LabVerticalRope.RopeContact> contacts = new List<LabVerticalRope.RopeContact>();
+        public readonly List<Vector2> incoming = new List<Vector2>();
+        public readonly List<Vector2> velocities = new List<Vector2>();
+    }
+
+    [UnityTest]
+    public IEnumerator VerticalRopeBlocksPlayerBelowTierTwo()
+    {
+        var run = new VerticalRopeRun();
+        yield return RunIntoVerticalRope(new Vector2(-3f, 0.6f), new Vector2(24f, 0f), 0.35f, run);
+
+        Assert.AreEqual(1, run.contacts.Count, "一级撞绳应该只判一次");
+        var hit = run.contacts[0];
+        Assert.AreEqual(1, hit.tier, $"24 的入射应该是一级：实际 {hit.tier}");
+        Assert.IsFalse(hit.passed, "一级不该穿过");
+        Assert.IsFalse(hit.bounced, "一级不该弹回");
+        Assert.Greater(Mathf.Abs(hit.normal.x), 0.5f,
+            $"从绳下半段侧撞进来，法线应该是水平的；实际 {hit.normal}");
+        Assert.Less(run.player.transform.position.x, -0.3f, "一级被绳挡住，不该跑到另一侧");
+    }
+
+    [UnityTest]
+    public IEnumerator VerticalRopeLetsTierTwoPlayerPassWithoutSticking()
+    {
+        var run = new VerticalRopeRun();
+        yield return RunIntoVerticalRope(new Vector2(-3f, 0.6f), new Vector2(31f, 0f), 0.45f, run);
+
+        Assert.AreEqual(1, run.contacts.Count, "穿过只应该判一次，反复判会把玩家卡在绳里");
+        var hit = run.contacts[0];
+        Assert.AreEqual(2, hit.tier, $"31 的入射应该是二级：实际 {hit.tier}");
+        Assert.IsTrue(hit.passed, "二级应该穿过");
+        Assert.IsFalse(hit.bounced, "二级不该弹回");
+        Assert.Greater(Mathf.Abs(hit.normal.x), 0.5f, $"侧撞法线应该水平；实际 {hit.normal}");
+        Assert.Greater(run.velocities[0].x, 25f, "穿过时要保留入射速度，不能贴着绳面停住");
+        Assert.Greater(run.player.transform.position.x, 0.5f, "二级应该穿到绳的另一侧");
+    }
+
+    [UnityTest]
+    public IEnumerator VerticalRopeBouncesTierThreePlayerWithRopeSpeed()
+    {
+        const float speed = 37f;
+        var run = new VerticalRopeRun();
+        yield return RunIntoVerticalRope(new Vector2(-3f, 0.6f), new Vector2(speed, 0f), 0.35f, run);
+
+        Assert.AreEqual(1, run.contacts.Count, "三级撞绳应该只判一次");
+        var hit = run.contacts[0];
+        Assert.AreEqual(3, hit.tier, $"37 的入射应该是三级：实际 {hit.tier}");
+        Assert.IsFalse(hit.passed, "三级不该穿过");
+        Assert.IsTrue(hit.bounced, "三级应该弹回");
+        Assert.Less(hit.normal.x, -0.5f, $"被弹回时法线应该朝左；实际 {hit.normal}");
+        Assert.Less(run.velocities[0].x, 0f, "三级应该被弹向反方向");
+        Assert.AreEqual(lab.RopeBounceSpeed(Mathf.Abs(run.incoming[0].x)), -run.velocities[0].x, 0.5f,
+            "弹回速度 = 入射速度 + 一个等级间距，和横绳同一条公式");
+        Assert.Less(run.player.transform.position.x, -1f, "玩家应该被弹离绳");
+    }
+
+    [UnityTest]
+    public IEnumerator VerticalRopeBouncesFallingTierThreePlayerUp()
+    {
+        const float speed = 37f;
+        var run = new VerticalRopeRun();
+        yield return RunIntoVerticalRope(new Vector2(0f, 4.5f), new Vector2(0f, -speed), 0.3f, run);
+
+        Assert.AreEqual(1, run.contacts.Count, "从绳顶落下来应该只判一次");
+        var hit = run.contacts[0];
+        Assert.AreEqual(3, hit.tier, $"37 的下落应该是三级：实际 {hit.tier}");
+        Assert.IsTrue(hit.bounced, "三级落在绳顶应该弹回");
+        Assert.Greater(hit.normal.y, 0.5f, $"绳顶的法线应该朝上；实际 {hit.normal}");
+        Assert.Greater(run.velocities[0].y, 0f, "应该被弹向上方");
+        Assert.AreEqual(lab.RopeBounceSpeed(Mathf.Abs(run.incoming[0].y)), run.velocities[0].y, 0.5f,
+            "弹回速度 = 入射速度 + 一个等级间距");
+    }
+
+    [UnityTest]
+    public IEnumerator VerticalRopeKeepsIgnoringUntilTierTwoPlayerLeavesLongRope()
+    {
+        var run = new VerticalRopeRun();
+        // 10 格长绳：按 31 下落，0.22s 的穿过窗口到期时人还在绳里，必须继续忽略到完全离开。
+        yield return RunIntoVerticalRope(new Vector2(0f, 10.5f), new Vector2(0f, -31f), 0.7f, run, 10);
+
+        Assert.AreEqual(1, run.contacts.Count, "穿过只应该判一次；窗口到期时人还在绳里也不能重新判");
+        var hit = run.contacts[0];
+        Assert.AreEqual(2, hit.tier, $"31 的下落应该是二级：实际 {hit.tier}");
+        Assert.IsTrue(hit.passed, "二级应该从绳顶穿下去");
+        Assert.Less(run.player.transform.position.y, -0.5f,
+            "10 格长绳要一直忽略到人从下端出去，不能卡在绳中间");
+    }
+
+    IEnumerator RunIntoVerticalRope(Vector2 start, Vector2 velocity, float duration, VerticalRopeRun run,
+        int ropeCells = 4, bool canBeRedHot = false, System.Action<LabPlayer> prepare = null)
+    {
+        // 关闭水平空气制动，让碰撞前的入射速度就是测试给的挡位。
+        lab.horizontalAirDrag = false;
+
+        // 绳底固定在 y = 0，长度改的是绳顶高度。
+        var level = BuildLevel(new LabRopeSpec(new Vector2(0f, ropeCells * 0.5f), ropeCells));
+        run.rope = level.GetComponentInChildren<LabVerticalRope>();
+        Assert.IsNotNull(run.rope, "关卡数据里的竖绳没生成");
+
+        run.player = MakePlayer(start, canBeRedHot);
+        if (prepare != null) prepare(run.player);
+
+        run.rope.Contacted += contact =>
+        {
+            run.contacts.Add(contact);
+            run.incoming.Add(run.player.PreImpactVelocity);
+            run.velocities.Add(run.player.Velocity);
+        };
+
+        yield return null;      // 等 LabVerticalRope.Start 抓到 lab
+
+        run.player.SetVelocity(velocity);
+
+        float deadline = Time.time + duration;
+        while (Time.time < deadline) yield return new WaitForFixedUpdate();
+    }
+
+    // 绳不参与地形锻造：除反弹外不改边态 --------------------------------
+
+    [UnityTest]
+    public IEnumerator VerticalRopePassDoesNotHeatPlayer()
+    {
+        var run = new VerticalRopeRun();
+        yield return RunIntoVerticalRope(new Vector2(-3f, 0.6f), new Vector2(31f, 0f), 0.45f, run,
+            canBeRedHot: true);
+
+        Assert.AreEqual(1, run.contacts.Count);
+        Assert.AreEqual(2, run.contacts[0].tier);
+        Assert.IsTrue(run.contacts[0].passed);
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, run.player.GetEdge(LabPlayer.Edge.Right),
+            "二级穿过竖绳不该把右边缘加热");
+    }
+
+    [UnityTest]
+    public IEnumerator VerticalRopeBounceStillHeatsPlayer()
+    {
+        var run = new VerticalRopeRun();
+        yield return RunIntoVerticalRope(new Vector2(-3f, 0.6f), new Vector2(37f, 0f), 0.35f, run,
+            canBeRedHot: true);
+
+        Assert.AreEqual(1, run.contacts.Count);
+        Assert.AreEqual(3, run.contacts[0].tier);
+        Assert.IsTrue(run.contacts[0].bounced);
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, run.player.GetEdge(LabPlayer.Edge.Right),
+            "三级反弹仍按红热撞击结算右边缘");
+    }
+
+    [UnityTest]
+    public IEnumerator VerticalRopePassDoesNotCollapseHotEdge()
+    {
+        var run = new VerticalRopeRun();
+        yield return RunIntoVerticalRope(new Vector2(-3f, 0.6f), new Vector2(31f, 0f), 0.45f, run,
+            canBeRedHot: true,
+            prepare: p => p.SetEdge(LabPlayer.Edge.Right, LabPlayer.EdgeState.Hot2));
+
+        Assert.IsTrue(run.player != null, "热二边穿过竖绳不该塌框销毁玩家");
+        Assert.IsTrue(run.player.IsAlive);
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, run.player.GetEdge(LabPlayer.Edge.Right),
+            "二级穿过竖绳不该让热二边碎成灵体或塌框");
+    }
+
+    sealed class HorizontalRopeRun
+    {
+        public LabPlayer player;
+        public LabHorizontalRope rope;
+        public readonly List<LabHorizontalRope.RopeContact> contacts = new List<LabHorizontalRope.RopeContact>();
+    }
+
+    [UnityTest]
+    public IEnumerator HorizontalRopePassDoesNotHeatPlayer()
+    {
+        var run = new HorizontalRopeRun();
+        yield return RunIntoHorizontalRope(new Vector2(0f, 4.5f), new Vector2(0f, -31f), 0.4f, run);
+
+        Assert.AreEqual(1, run.contacts.Count);
+        Assert.AreEqual(2, run.contacts[0].tier);
+        Assert.IsTrue(run.contacts[0].passed);
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, run.player.GetEdge(LabPlayer.Edge.Bottom),
+            "二级下落穿过横绳不该把底边加热");
+    }
+
+    [UnityTest]
+    public IEnumerator HorizontalRopeBounceStillHeatsPlayer()
+    {
+        var run = new HorizontalRopeRun();
+        yield return RunIntoHorizontalRope(new Vector2(0f, 4.5f), new Vector2(0f, -37f), 0.3f, run);
+
+        Assert.AreEqual(1, run.contacts.Count);
+        Assert.AreEqual(3, run.contacts[0].tier);
+        Assert.IsTrue(run.contacts[0].bounced);
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, run.player.GetEdge(LabPlayer.Edge.Bottom),
+            "三级落在横绳上反弹仍按红热撞击结算底边");
+    }
+
+    IEnumerator RunIntoHorizontalRope(Vector2 start, Vector2 velocity, float duration, HorizontalRopeRun run)
+    {
+        var level = BuildLevel(new LabRopeSpec(new Vector2(0f, 3f), 6, 0, LabRopeOrientation.Horizontal));
+        run.rope = level.GetComponentInChildren<LabHorizontalRope>();
+        Assert.IsNotNull(run.rope, "关卡数据里的横绳没生成");
+
+        run.player = MakePlayer(start, true);
+        run.rope.Contacted += contact => run.contacts.Add(contact);
+
+        yield return null;      // 等 LabHorizontalRope.Start 抓到 lab
+
+        run.player.SetVelocity(velocity);
+
+        float deadline = Time.time + duration;
+        while (Time.time < deadline) yield return new WaitForFixedUpdate();
+    }
+
     // 工具 ------------------------------------------------------------
 
     LabLevel BuildLevel(LabRopeSpec rope)
@@ -169,7 +389,7 @@ public sealed class LabRopeTests
         return level;
     }
 
-    LabPlayer MakePlayer(Vector2 position)
+    LabPlayer MakePlayer(Vector2 position, bool canBeRedHot = false)
     {
         var go = new GameObject("B_Chunk");
         go.transform.SetParent(labGo.transform, false);
@@ -183,6 +403,7 @@ public sealed class LabRopeTests
         p.lab = lab;
         p.pixels = 10;
         p.scheme = LabPlayer.Scheme.P2;
+        p.canBeRedHot = canBeRedHot;
         return p;
     }
 }

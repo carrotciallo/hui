@@ -24,7 +24,7 @@ public sealed class LabLevelInspector : Editor
         EditorGUILayout.LabelField("竖绳", level.RopeCount.ToString());
         EditorGUILayout.LabelField("钥匙 / 门", level.KeyCount + " / " + level.DoorCount);
         EditorGUILayout.LabelField("地刺", level.SpikeCount + "（16×6，碰到即死）");
-        EditorGUILayout.LabelField("冰块", level.IceCount + "（1×1，可编组）");
+        EditorGUILayout.LabelField("冰块", level.IceCount + "（1×1，可编组；冰面滑行不碎 / 不卡脚）");
         EditorGUILayout.LabelField("岩浆块", level.MagmaCount + "（首次接触强制红热 / 热二接触死亡 / v3 破坏）");
         EditorGUILayout.LabelField("隐藏方块", level.HiddenBlockCount + "（无实体，玩家完全进入整组永久半透明）");
         EditorGUILayout.LabelField("重生点", level.RespawnPointCount + "（3×3，接触触发）");

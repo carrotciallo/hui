@@ -442,6 +442,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Ice:
                 EditorGUILayout.HelpBox(
                     "左键放一块 1×1 冰块，按住拖可以连续铺。同组冰块共享 v2 整组破坏；\n" +
+                    "冰面滑行（含 v2+）不算撞击，不会碎冰；冰面已并入地形合并碰撞，滑行不卡脚。\n" +
                     "红热边接触只融一块。同格再点 = 删除，换组号再点 = 改组。\n" +
                     "0 也是普通组；「新建组」会给一个当前最大组号 + 1 的新组。",
                     MessageType.None);

@@ -29,7 +29,7 @@ public sealed class LabLevelData
     public List<LabDoorSpec> doors = new List<LabDoorSpec>();
     /// <summary>地刺（16×6 像素，贴格边，一格一根，碰到即死）。</summary>
     public List<LabSpikeSpec> spikes = new List<LabSpikeSpec>();
-    /// <summary>冰块（1×1，可编组；红热边接触融一块，v2 碰撞碎整组）。</summary>
+    /// <summary>冰块（1×1，可编组；冰面滑行不碎，红热边接触融一块，非承重 v2 碰撞碎整组）。</summary>
     public List<LabIceSpec> ices = new List<LabIceSpec>();
     /// <summary>岩浆块（1×1，可编组；每个接触面首次接触强制红热，热二边再接触死亡，v2+ 撞击死亡，v3 碰撞碎整组）。</summary>
     public List<LabMagmaSpec> magmas = new List<LabMagmaSpec>();
