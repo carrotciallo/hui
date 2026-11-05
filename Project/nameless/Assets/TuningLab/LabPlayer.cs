@@ -107,6 +107,9 @@ public class LabPlayer : MonoBehaviour
     public float NetDescent => grounded ? LandedNetDescent : Mathf.Max(0f, LaunchFootY - FootY);
     public float ApexDescent => grounded ? LandedApexDescent : Mathf.Max(0f, ApexFootY - FootY);
 
+    /// <summary>本体基色（A 蓝 / B 红），速度反馈的残影和拖尾用它保持同色。</summary>
+    public Color BaseColor => visual != null ? visual.BaseColor : Color.white;
+
     public int SpeedTier => lab != null ? lab.TierOfSpeed(Speed) : 0;
     public int LaunchTier => lab != null ? lab.TierOfCells(NetDescent) : 0;
     public int ApexTier => lab != null ? lab.TierOfCells(ApexDescent) : 0;

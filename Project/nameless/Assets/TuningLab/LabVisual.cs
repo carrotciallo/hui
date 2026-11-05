@@ -29,6 +29,9 @@ public class LabVisual : MonoBehaviour
     Color baseColor = Color.white;
     bool hasFrame;
 
+    /// <summary>玩家基色；速度反馈的拖尾/残影用它保持与本体同色。</summary>
+    public Color BaseColor => baseColor;
+
     static readonly System.Collections.Generic.Dictionary<long, Sprite> cache =
         new System.Collections.Generic.Dictionary<long, Sprite>();
 

@@ -121,12 +121,52 @@ public class TuningLab : MonoBehaviour
     [Tooltip("Tab 键切换：相机视野内的整数格网格线。")]
     public bool showGrid = true;
 
+    [Header("死亡反馈")]
+    [Tooltip("任一玩家死亡时，屏幕边框闪一次红色。")]
+    public bool deathFlashEnabled = true;
+    [Tooltip("闪红满亮持续（秒），之后按淡出时长线性收掉。")]
+    public float deathFlashHold = 0.1f;
+    [Tooltip("闪红从满亮淡到无（秒）。")]
+    public float deathFlashFade = 0.4f;
+    [Tooltip("边框带宽 = 屏高 × 这个比例。")]
+    [Range(0.01f, 0.15f)] public float deathFlashBorderRatio = 0.04f;
+    [Tooltip("满亮时的红色。")]
+    public Color deathFlashColor = new Color(1f, 0.25f, 0.25f, 0.9f);
+
+    [Header("速度反馈")]
+    [Tooltip("残影和拖尾从第几档开始出现（合速度档，含竖直分量）。走路恒为 v0，默认 v3 起。")]
+    [Range(1, 6)] public int speedFxStartTier = 3;
+    [Tooltip("起始档同时存在的残影数。")]
+    [Range(0, 12)] public int ghostCountTier3 = 3;
+    [Tooltip("起始档残影初始不透明度。")]
+    [Range(0f, 1f)] public float ghostAlphaTier3 = 0.35f;
+    [Tooltip("起始档残影存活（秒）。")]
+    public float ghostLifeTier3 = 0.18f;
+    [Tooltip("顶档同时存在的残影数（tierCount=4 时即 V4）。")]
+    [Range(0, 12)] public int ghostCountTopTier = 5;
+    [Tooltip("顶档残影初始不透明度。")]
+    [Range(0f, 1f)] public float ghostAlphaTopTier = 0.55f;
+    [Tooltip("顶档残影存活（秒）。")]
+    public float ghostLifeTopTier = 0.28f;
+    [Tooltip("拖尾亮点同屏上限。")]
+    [Range(0, 64)] public int trailCap = 24;
+    [Tooltip("拖尾亮点存活（秒）。")]
+    public float trailLife = 0.25f;
+    [Tooltip("拖尾亮点 V3 初始不透明度。")]
+    [Range(0f, 1f)] public float trailAlphaTier3 = 0.5f;
+    [Tooltip("拖尾亮点 V4 初始不透明度。")]
+    [Range(0f, 1f)] public float trailAlphaTopTier = 0.8f;
+
     public LabPlayer PlayerA { get; private set; }
     public LabPlayer PlayerB { get; private set; }
     public Camera Cam { get; private set; }
     public LabHud Hud { get; private set; }
     public LabRespawnPoint ActiveRespawnPoint { get; private set; }
     public event System.Action MapReset;
+    /// <summary>任一玩家死亡后广播（唯一必达点在 NotifyPlayerDied）；现阶段只有边框闪红订阅。</summary>
+    public event System.Action<LabPlayer> PlayerDied;
+
+    float deathFlashLeft;
     public bool TeleportSelecting => teleportSource != null;
     /// <summary>选择界面里当前选中的终点；没有在选终点时为 null。</summary>
     public LabTeleportPoint TeleportTarget =>
@@ -367,6 +407,8 @@ public class TuningLab : MonoBehaviour
 
     void Update()
     {
+        if (deathFlashLeft > 0f) deathFlashLeft = Mathf.Max(0f, deathFlashLeft - Time.deltaTime);
+
         var kb = UnityEngine.InputSystem.Keyboard.current;
         if (kb == null) return;
         UpdateTeleportSelection(kb);
@@ -436,6 +478,8 @@ public class TuningLab : MonoBehaviour
     /// </summary>
     public void NotifyPlayerDied(LabPlayer deadPlayer)
     {
+        TriggerDeathFlash();
+        PlayerDied?.Invoke(deadPlayer);
         if (TeleportSelecting) EndTeleportSelection();
 
         // 只创建了一个玩家（测试/调试）时没有“队友”，直接按单人结算。
@@ -616,7 +660,43 @@ public class TuningLab : MonoBehaviour
 
     void OnGUI()
     {
-        if (!TeleportSelecting) return;
+        if (TeleportSelecting) DrawTeleportSelectionGui();
+        DrawDeathFlashGui();
+    }
+
+    /// <summary>死亡边框闪红：one-shot 重放，两人同死也只显示一次闪光。</summary>
+    void TriggerDeathFlash()
+    {
+        if (!deathFlashEnabled) return;
+        deathFlashLeft = Mathf.Max(0.01f, deathFlashHold + deathFlashFade);
+    }
+
+    void DrawDeathFlashGui()
+    {
+        if (deathFlashLeft <= 0f) return;
+
+        float hold = Mathf.Max(0.01f, deathFlashHold);
+        float fade = Mathf.Max(0.01f, deathFlashFade);
+        // 满亮段 multiplier=1，淡出段从 1 线性收到 0。
+        float multiplier = deathFlashLeft > hold
+            ? 1f
+            : Mathf.Clamp01(deathFlashLeft / fade);
+
+        Color c = deathFlashColor;
+        c.a *= multiplier;
+
+        float band = Screen.height * Mathf.Clamp(deathFlashBorderRatio, 0.01f, 0.15f);
+        Color previous = GUI.color;
+        GUI.color = c;
+        GUI.DrawTexture(new Rect(0f, 0f, Screen.width, band), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(0f, Screen.height - band, Screen.width, band), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(0f, band, band, Screen.height - band * 2f), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(Screen.width - band, band, band, Screen.height - band * 2f), Texture2D.whiteTexture);
+        GUI.color = previous;
+    }
+
+    void DrawTeleportSelectionGui()
+    {
         Color previous = GUI.color;
         GUI.color = new Color(0f, 0f, 0f, 0.22f);
         GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
@@ -1015,6 +1095,10 @@ public class TuningLab : MonoBehaviour
         p.scheme = scheme;
         p.pixels = pixels;
         p.visual = LabVisual.Build(go.transform, pixels, wall > 0, color);
+
+        var fxGo = new GameObject("SpeedFx");
+        fxGo.transform.SetParent(go.transform, false);
+        fxGo.AddComponent<LabSpeedFeedback>().Bind(this, p);
         return p;
     }
 
