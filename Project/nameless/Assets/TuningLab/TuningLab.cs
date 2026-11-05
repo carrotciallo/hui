@@ -66,6 +66,10 @@ public class TuningLab : MonoBehaviour
     [Tooltip("冰块整组破坏的碰撞等级（2 = v2）。只算碰撞前沿接触法线撞进去的分量，站在冰面上横向滑行不算。")]
     [Range(0, 4)] public int iceBreakTierIndex = 2;
 
+    [Header("隐藏方块")]
+    [Tooltip("隐藏方块被任一玩家完全进入后整组保持的不透明度（0.5 = 半透明）。只在揭示那一刻取值，之后改不影响已揭示的组。")]
+    [Range(0f, 1f)] public float hiddenRevealedAlpha = 0.5f;
+
     /// <summary>没有检查点时的死亡后果。</summary>
     public enum DeathFallback
     {

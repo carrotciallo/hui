@@ -33,7 +33,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         RespawnPoint = 13,
         TeleportPoint = 14,
         Marquee = 15,
-        Move = 16
+        Move = 16,
+        HiddenBlock = 17
     }
 
     /// <summary>下一次拉选区时怎么处理当前选区。</summary>
@@ -56,7 +57,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Ice = 6,
         Magma = 7,
         RespawnPoint = 8,
-        TeleportPoint = 9
+        TeleportPoint = 9,
+        HiddenBlock = 10
     }
 
     struct Pick
@@ -72,7 +74,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     static readonly string[] ToolLabels =
     {
         "铺地形", "擦地形", "矩形", "竖绳", "横绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺", "冰块", "岩浆块", "重生点", "传送点",
-        "选区", "选择"
+        "选区", "选择", "隐藏方块"
     };
 
     static readonly string[] MarqueeModeLabels = { "重新选择", "增加选区", "删除选区" };
@@ -94,6 +96,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     LabSpikeDir newSpikeDir = LabSpikeDir.Up;
     int iceGroupId = 1;
     int magmaGroupId = 1;
+    int hiddenGroupId = 1;
     bool showGrid = true;
     bool showSpawns = true;
     bool showCameraFrames = true;
@@ -103,6 +106,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     Vector2 spikeScroll;
     Vector2 iceScroll;
     Vector2 magmaScroll;
+    Vector2 hiddenScroll;
     Vector2 respawnScroll;
     Vector2 teleportScroll;
 
@@ -273,6 +277,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawIces();
         EditorGUILayout.Space();
         DrawMagmas();
+        EditorGUILayout.Space();
+        DrawHiddenBlocks();
         EditorGUILayout.Space();
         DrawRespawnPoints();
         EditorGUILayout.Space();
@@ -458,6 +464,20 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     magmaGroupId = EditorGUILayout.IntField("组号", magmaGroupId);
                     if (GUILayout.Button("新建组", GUILayout.Width(64f)))
                         magmaGroupId = level.Data.NextMagmaGroupId();
+                }
+                break;
+            case Tool.HiddenBlock:
+                EditorGUILayout.HelpBox(
+                    "左键放一块隐藏方块，按住拖可以连续铺。无实体、外形和墙一致，用来盖住后面的物件。\n" +
+                    "任一玩家完全进入一组后，该组永久变为半透明（地图重置也不会恢复）。\n" +
+                    "不能压实心格；允许压钥匙、门、绳、冰、岩浆等。同格再点 = 从本组删除；同一格可以属于多个组。\n" +
+                    "0 也是普通组；「新建组」会给一个当前最大组号 + 1 的新组。",
+                    MessageType.None);
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    hiddenGroupId = EditorGUILayout.IntField("组号", hiddenGroupId);
+                    if (GUILayout.Button("新建组", GUILayout.Width(64f)))
+                        hiddenGroupId = level.Data.NextHiddenGroupId();
                 }
                 break;
             case Tool.RespawnPoint:
@@ -970,6 +990,56 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 if (!EditorUtility.DisplayDialog("清空岩浆块", "删掉所有岩浆块？", "清空", "取消")) return;
                 Record("清空岩浆块");
                 level.Data.ClearMagmas();
+                AfterStructuralEdit();
+            }
+        }
+    }
+
+    void DrawHiddenBlocks()
+    {
+        EditorGUILayout.LabelField("隐藏方块", EditorStyles.boldLabel);
+        var data = level.Data;
+        if (data.hiddenBlocks == null) data.hiddenBlocks = new List<LabHiddenBlockSpec>();
+        EditorGUILayout.LabelField("隐藏方块", level.HiddenBlockCount + "（无实体，外形与墙一致；玩家完全进入整组永久半透明）");
+
+        hiddenScroll = EditorGUILayout.BeginScrollView(hiddenScroll, GUILayout.MaxHeight(120f));
+        for (int i = 0; i < data.hiddenBlocks.Count; i++)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                var block = data.hiddenBlocks[i];
+                EditorGUILayout.LabelField(
+                    string.Format("隐 ({0}, {1})", block.cell.x, block.cell.y),
+                    EditorStyles.miniLabel, GUILayout.Width(110f));
+
+                EditorGUI.BeginChangeCheck();
+                int next = EditorGUILayout.IntField(block.groupId, GUILayout.Width(48f));
+                if (EditorGUI.EndChangeCheck())
+                {
+                    Record("改隐藏方块组号");
+                    block.groupId = next;
+                    data.hiddenBlocks[i] = block;
+                    MarkDirty(true);
+                }
+
+                if (GUILayout.Button("×", GUILayout.Width(24f)))
+                {
+                    Record("删隐藏方块");
+                    data.hiddenBlocks.RemoveAt(i);
+                    AfterStructuralEdit();
+                    break;
+                }
+            }
+        }
+        EditorGUILayout.EndScrollView();
+
+        using (new EditorGUI.DisabledScope(level.HiddenBlockCount == 0))
+        {
+            if (GUILayout.Button("清空隐藏方块"))
+            {
+                if (!EditorUtility.DisplayDialog("清空隐藏方块", "删掉所有隐藏方块？", "清空", "取消")) return;
+                Record("清空隐藏方块");
+                level.Data.ClearHiddenBlocks();
                 AfterStructuralEdit();
             }
         }
@@ -1529,6 +1599,26 @@ public sealed class LabLevelEditorWindow : EditorWindow
             }
         }
 
+        if (data.hiddenBlocks != null)
+        {
+            for (int i = 0; i < data.hiddenBlocks.Count; i++)
+            {
+                var block = data.hiddenBlocks[i];
+                if (!data.ContainsCell(block.cell))
+                    issues.Add("第 " + i + " 条隐藏方块不在编辑范围内：" + block.cell);
+                if (data.HasCell(block.cell))
+                    issues.Add("第 " + i + " 条隐藏方块和地形重叠：" + block.cell);
+                if (block.groupId < 0)
+                    issues.Add("第 " + i + " 条隐藏方块的组号不能是负数：" + block.groupId);
+
+                // 无实体不挡人，但出生点整个压在未揭示的隐藏格里会开局即触发揭示。
+                if (SpawnTouchesCell(data.spawnA, TuningLab.A_Pixels / (float)TuningLab.CellPixels, block.cell))
+                    issues.Add("第 " + i + " 条隐藏方块压在 A 的出生点上：" + block.cell);
+                if (SpawnTouchesCell(data.spawnB, TuningLab.B_Pixels / (float)TuningLab.CellPixels, block.cell))
+                    issues.Add("第 " + i + " 条隐藏方块压在 B 的出生点上：" + block.cell);
+            }
+        }
+
         if (data.respawnPoints != null)
         {
             for (int i = 0; i < data.respawnPoints.Count; i++)
@@ -1585,10 +1675,10 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
         if (issues.Count == 0)
         {
-            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 根刺，{6} 块冰，{7} 块岩浆，{8} 个重生点，{9} 个传送点，{10} 个关卡分区。",
+            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 根刺，{6} 块冰，{7} 块岩浆，{8} 个重生点，{9} 个传送点，{10} 个关卡分区，{11} 条隐藏方块。",
                 level.SolidCellCount, level.MergedRectCount, level.RopeCount, level.KeyCount, level.DoorCount,
                 level.SpikeCount, level.IceCount, level.MagmaCount, level.RespawnPointCount, level.TeleportCount,
-                data.partitions != null ? data.partitions.Count : 0), level);
+                data.partitions != null ? data.partitions.Count : 0, level.HiddenBlockCount), level);
         }
         else
         {
@@ -1677,6 +1767,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawSpikeHandles(data);
         DrawIceHandles(data);
         DrawMagmaHandles(data);
+        DrawHiddenBlockHandles(data);
         DrawRespawnPointHandles(data);
         DrawTeleportHandles(data);
         DrawSelectionRegion();
@@ -1907,6 +1998,31 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 {
                     Record(existingMagma.HasValue ? "改岩浆块组号" : "放岩浆块");
                     level.Data.PlaceMagma(cell, magmaGroupId);
+                }
+                AfterStructuralEdit();
+                break;
+
+            case Tool.HiddenBlock:
+                if (!inBounds)
+                {
+                    Notify(view, "隐藏方块必须放在相机范围里。");
+                    return;
+                }
+                if (level.Data.HasCell(cell))
+                {
+                    Notify(view, "隐藏方块不能放在实心格里：" + cell);
+                    return;
+                }
+
+                if (level.Data.HasHiddenBlock(cell, hiddenGroupId))
+                {
+                    Record("删隐藏方块");
+                    level.Data.RemoveHiddenBlock(cell, hiddenGroupId);
+                }
+                else
+                {
+                    Record(level.Data.HasHiddenBlock(cell) ? "隐藏方块加入本组" : "放隐藏方块");
+                    level.Data.PlaceHiddenBlock(cell, hiddenGroupId);
                 }
                 AfterStructuralEdit();
                 break;
@@ -2253,6 +2369,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         if (data.spikes != null) data.spikes.RemoveAll(spike => spike.cell == cell);
         if (data.ices != null) data.ices.RemoveAll(ice => ice.cell == cell);
         if (data.magmas != null) data.magmas.RemoveAll(magma => magma.cell == cell);
+        if (data.hiddenBlocks != null) data.hiddenBlocks.RemoveAll(block => block.cell == cell);
         if (data.respawnPoints != null)
             data.respawnPoints.RemoveAll(point => point.Cells().Contains(cell));
         if (data.teleports != null)
@@ -2320,6 +2437,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Spike:
             case Tool.Ice:
             case Tool.Magma:
+            case Tool.HiddenBlock:
             case Tool.RespawnPoint:
             case Tool.TeleportPoint:
                 return true;
@@ -2349,6 +2467,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 var existing = data.FindMagma(cell);
                 return !(existing.HasValue && existing.Value.groupId == magmaGroupId);
             }
+            case Tool.HiddenBlock:
+                return !data.HasHiddenBlock(cell, hiddenGroupId);
             case Tool.RespawnPoint:
                 return !data.HasRespawnPoint(cell);
             case Tool.TeleportPoint:
@@ -2414,6 +2534,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 if (!data.ContainsCell(cell) || data.HasCell(cell) || data.HasIce(cell)) return false;
                 return data.PlaceMagma(cell, magmaGroupId);
 
+            case Tool.HiddenBlock:
+                if (!add) return data.RemoveHiddenBlock(cell, hiddenGroupId);
+                if (!data.ContainsCell(cell) || data.HasCell(cell)) return false;
+                return data.PlaceHiddenBlock(cell, hiddenGroupId);
+
             case Tool.RespawnPoint:
                 if (!add) return data.RemoveRespawnPoint(cell);
                 if (!data.ContainsCell(cell)) return false;
@@ -2463,7 +2588,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     static RectInt CellRect(Vector2 point)
         => new RectInt(Mathf.FloorToInt(point.x), Mathf.FloorToInt(point.y), 1, 1);
 
-    /// <summary>这一格上最上层的物件。优先级：传送点 &gt; 重生点 &gt; 钥匙 &gt; 冰块/岩浆块 &gt; 地刺 &gt; 门 &gt; 绳 &gt; 地形。</summary>
+    /// <summary>这一格上最上层的物件。优先级：传送点 &gt; 重生点 &gt; 隐藏方块 &gt; 钥匙 &gt; 冰块/岩浆块 &gt; 地刺 &gt; 门 &gt; 绳 &gt; 地形。</summary>
     Pick PickAt(Vector2Int cell)
     {
         var data = level.Data;
@@ -2477,6 +2602,12 @@ public sealed class LabLevelEditorWindow : EditorWindow
             for (int i = 0; i < data.respawnPoints.Count; i++)
                 if (data.respawnPoints[i].Cells().Contains(cell))
                     return new Pick { kind = PickKind.RespawnPoint, index = i };
+
+        // 隐藏方块盖在钥匙/门/绳上面，先按视觉最上层认领它。
+        if (data.hiddenBlocks != null)
+            for (int i = 0; i < data.hiddenBlocks.Count; i++)
+                if (data.hiddenBlocks[i].cell == cell)
+                    return new Pick { kind = PickKind.HiddenBlock, index = i };
 
         if (data.keys != null)
             for (int i = 0; i < data.keys.Count; i++)
@@ -2529,6 +2660,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Spike: return pick.index >= 0 && pick.index < data.spikes.Count;
             case PickKind.Ice: return pick.index >= 0 && pick.index < data.ices.Count;
             case PickKind.Magma: return pick.index >= 0 && pick.index < data.magmas.Count;
+            case PickKind.HiddenBlock:
+                return data.hiddenBlocks != null && pick.index >= 0 && pick.index < data.hiddenBlocks.Count;
             case PickKind.RespawnPoint: return pick.index >= 0 && pick.index < data.respawnPoints.Count;
             case PickKind.TeleportPoint: return pick.index >= 0 && pick.index < data.teleports.Count;
             default: return false;
@@ -2547,6 +2680,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Spike: return new RectInt(data.spikes[pick.index].cell, Vector2Int.one);
             case PickKind.Ice: return new RectInt(data.ices[pick.index].cell, Vector2Int.one);
             case PickKind.Magma: return new RectInt(data.magmas[pick.index].cell, Vector2Int.one);
+            case PickKind.HiddenBlock:
+                return new RectInt(data.hiddenBlocks[pick.index].cell, Vector2Int.one);
             case PickKind.RespawnPoint: return CellRect(data.respawnPoints[pick.index].position);
             case PickKind.TeleportPoint: return CellRect(data.teleports[pick.index].position);
             default: return new RectInt(0, 0, 0, 0);
@@ -2564,6 +2699,9 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Spike: return "地刺 #" + pick.index;
             case PickKind.Ice: return "冰块 #" + pick.index;
             case PickKind.Magma: return "岩浆块 #" + pick.index;
+            case PickKind.HiddenBlock:
+                return "隐藏方块 组" + level.Data.hiddenBlocks[pick.index].groupId +
+                    " @ " + level.Data.hiddenBlocks[pick.index].cell;
             case PickKind.RespawnPoint: return "重生点 #" + pick.index;
             case PickKind.TeleportPoint: return "传送点 #" + pick.index;
             default: return "（无）";
@@ -3069,6 +3207,19 @@ public sealed class LabLevelEditorWindow : EditorWindow
         }
     }
 
+    void DrawHiddenBlockHandles(LabLevelData data)
+    {
+        if (data.hiddenBlocks == null) return;
+        for (int i = 0; i < data.hiddenBlocks.Count; i++)
+        {
+            var block = data.hiddenBlocks[i];
+            // 隐藏方块只禁止压实心格；压别的物件正是它的用途。
+            bool blocked = data.HasCell(block.cell);
+            Handles.color = blocked ? new Color(1f, 0.35f, 0.3f, 0.95f) : HiddenGroupColor(block.groupId);
+            Handles.DrawWireCube(CellCenter(block.cell), Vector3.one);
+        }
+    }
+
     void DrawRespawnPointHandles(LabLevelData data)
     {
         if (data.respawnPoints == null) return;
@@ -3116,6 +3267,14 @@ public sealed class LabLevelEditorWindow : EditorWindow
         float hue = Mathf.Lerp(0f, 0.14f, Mathf.Repeat(groupId * 0.37f, 1f));
         float value = 0.72f + 0.28f * Mathf.Repeat(groupId * 0.53f, 1f);
         return Color.HSVToRGB(hue, 0.85f, value);
+    }
+
+    /// <summary>隐藏方块用低饱和绿色，和冰（冷色）、岩浆（暖色）都拉开。</summary>
+    static Color HiddenGroupColor(int groupId)
+    {
+        float hue = Mathf.Lerp(0.3f, 0.46f, Mathf.Repeat(groupId * 0.37f, 1f));
+        float value = 0.72f + 0.28f * Mathf.Repeat(groupId * 0.53f, 1f);
+        return Color.HSVToRGB(hue, 0.6f, value);
     }
 
     void DrawHover(Vector2Int cell, bool inArea, bool inBounds, LabLevelData data)
@@ -3281,6 +3440,20 @@ public sealed class LabLevelEditorWindow : EditorWindow
             return;
         }
 
+        if (tool == Tool.HiddenBlock)
+        {
+            bool blocked = !inBounds || data.HasCell(cell);
+            bool inGroup = data.HasHiddenBlock(cell, hiddenGroupId);
+            Handles.color = blocked
+                ? new Color(1f, 0.3f, 0.25f, 0.9f)
+                : new Color(HiddenGroupColor(hiddenGroupId).r, HiddenGroupColor(hiddenGroupId).g,
+                            HiddenGroupColor(hiddenGroupId).b, 0.9f);
+            Handles.DrawWireCube(CellCenter(cell), Vector3.one);
+            Handles.Label(CellCenter(cell) + Vector3.up * 0.6f,
+                (inGroup ? "移除 隐 组 " : "隐 组 ") + hiddenGroupId);
+            return;
+        }
+
         if (tool == Tool.RespawnPoint)
         {
             bool blocked = !inBounds;
@@ -3345,6 +3518,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Spike: return new Color(0.75f, 0.82f, 0.92f, 0.95f);
             case Tool.Ice: return new Color(0.42f, 0.75f, 1f, 0.95f);
             case Tool.Magma: return new Color(1f, 0.34f, 0.12f, 0.95f);
+            case Tool.HiddenBlock: return new Color(0.45f, 0.9f, 0.55f, 0.95f);
             case Tool.RespawnPoint: return new Color(0.35f, 1f, 0.65f, 0.95f);
             case Tool.TeleportPoint: return new Color(0.8f, 0.5f, 1f, 0.95f);
             case Tool.Marquee: return new Color(0.35f, 0.9f, 1f, 0.95f);

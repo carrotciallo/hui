@@ -36,6 +36,7 @@ public sealed class LabLevel : MonoBehaviour
     public int SpikeCount => Data.spikes != null ? Data.spikes.Count : 0;
     public int IceCount => Data.ices != null ? Data.ices.Count : 0;
     public int MagmaCount => Data.magmas != null ? Data.magmas.Count : 0;
+    public int HiddenBlockCount => Data.hiddenBlocks != null ? Data.hiddenBlocks.Count : 0;
     public int RespawnPointCount => Data.respawnPoints != null ? Data.respawnPoints.Count : 0;
     public int TeleportCount => Data.teleports != null ? Data.teleports.Count : 0;
 
@@ -170,6 +171,7 @@ public sealed class LabLevel : MonoBehaviour
         for (int i = 0; i < data.spikes.Count; i++) AddSpike(root.transform, data.spikes[i]);
         for (int i = 0; i < data.ices.Count; i++) AddIce(root.transform, data.ices[i], material, preview);
         for (int i = 0; i < data.magmas.Count; i++) AddMagma(terrain, data.magmas[i], material, preview);
+        for (int i = 0; i < data.hiddenBlocks.Count; i++) AddHiddenBlock(root.transform, data.hiddenBlocks[i]);
         for (int i = 0; i < data.respawnPoints.Count; i++)
             AddRespawnPoint(root.transform, data.respawnPoints[i]);
         for (int i = 0; i < data.teleports.Count; i++)
@@ -274,6 +276,22 @@ public sealed class LabLevel : MonoBehaviour
 
         magma.ApplyShape();
         if (!preview) runtimeMagmas.Add(magma);
+    }
+
+    /// <summary>
+    /// 把一格隐藏方块摆进场景：逐格 SpriteRenderer、无碰撞，颜色与实心墙一致。
+    /// 揭示状态只存在运行时实例上，不订阅 MapReset——地图重置后保持半透明。
+    /// </summary>
+    void AddHiddenBlock(Transform parent, LabHiddenBlockSpec spec)
+    {
+        var go = new GameObject("HiddenBlock");
+        go.transform.SetParent(parent, false);
+        go.transform.position = spec.Center;
+
+        var block = go.AddComponent<LabHiddenBlock>();
+        block.cell = spec.cell;
+        block.groupId = spec.groupId;
+        block.ApplyShape();
     }
 
     static void AddRespawnPoint(Transform parent, LabRespawnPointSpec spec)
