@@ -27,6 +27,8 @@ public static class LabLevelPlayCheck
     /// <summary>验证用冰块：同样放在远处地板上，只验证"数据 → 实体碰撞"和重置。</summary>
     static readonly Vector2Int IceCell = new Vector2Int(-8, 0);
     const int IceGroup = 5;
+    /// <summary>验证用召回道具：放在远处地板，验证拾取解锁和幻影生成。</summary>
+    static readonly Vector2Int RecallCell = new Vector2Int(-10, 0);
 
     const string ActiveKey = "LabLevelPlayCheck.Active";
     const string StartedKey = "LabLevelPlayCheck.Started";
@@ -94,6 +96,8 @@ public static class LabLevelPlayCheck
             level.Data.PlaceSpike(SpikeCell, LabSpikeDir.Up);
             level.Data.ClearIces();
             level.Data.PlaceIce(IceCell, IceGroup);
+            level.Data.ClearRecalls();
+            level.Data.PlaceRecall(RecallCell);
 
             var lab = Object.FindAnyObjectByType<TuningLab>();
             if (lab != null)
@@ -248,12 +252,13 @@ public static class LabLevelPlayCheck
             Check(sb, ref fails, level.RopeCount == 1, "绳 = 1");
             Check(sb, ref fails, level.SpikeCount == 1, "地刺 = 1，实际 " + level.SpikeCount);
             Check(sb, ref fails, level.IceCount == 1, "冰块 = 1，实际 " + level.IceCount);
+            Check(sb, ref fails, level.RecallCount == 1, "召回道具 = 1，实际 " + level.RecallCount);
 
             Transform generated = lab.transform.Find(LabLevel.GeneratedRootName);
             Check(sb, ref fails, generated != null, "生成根 " + LabLevel.GeneratedRootName + " 存在");
             if (generated != null)
-                Check(sb, ref fails, generated.childCount == 11,
-                    "生成物 = 8 块地形 + 1 根绳 + 1 根刺 + 1 块冰，实际 " + generated.childCount);
+                Check(sb, ref fails, generated.childCount == 4,
+                    "生成根直接子物 = 地形合并体 + 绳 + 刺 + 召回道具，实际 " + generated.childCount);
 
             Check(sb, ref fails,
                 Mathf.Abs(level.Data.spawnA.x - TuningLab.SpawnAFeet.x) < 0.0001f &&
@@ -349,6 +354,46 @@ public static class LabLevelPlayCheck
             Check(sb, ref fails, !ice.Broken && iceBody != null && iceBody.enabled,
                 "MapReset 后冰块恢复");
         }
+        var pickups = Object.FindObjectsByType<LabRecallPickup>();
+        Check(sb, ref fails, pickups.Length == 1, "召回道具组件 = 1，实际 " + pickups.Length);
+        if (pickups.Length == 1)
+        {
+            LabRecallPickup pickup = pickups[0];
+            var center = new Vector2(RecallCell.x + 0.5f, RecallCell.y + 0.5f);
+            Check(sb, ref fails,
+                Mathf.Abs(pickup.transform.position.x - center.x) < 0.0001f &&
+                Mathf.Abs(pickup.transform.position.y - center.y) < 0.0001f,
+                "召回道具生成在 " + center + "，实际 " + pickup.transform.position);
+
+            var pickupBody = pickup.GetComponent<BoxCollider2D>();
+            Check(sb, ref fails, pickupBody != null && pickupBody.isTrigger
+                && Mathf.Abs(pickupBody.size.x - 1f) < 0.0001f
+                && Mathf.Abs(pickupBody.size.y - 1f) < 0.0001f,
+                "召回道具碰撞 = 触发式 1×1");
+            Check(sb, ref fails, pickup.GetComponent<SpriteRenderer>().sprite != null,
+                "召回道具看得见");
+
+            Check(sb, ref fails, !lab.RecallUnlocked, "召回默认未解锁");
+            Check(sb, ref fails, pickup.TryCollect(lab.PlayerA), "玩家 A 能拾取召回道具");
+            Check(sb, ref fails, lab.RecallUnlocked, "拾取后全队解锁召回");
+
+            Check(sb, ref fails, lab.TryRecall(lab.PlayerB), "B 头顶有空位，召回 A");
+            Check(sb, ref fails, LabPhantom.All.Count == 1,
+                "旧位置生成 1 个幻影，实际 " + LabPhantom.All.Count);
+            if (LabPhantom.All.Count == 1)
+            {
+                var phantom = LabPhantom.All[0];
+                Check(sb, ref fails, phantom.Source == lab.PlayerA && phantom.Target == lab.PlayerB,
+                    "幻影复制 A，只对 B 生效");
+                Check(sb, ref fails, phantom.Form == lab.PlayerA.Form,
+                    "幻影形态 = 被召回者形态");
+            }
+
+            lab.ResetMap();
+            Check(sb, ref fails, LabPhantom.All.Count == 0, "MapReset 清空幻影");
+            Check(sb, ref fails, lab.RecallUnlocked, "MapReset 保留召回能力");
+        }
+
         Check(sb, ref fails, lab.PlayerA != null && lab.PlayerB != null,
             "离刺很远的两名玩家没有被误杀");
 

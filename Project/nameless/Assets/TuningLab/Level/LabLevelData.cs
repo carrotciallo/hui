@@ -25,6 +25,8 @@ public sealed class LabLevelData
     public List<LabRopeSpec> ropes = new List<LabRopeSpec>();
     /// <summary>钥匙（1×1，拾取后消失）。</summary>
     public List<LabKeySpec> keys = new List<LabKeySpec>();
+    /// <summary>召回道具（1×1，拾取后全队永久解锁召回；地图重置不刷新）。</summary>
+    public List<LabRecallSpec> recalls = new List<LabRecallSpec>();
     /// <summary>门（1×3，任意一把钥匙开任意一扇门）。</summary>
     public List<LabDoorSpec> doors = new List<LabDoorSpec>();
     /// <summary>地刺（16×6 像素，贴格边，一格一根，碰到即死）。</summary>
@@ -70,6 +72,12 @@ public sealed class LabLevelData
     {
         if (keys == null) keys = new List<LabKeySpec>();
         else keys.Clear();
+    }
+
+    public void ClearRecalls()
+    {
+        if (recalls == null) recalls = new List<LabRecallSpec>();
+        else recalls.Clear();
     }
 
     public void ClearDoors()
@@ -141,6 +149,32 @@ public sealed class LabLevelData
     {
         if (spikes == null) return false;
         return spikes.RemoveAll(spike => spike.cell == cell) > 0;
+    }
+
+    /// <summary>这一格的召回道具；没有返回 null。</summary>
+    public LabRecallSpec? FindRecall(Vector2Int cell)
+    {
+        if (recalls == null) return null;
+        for (int i = 0; i < recalls.Count; i++)
+            if (recalls[i].cell == cell) return recalls[i];
+        return null;
+    }
+
+    public bool HasRecall(Vector2Int cell) => FindRecall(cell).HasValue;
+
+    /// <summary>放一个召回道具；这一格已有则什么都不做。</summary>
+    public bool PlaceRecall(Vector2Int cell)
+    {
+        if (recalls == null) recalls = new List<LabRecallSpec>();
+        if (HasRecall(cell)) return false;
+        recalls.Add(new LabRecallSpec(cell));
+        return true;
+    }
+
+    public bool RemoveRecall(Vector2Int cell)
+    {
+        if (recalls == null) return false;
+        return recalls.RemoveAll(recall => recall.cell == cell) > 0;
     }
 
     /// <summary>这一格的冰块；没有返回 null。</summary>
@@ -391,6 +425,7 @@ public sealed class LabLevelData
         if (solids == null) solids = new List<Vector2Int>();
         if (ropes == null) ropes = new List<LabRopeSpec>();
         if (keys == null) keys = new List<LabKeySpec>();
+        if (recalls == null) recalls = new List<LabRecallSpec>();
         if (doors == null) doors = new List<LabDoorSpec>();
         if (spikes == null) spikes = new List<LabSpikeSpec>();
         if (ices == null) ices = new List<LabIceSpec>();
@@ -486,6 +521,16 @@ public sealed class LabLevelData
         }
         if (spikeWrite < spikes.Count) spikes.RemoveRange(spikeWrite, spikes.Count - spikeWrite);
 
+        // 一格只留一个召回道具：按格排序后丢掉同格重复项。
+        recalls.Sort((a, b) => CompareCells(a.cell, b.cell));
+        int recallWrite = 0;
+        for (int read = 0; read < recalls.Count; read++)
+        {
+            if (recallWrite > 0 && recalls[read].cell == recalls[recallWrite - 1].cell) continue;
+            recalls[recallWrite++] = recalls[read];
+        }
+        if (recallWrite < recalls.Count) recalls.RemoveRange(recallWrite, recalls.Count - recallWrite);
+
         // 一格只留一块冰：按格排序后丢掉同格重复项，组号随保留项。
         ices.Sort((a, b) => CompareCells(a.cell, b.cell));
         int iceWrite = 0;
@@ -535,6 +580,7 @@ public sealed class LabLevelData
             solids = new List<Vector2Int>();
             ropes = new List<LabRopeSpec>();
             keys = new List<LabKeySpec>();
+            recalls = new List<LabRecallSpec>();
             doors = new List<LabDoorSpec>();
             spikes = new List<LabSpikeSpec>();
             ices = new List<LabIceSpec>();
@@ -554,6 +600,7 @@ public sealed class LabLevelData
         solids = new List<Vector2Int>(other.solids ?? new List<Vector2Int>());
         ropes = new List<LabRopeSpec>(other.ropes ?? new List<LabRopeSpec>());
         keys = new List<LabKeySpec>(other.keys ?? new List<LabKeySpec>());
+        recalls = new List<LabRecallSpec>(other.recalls ?? new List<LabRecallSpec>());
         doors = new List<LabDoorSpec>(other.doors ?? new List<LabDoorSpec>());
         spikes = new List<LabSpikeSpec>(other.spikes ?? new List<LabSpikeSpec>());
         ices = new List<LabIceSpec>(other.ices ?? new List<LabIceSpec>());
@@ -705,6 +752,17 @@ public sealed class LabLevelData
             }
         }
 
+        if (recalls != null)
+        {
+            for (int i = 0; i < recalls.Count; i++)
+            {
+                var recall = recalls[i];
+                if (!oldRect.Contains(new Vector2(recall.cell.x + 0.5f, recall.cell.y + 0.5f))) continue;
+                recall.cell += delta;
+                recalls[i] = recall;
+            }
+        }
+
         if (doors != null)
         {
             for (int i = 0; i < doors.Count; i++)
@@ -833,6 +891,8 @@ public sealed class LabLevelData
                 ropes.RemoveAll(rope => rect.Contains(rope.center));
             if (keys != null)
                 keys.RemoveAll(key => rect.Contains(key.position));
+            if (recalls != null)
+                recalls.RemoveAll(recall => rect.Contains(new Vector2(recall.cell.x + 0.5f, recall.cell.y + 0.5f)));
             if (doors != null)
                 doors.RemoveAll(door => rect.Contains(door.position));
             if (spikes != null)
@@ -877,6 +937,7 @@ public sealed class LabLevelData
         internal readonly List<int> solids = new List<int>();
         internal readonly List<int> ropes = new List<int>();
         internal readonly List<int> keys = new List<int>();
+        internal readonly List<int> recalls = new List<int>();
         internal readonly List<int> doors = new List<int>();
         internal readonly List<int> spikes = new List<int>();
         internal readonly List<int> ices = new List<int>();
@@ -886,7 +947,7 @@ public sealed class LabLevelData
         internal readonly List<int> teleports = new List<int>();
 
         /// <summary>锁定的条目数（地形格也算一条）。</summary>
-        public int Count => solids.Count + ropes.Count + keys.Count + doors.Count
+        public int Count => solids.Count + ropes.Count + keys.Count + recalls.Count + doors.Count
             + spikes.Count + ices.Count + magmas.Count + hiddenBlocks.Count
             + respawnPoints.Count + teleports.Count;
     }
@@ -910,6 +971,10 @@ public sealed class LabLevelData
         if (keys != null)
             for (int i = 0; i < keys.Count; i++)
                 if (InAnyArea(areas, keys[i].position)) capture.keys.Add(i);
+
+        if (recalls != null)
+            for (int i = 0; i < recalls.Count; i++)
+                if (InAnyArea(areas, CellCenter(recalls[i].cell))) capture.recalls.Add(i);
 
         if (doors != null)
             for (int i = 0; i < doors.Count; i++)
@@ -974,6 +1039,15 @@ public sealed class LabLevelData
                 var key = keys[i];
                 key.position += shift;
                 keys[i] = key;
+                moved++;
+            }
+
+        if (recalls != null)
+            foreach (int i in capture.recalls)
+            {
+                var recall = recalls[i];
+                recall.cell += delta;
+                recalls[i] = recall;
                 moved++;
             }
 
@@ -1065,6 +1139,7 @@ public sealed class LabLevelData
 
         if (ropes != null) removed += ropes.RemoveAll(rope => InAnyArea(areas, rope.center));
         if (keys != null) removed += keys.RemoveAll(key => InAnyArea(areas, key.position));
+        if (recalls != null) removed += recalls.RemoveAll(recall => InAnyArea(areas, CellCenter(recall.cell)));
         if (doors != null) removed += doors.RemoveAll(door => InAnyArea(areas, door.position));
         if (spikes != null) removed += spikes.RemoveAll(spike => InAnyArea(areas, CellCenter(spike.cell)));
         if (ices != null) removed += ices.RemoveAll(ice => InAnyArea(areas, CellCenter(ice.cell)));
@@ -1095,6 +1170,9 @@ public sealed class LabLevelData
         if (keys != null)
             for (int i = 0; i < keys.Count; i++)
                 if (InAnyArea(areas, keys[i].position)) count++;
+        if (recalls != null)
+            for (int i = 0; i < recalls.Count; i++)
+                if (InAnyArea(areas, CellCenter(recalls[i].cell))) count++;
         if (doors != null)
             for (int i = 0; i < doors.Count; i++)
                 if (InAnyArea(areas, doors[i].position)) count++;
@@ -1287,6 +1365,22 @@ public sealed class LabLevelData
             }
         }
 
+        if (recalls != null)
+        {
+            for (int i = 0; i < recalls.Count; i++)
+            {
+                var recall = recalls[i];
+                int cx0 = recall.cell.x, cx1 = recall.cell.x + 1;
+                int cy0 = recall.cell.y, cy1 = recall.cell.y + 1;
+                if (!any) { x0 = cx0; y0 = cy0; x1 = cx1; y1 = cy1; any = true; }
+                else
+                {
+                    x0 = Mathf.Min(x0, cx0); y0 = Mathf.Min(y0, cy0);
+                    x1 = Mathf.Max(x1, cx1); y1 = Mathf.Max(y1, cy1);
+                }
+            }
+        }
+
         if (respawnPoints != null)
         {
             for (int i = 0; i < respawnPoints.Count; i++)
@@ -1381,6 +1475,26 @@ public struct LabKeySpec
         Mathf.FloorToInt(position.x),
         Mathf.FloorToInt(position.y),
         1, 1);
+}
+
+/// <summary>
+/// 一个召回道具。1×1，位置是格心；拾取后全队永久解锁召回，地图重置不会刷新。
+/// </summary>
+[System.Serializable]
+public struct LabRecallSpec
+{
+    public Vector2Int cell;
+
+    public LabRecallSpec(Vector2Int cell)
+    {
+        this.cell = cell;
+    }
+
+    /// <summary>物件落点（格中心）。</summary>
+    public Vector2 Center => new Vector2(cell.x + 0.5f, cell.y + 0.5f);
+
+    /// <summary>道具盖住的格子（1×1）。</summary>
+    public RectInt Cells() => new RectInt(cell.x, cell.y, 1, 1);
 }
 
 /// <summary>

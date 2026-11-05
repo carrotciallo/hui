@@ -32,6 +32,7 @@ public sealed class LabLevel : MonoBehaviour
     public int MergedRectCount => Data.MergedRects().Count;
     public int RopeCount => Data.ropes != null ? Data.ropes.Count : 0;
     public int KeyCount => Data.keys != null ? Data.keys.Count : 0;
+    public int RecallCount => Data.recalls != null ? Data.recalls.Count : 0;
     public int DoorCount => Data.doors != null ? Data.doors.Count : 0;
     public int SpikeCount => Data.spikes != null ? Data.spikes.Count : 0;
     public int IceCount => Data.ices != null ? Data.ices.Count : 0;
@@ -43,6 +44,8 @@ public sealed class LabLevel : MonoBehaviour
     Transform generatedRoot;
     // 运行时生成的钥匙/门/冰/岩浆；地图重置时要关回去、把捡走的钥匙长回来、把碎掉的块恢复。
     readonly System.Collections.Generic.List<LabKey> runtimeKeys = new System.Collections.Generic.List<LabKey>();
+    // 召回道具是一次性的：不登记到 MapReset 的恢复链里。
+    readonly System.Collections.Generic.List<LabRecallPickup> runtimeRecalls = new System.Collections.Generic.List<LabRecallPickup>();
     readonly System.Collections.Generic.List<LabDoor> runtimeDoors = new System.Collections.Generic.List<LabDoor>();
     readonly System.Collections.Generic.List<LabIce> runtimeIces = new System.Collections.Generic.List<LabIce>();
     readonly System.Collections.Generic.List<LabMagma> runtimeMagmas = new System.Collections.Generic.List<LabMagma>();
@@ -177,6 +180,7 @@ public sealed class LabLevel : MonoBehaviour
 
         for (int i = 0; i < data.ropes.Count; i++) AddRope(root.transform, data.ropes[i], material);
         for (int i = 0; i < data.keys.Count; i++) AddKey(root.transform, data.keys[i], preview);
+        for (int i = 0; i < data.recalls.Count; i++) AddRecall(root.transform, data.recalls[i], preview);
         for (int i = 0; i < data.doors.Count; i++) AddDoor(root.transform, data.doors[i], preview);
         for (int i = 0; i < data.spikes.Count; i++) AddSpike(root.transform, data.spikes[i]);
         for (int i = 0; i < data.ices.Count; i++) AddIce(terrain, data.ices[i], material, preview);
@@ -328,6 +332,17 @@ public sealed class LabLevel : MonoBehaviour
         if (!preview) runtimeKeys.Add(key);
     }
 
+    /// <summary>把召回道具摆进场景。拾取后销毁；MapReset 故意不重建它。</summary>
+    void AddRecall(Transform parent, LabRecallSpec spec, bool preview)
+    {
+        var go = new GameObject("RecallPickup");
+        go.transform.SetParent(parent, false);
+        go.transform.position = spec.Center;
+        var pickup = go.AddComponent<LabRecallPickup>();
+        pickup.ApplyShape();
+        if (!preview) runtimeRecalls.Add(pickup);
+    }
+
     static LabKey CreateKey(Transform parent, LabKeySpec spec)
     {
         var go = new GameObject("Key");
@@ -353,6 +368,7 @@ public sealed class LabLevel : MonoBehaviour
     {
         UnbindMapReset();
         runtimeKeys.Clear();
+        runtimeRecalls.Clear();
         runtimeDoors.Clear();
         runtimeIces.Clear();
         runtimeMagmas.Clear();

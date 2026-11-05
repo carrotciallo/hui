@@ -36,10 +36,12 @@
 | `Assets/TuningLab/LabHorizontalRope.cs` | 横绳平台；零/一级挡住、二级向下穿过、三级以上反弹并提升一级 |
 | `Assets/TuningLab/LabIce.cs` | 冰块：`groupId` 编组、单块融化、整组破坏和地图重置恢复；冰面并入地形合并碰撞，滑行不碎不卡脚 |
 | `Assets/TuningLab/LabMagma.cs` | 岩浆块：每个接触面首次接触强制红热、热二边再接触死亡、v2+ 撞击死亡、v3 整组破坏和地图重置恢复 |
+| `Assets/TuningLab/LabRecallPickup.cs` | 召回道具：1×1 触发区，任一玩家拾取后全队永久解锁召回，地图重置不刷新 |
+| `Assets/TuningLab/LabPhantom.cs` | 召回留下的幻影：复制被召回者形态、只对另一名玩家生效、最多 3 个 FIFO；A 的 u/L 幻影可让 B 从底面进入 |
 | `Assets/TuningLab/LabRespawnPoint.cs` | 重生点：3×3 触发区，任一玩家从区域外进入即记录两人形态并双人固定重生；`ApplyShape` 同时服务预览和 Play |
 | `Assets/TuningLab/LabTeleportPoint.cs` | 传送点：3×3 触发区；两人进入后打开全互联终点选择；`ApplyShape` 同时服务预览和 Play |
-| `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据：实心格、绳、钥匙/门、地刺、冰块、岩浆块、重生点、传送点、出生点、相机尺寸、**关卡分区** |
-| `Assets/TuningLab/Level/LabLevel.cs` | 数据 → 合并 `BoxCollider2D` / 绳 / 地刺 / 冰块 / 岩浆块 / 重生点 / 传送点；编辑器预览和 Play 共用 |
+| `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据：实心格、绳、钥匙/门、地刺、冰块、岩浆块、召回道具、重生点、传送点、出生点、相机尺寸、**关卡分区** |
+| `Assets/TuningLab/Level/LabLevel.cs` | 数据 → 合并 `BoxCollider2D` / 绳 / 地刺 / 冰块 / 岩浆块 / 召回道具 / 重生点 / 传送点；编辑器预览和 Play 共用 |
 | `Assets/TuningLab/Level/Editor/LabLevelScene.cs` | 从 `TuningLab.unity` 派生关卡场景；默认 `Level 1` 分区 |
 | `Assets/TuningLab/Level/Editor/LabLevelEditorWindow.cs` | 关卡编辑器：地形/绳/出生点/分区/相机/机关面板 |
 | `Assets/TuningLab/Level/Editor/LabLevelSelfCheck.cs` | 纯数据自检（基准 73 格 ↔ 8 块、分区移动/删除、相机分区内外） |
@@ -49,7 +51,7 @@
 
 ### 3.1 `LabLevelData`
 
-- `solids`：实心格；`ropes`：竖绳/横绳；`keys`、`doors`、`spikes`、`ices`、`magmas`、`respawnPoints`、`teleports`：机关；`spawnA/B`：脚底落点。
+- `solids`：实心格；`ropes`：竖绳/横绳；`keys`、`recalls`、`doors`、`spikes`、`ices`、`magmas`、`respawnPoints`、`teleports`：机关；`spawnA/B`：脚底落点。
 - `teleports` 只存位置：所有传送点互为终点，不存配对关系；进入任意一个后从其余点里选择出口。
 - `cameraMinSize / cameraMaxSize`：**关卡级**相机跟随尺寸（正交 size，半高）。
 - `bounds`：编辑范围；没有分区时也作为单关相机 clamp 范围。
@@ -61,7 +63,8 @@
 
 - 把 `solids` 合并成尽量少的矩形，每个矩形一个 `BoxCollider2D`；竖绳生成 `LabVerticalRope`，横绳生成 `LabHorizontalRope`。
 - 所有实心矩形、冰块和岩浆块并入同一个 `LabTerrainField` 的 `CompositeCollider2D`：冰—冰、冰—地形、岩浆—岩浆、岩浆—地形的接缝都没有可碰撞的内侧竖面，走上表面/冰面时不会被接缝卡住，也不会把上表面滑行误判成侧面接触。
-- 钥匙、门、地刺、冰块、岩浆块、重生点、传送点都逐格/逐点生成；冰块和岩浆块按 `groupId` 共享整组破坏。冰块/岩浆块的视觉和破坏仍然逐块，破坏/重置后重建一次合并几何。
+- 钥匙、门、地刺、冰块、岩浆块、召回道具、重生点、传送点都逐格/逐点生成；冰块和岩浆块按 `groupId` 共享整组破坏。冰块/岩浆块的视觉和破坏仍然逐块，破坏/重置后重建一次合并几何。
+- 召回道具只生成一个触发区；被拾取后销毁，`MapReset` 故意不重建它（能力存在 `TuningLab.RecallUnlocked` 上，重置不清空）。
 - 传送点生成后由 `TuningLab` 统一注册；选择终点时不依赖场景里的手工引用。
 - 绳子规格保存在 `LabRopeSpec.orientation`；旧数据缺省为竖绳。
 - 地图重置时恢复被拾取的钥匙、关回门并恢复所有冰块和岩浆块。
@@ -287,6 +290,7 @@
 - 地刺按 `{ cell, dir }` 保存；每格最多一根，碰到即死。
 - 冰块按 `{ cell, groupId }` 保存；1×1 实体，可站立/滑行。冰和地形共用合并碰撞，冰面滑行只产生顶面接触，不会卡脚；在冰面上加速到 v2/v3 不算撞击，不会碎冰。只有侧面/非承重接触才按 v2 整组碎；红热边只在非承重接触时融一块并把边回普通，冰格落在玩家脚下 footprint 内（含不同分组交界处的侧向接触）不会融掉脚下。冰面按住方向按 `a = g` 加速，4 格升一级，封顶 v4；松手保留滑行。
 - 岩浆块按 `{ cell, groupId }` 保存；1×1 实体，可站立，走动按普通地面（不是冰面）。每条边只在第一次接触某个岩浆面时强制热二，持续贴着不重复触发；离开表面再接触才重新按第一次接触算。强制红热走 `StrikeEdge` 的死亡状态机：热二边接触岩浆直接死亡；灵体边不可复锻，不会被岩浆重新加热。以 v2 及以上沿法线撞上岩浆时，撞击红热和强制红热叠加，同样死亡；v3 撞击仍整组破坏。地图重置时恢复。
+- 召回道具按 `{ cell }` 保存；1×1 触发区。任一玩家拾取后全队永久解锁召回，A 按 `Q`、B 按右 `Shift`：施法者头顶有 1 格空位时，把另一名玩家传送到头顶，并在其旧位置留下一个吸附格心的幻影。幻影复制被召回者当时的形态，只和另一名玩家交互，最多同时 3 个（FIFO）。A 的 u 炮 / L 转向器幻影允许 B 从底面进入；其他形态（含“2048/矛”）是普通方块。地图重置清空幻影，但保留能力、不刷新已拾取的道具。
 - 传送点按 `{ position }` 保存；3×3 触发区，双人进入后运行时标记；至少两个已标记点才可进入选择，选择时 `A/D` 选终点、`Enter` 确认、`Escape` 取消；传送会重置地图并吞掉钥匙。
 - 预览生成物不保存到场景；运行时重新从数据生成。
 

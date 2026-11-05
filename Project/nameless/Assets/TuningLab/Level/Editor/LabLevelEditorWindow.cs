@@ -34,7 +34,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         TeleportPoint = 14,
         Marquee = 15,
         Move = 16,
-        HiddenBlock = 17
+        HiddenBlock = 17,
+        Recall = 18
     }
 
     /// <summary>下一次拉选区时怎么处理当前选区。</summary>
@@ -58,7 +59,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Magma = 7,
         RespawnPoint = 8,
         TeleportPoint = 9,
-        HiddenBlock = 10
+        HiddenBlock = 10,
+        Recall = 11
     }
 
     struct Pick
@@ -74,7 +76,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     static readonly string[] ToolLabels =
     {
         "铺地形", "擦地形", "矩形", "竖绳", "横绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺", "冰块", "岩浆块", "重生点", "传送点",
-        "选区", "选择", "隐藏方块"
+        "选区", "选择", "隐藏方块", "召回道具"
     };
 
     static readonly string[] MarqueeModeLabels = { "重新选择", "增加选区", "删除选区" };
@@ -109,6 +111,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     Vector2 hiddenScroll;
     Vector2 respawnScroll;
     Vector2 teleportScroll;
+    Vector2 recallScroll;
 
     bool gesture;
     Vector2Int rectStart;
@@ -272,6 +275,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         EditorGUILayout.Space();
         DrawKeyDoors();
         EditorGUILayout.Space();
+        DrawRecalls();
+        EditorGUILayout.Space();
         DrawSpikes();
         EditorGUILayout.Space();
         DrawIces();
@@ -421,6 +426,12 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 break;
             case Tool.Key:
                 EditorGUILayout.HelpBox("左键在一个格子上放一把钥匙（1×1，拾取后消失）。", MessageType.None);
+                break;
+            case Tool.Recall:
+                EditorGUILayout.HelpBox(
+                    "左键放一个 1×1 召回道具；同一格再点删除。任一玩家拾取后全队永久解锁召回，\n" +
+                    "地图重置不会刷新道具。A 按 Q、B 按右 Shift，把另一名玩家召回到头顶并留下幻影。",
+                    MessageType.None);
                 break;
             case Tool.Door:
                 EditorGUILayout.HelpBox(
@@ -941,6 +952,48 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 if (!EditorUtility.DisplayDialog("清空冰块", "删掉所有冰块？", "清空", "取消")) return;
                 Record("清空冰块");
                 level.Data.ClearIces();
+                AfterStructuralEdit();
+            }
+        }
+    }
+
+    void DrawRecalls()
+    {
+        EditorGUILayout.LabelField("召回道具", EditorStyles.boldLabel);
+        var data = level.Data;
+        EditorGUILayout.LabelField("道具", level.RecallCount + "（1×1，拾取后全队永久解锁召回）");
+
+        recallScroll = EditorGUILayout.BeginScrollView(recallScroll, GUILayout.MaxHeight(100f));
+        if (data.recalls != null)
+        {
+            for (int i = 0; i < data.recalls.Count; i++)
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    var recall = data.recalls[i];
+                    EditorGUILayout.LabelField(
+                        string.Format("召回 ({0}, {1})", recall.cell.x, recall.cell.y),
+                        EditorStyles.miniLabel, GUILayout.Width(120f));
+
+                    if (GUILayout.Button("×", GUILayout.Width(24f)))
+                    {
+                        Record("删召回道具");
+                        data.recalls.RemoveAt(i);
+                        AfterStructuralEdit();
+                        break;
+                    }
+                }
+            }
+        }
+        EditorGUILayout.EndScrollView();
+
+        using (new EditorGUI.DisabledScope(level.RecallCount == 0))
+        {
+            if (GUILayout.Button("清空召回道具"))
+            {
+                if (!EditorUtility.DisplayDialog("清空召回道具", "删掉所有召回道具？", "清空", "取消")) return;
+                Record("清空召回道具");
+                level.Data.ClearRecalls();
                 AfterStructuralEdit();
             }
         }
@@ -1488,6 +1541,52 @@ public sealed class LabLevelEditorWindow : EditorWindow
             }
         }
 
+        if (data.recalls != null)
+        {
+            var seenRecalls = new HashSet<Vector2Int>();
+            for (int i = 0; i < data.recalls.Count; i++)
+            {
+                var recall = data.recalls[i];
+                if (!data.ContainsCell(recall.cell))
+                    issues.Add("第 " + i + " 个召回道具不在编辑范围内：" + recall.cell);
+                if (!seenRecalls.Add(recall.cell))
+                    issues.Add("第 " + i + " 个召回道具和前面的重合：" + recall.cell);
+                if (data.HasCell(recall.cell))
+                    issues.Add("第 " + i + " 个召回道具在地形里：" + recall.cell);
+                if (data.HasSpike(recall.cell))
+                    issues.Add("第 " + i + " 个召回道具和地刺在同一格：" + recall.cell);
+                if (data.HasIce(recall.cell))
+                    issues.Add("第 " + i + " 个召回道具和冰块在同一格：" + recall.cell);
+                if (data.HasMagma(recall.cell))
+                    issues.Add("第 " + i + " 个召回道具和岩浆块在同一格：" + recall.cell);
+
+                if (SpawnTouchesCell(data.spawnA, TuningLab.A_Pixels / (float)TuningLab.CellPixels, recall.cell))
+                    issues.Add("第 " + i + " 个召回道具压在 A 的出生点上：" + recall.cell);
+                if (SpawnTouchesCell(data.spawnB, TuningLab.B_Pixels / (float)TuningLab.CellPixels, recall.cell))
+                    issues.Add("第 " + i + " 个召回道具压在 B 的出生点上：" + recall.cell);
+
+                if (data.keys != null)
+                    for (int k = 0; k < data.keys.Count; k++)
+                        if (data.keys[k].Cells().Contains(recall.cell))
+                            issues.Add("第 " + i + " 个召回道具和第 " + k + " 把钥匙在同一格：" + recall.cell);
+
+                if (data.doors != null)
+                    for (int d = 0; d < data.doors.Count; d++)
+                        if (data.doors[d].Cells().Contains(recall.cell))
+                            issues.Add("第 " + i + " 个召回道具在第 " + d + " 扇门里：" + recall.cell);
+
+                if (data.respawnPoints != null)
+                    for (int r = 0; r < data.respawnPoints.Count; r++)
+                        if (data.respawnPoints[r].Cells().Contains(recall.cell))
+                            issues.Add("第 " + i + " 个召回道具在第 " + r + " 个重生点里：" + recall.cell);
+
+                if (data.teleports != null)
+                    for (int t = 0; t < data.teleports.Count; t++)
+                        if (data.teleports[t].Cells().Contains(recall.cell))
+                            issues.Add("第 " + i + " 个召回道具在第 " + t + " 个传送点里：" + recall.cell);
+            }
+        }
+
         if (data.doors != null)
         {
             for (int i = 0; i < data.doors.Count; i++)
@@ -1676,10 +1775,10 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
         if (issues.Count == 0)
         {
-            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 扇门，{5} 根刺，{6} 块冰，{7} 块岩浆，{8} 个重生点，{9} 个传送点，{10} 个关卡分区，{11} 条隐藏方块。",
-                level.SolidCellCount, level.MergedRectCount, level.RopeCount, level.KeyCount, level.DoorCount,
-                level.SpikeCount, level.IceCount, level.MagmaCount, level.RespawnPointCount, level.TeleportCount,
-                data.partitions != null ? data.partitions.Count : 0, level.HiddenBlockCount), level);
+            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 个召回道具，{5} 扇门，{6} 根刺，{7} 块冰，{8} 块岩浆，{9} 个重生点，{10} 个传送点，{11} 个关卡分区，{12} 条隐藏方块。",
+                level.SolidCellCount, level.MergedRectCount, level.RopeCount, level.KeyCount, level.RecallCount,
+                level.DoorCount, level.SpikeCount, level.IceCount, level.MagmaCount, level.RespawnPointCount,
+                level.TeleportCount, data.partitions != null ? data.partitions.Count : 0, level.HiddenBlockCount), level);
         }
         else
         {
@@ -1765,6 +1864,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawPartitionHandles(data);
         DrawRopeHandles(data);
         DrawKeyDoorHandles(data);
+        DrawRecallHandles(data);
         DrawSpikeHandles(data);
         DrawIceHandles(data);
         DrawMagmaHandles(data);
@@ -1899,6 +1999,30 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 }
                 Record("放钥匙");
                 level.Data.keys.Add(new LabKeySpec(new Vector2(cell.x + 0.5f, cell.y + 0.5f)));
+                AfterStructuralEdit();
+                break;
+
+            case Tool.Recall:
+                if (!inBounds)
+                {
+                    Notify(view, "召回道具必须放在相机范围里。");
+                    return;
+                }
+                if (level.Data.HasCell(cell))
+                {
+                    Notify(view, "召回道具不能放在实心格里：" + cell);
+                    return;
+                }
+                if (level.Data.HasRecall(cell))
+                {
+                    Record("删召回道具");
+                    level.Data.RemoveRecall(cell);
+                }
+                else
+                {
+                    Record("放召回道具");
+                    level.Data.PlaceRecall(cell);
+                }
                 AfterStructuralEdit();
                 break;
 
@@ -2366,6 +2490,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     static void EraseObjectsAt(LabLevelData data, Vector2Int cell)
     {
         if (data.keys != null) data.keys.RemoveAll(key => key.Cells().Contains(cell));
+        if (data.recalls != null) data.recalls.RemoveAll(recall => recall.cell == cell);
         if (data.doors != null) data.doors.RemoveAll(door => door.Cells().Contains(cell));
         if (data.spikes != null) data.spikes.RemoveAll(spike => spike.cell == cell);
         if (data.ices != null) data.ices.RemoveAll(ice => ice.cell == cell);
@@ -2432,6 +2557,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         switch (tool)
         {
             case Tool.Key:
+            case Tool.Recall:
             case Tool.Door:
             case Tool.Rope:
             case Tool.HorizontalRope:
@@ -2474,6 +2600,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 return !data.HasRespawnPoint(cell);
             case Tool.TeleportPoint:
                 return !data.HasTeleport(cell);
+            case Tool.Recall:
+                return !data.HasRecall(cell);
             default:
                 return true;
         }
@@ -2490,6 +2618,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 if (!data.ContainsCell(cell)) return false;
                 data.keys.Add(new LabKeySpec(new Vector2(cell.x + 0.5f, cell.y + 0.5f)));
                 return true;
+
+            case Tool.Recall:
+                if (!add) return data.RemoveRecall(cell);
+                if (!data.ContainsCell(cell) || data.HasCell(cell)) return false;
+                return data.PlaceRecall(cell);
 
             case Tool.Door:
                 if (!add) return data.doors.RemoveAll(door => door.Cells().Contains(cell)) > 0;
@@ -2589,7 +2722,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     static RectInt CellRect(Vector2 point)
         => new RectInt(Mathf.FloorToInt(point.x), Mathf.FloorToInt(point.y), 1, 1);
 
-    /// <summary>这一格上最上层的物件。优先级：传送点 &gt; 重生点 &gt; 隐藏方块 &gt; 钥匙 &gt; 冰块/岩浆块 &gt; 地刺 &gt; 门 &gt; 绳 &gt; 地形。</summary>
+    /// <summary>这一格上最上层的物件。优先级：传送点 &gt; 重生点 &gt; 隐藏方块 &gt; 钥匙 &gt; 召回道具 &gt; 冰块/岩浆块 &gt; 地刺 &gt; 门 &gt; 绳 &gt; 地形。</summary>
     Pick PickAt(Vector2Int cell)
     {
         var data = level.Data;
@@ -2614,6 +2747,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
             for (int i = 0; i < data.keys.Count; i++)
                 if (data.keys[i].Cells().Contains(cell))
                     return new Pick { kind = PickKind.Key, index = i };
+
+        if (data.recalls != null)
+            for (int i = 0; i < data.recalls.Count; i++)
+                if (data.recalls[i].cell == cell)
+                    return new Pick { kind = PickKind.Recall, index = i };
 
         if (data.ices != null)
             for (int i = 0; i < data.ices.Count; i++)
@@ -2657,6 +2795,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Solid: return pick.index >= 0 && pick.index < data.solids.Count;
             case PickKind.Rope: return pick.index >= 0 && pick.index < data.ropes.Count;
             case PickKind.Key: return pick.index >= 0 && pick.index < data.keys.Count;
+            case PickKind.Recall: return pick.index >= 0 && pick.index < data.recalls.Count;
             case PickKind.Door: return pick.index >= 0 && pick.index < data.doors.Count;
             case PickKind.Spike: return pick.index >= 0 && pick.index < data.spikes.Count;
             case PickKind.Ice: return pick.index >= 0 && pick.index < data.ices.Count;
@@ -2677,6 +2816,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Solid: return new RectInt(data.solids[pick.index], Vector2Int.one);
             case PickKind.Rope: return CellRect(data.ropes[pick.index].center);
             case PickKind.Key: return CellRect(data.keys[pick.index].position);
+            case PickKind.Recall: return new RectInt(data.recalls[pick.index].cell, Vector2Int.one);
             case PickKind.Door: return CellRect(data.doors[pick.index].position);
             case PickKind.Spike: return new RectInt(data.spikes[pick.index].cell, Vector2Int.one);
             case PickKind.Ice: return new RectInt(data.ices[pick.index].cell, Vector2Int.one);
@@ -2696,6 +2836,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Solid: return "地形格 " + level.Data.solids[pick.index];
             case PickKind.Rope: return "绳 #" + pick.index;
             case PickKind.Key: return "钥匙 #" + pick.index;
+            case PickKind.Recall: return "召回道具 #" + pick.index;
             case PickKind.Door: return "门 #" + pick.index;
             case PickKind.Spike: return "地刺 #" + pick.index;
             case PickKind.Ice: return "冰块 #" + pick.index;
@@ -2958,6 +3099,18 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     new Vector3(door.position.x, door.position.y, 0f),
                     new Vector3(1f, LabDoorSpec.CellHeight, 0.01f));
             }
+        }
+    }
+
+    void DrawRecallHandles(LabLevelData data)
+    {
+        if (data.recalls == null || data.recalls.Count == 0) return;
+        Handles.color = new Color(0.2f, 0.9f, 0.8f, 0.95f);
+        for (int i = 0; i < data.recalls.Count; i++)
+        {
+            var recall = data.recalls[i];
+            Handles.DrawWireCube(CellCenter(recall.cell), Vector3.one);
+            Handles.Label(CellCenter(recall.cell) + Vector3.up * 0.6f, "召回");
         }
     }
 
@@ -3386,6 +3539,18 @@ public sealed class LabLevelEditorWindow : EditorWindow
             return;
         }
 
+        if (tool == Tool.Recall)
+        {
+            bool blocked = !inBounds || data.HasCell(cell);
+            Handles.color = blocked
+                ? new Color(1f, 0.3f, 0.25f, 0.9f)
+                : new Color(color.r, color.g, color.b, 0.75f);
+            Handles.DrawWireCube(CellCenter(cell), Vector3.one);
+            Handles.Label(CellCenter(cell) + Vector3.up * 0.6f,
+                data.HasRecall(cell) ? "召回道具（再点删除）" : "召回道具");
+            return;
+        }
+
         if (tool == Tool.Door)
         {
             Handles.color = inBounds
@@ -3515,6 +3680,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.SpawnB: return TuningLab.ColorB;
             case Tool.Partition: return new Color(1f, 0.85f, 0.3f, 0.95f);
             case Tool.Key: return new Color(1f, 0.85f, 0.1f, 0.95f);
+            case Tool.Recall: return new Color(0.2f, 0.9f, 0.8f, 0.95f);
             case Tool.Door: return new Color(newDoorColor.r, newDoorColor.g, newDoorColor.b, 0.95f);
             case Tool.Spike: return new Color(0.75f, 0.82f, 0.92f, 0.95f);
             case Tool.Ice: return new Color(0.42f, 0.75f, 1f, 0.95f);
