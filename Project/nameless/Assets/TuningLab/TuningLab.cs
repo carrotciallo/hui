@@ -122,14 +122,14 @@ public class TuningLab : MonoBehaviour
     public bool showGrid = true;
 
     [Header("死亡反馈")]
-    [Tooltip("任一玩家死亡时，屏幕边框闪一次红色。")]
+    [Tooltip("任一玩家死亡时，屏幕闪一次红色边缘渐晕。")]
     public bool deathFlashEnabled = true;
-    [Tooltip("闪红满亮持续（秒），之后按淡出时长线性收掉。")]
-    public float deathFlashHold = 0.1f;
-    [Tooltip("闪红从满亮淡到无（秒）。")]
-    public float deathFlashFade = 0.4f;
-    [Tooltip("边框带宽 = 屏高 × 这个比例。")]
-    [Range(0.01f, 0.15f)] public float deathFlashBorderRatio = 0.04f;
+    [Tooltip("闪烁持续时间（秒）。")]
+    public float deathFlashDuration = 0.55f;
+    [Tooltip("闪烁期内亮度脉动的次数。")]
+    [Range(1f, 8f)] public float deathFlashPulses = 3f;
+    [Tooltip("最贴近屏幕边缘处的红色带深度 = 屏高 × 这个比例；往屏幕中心平滑衰减到无。")]
+    [Range(0.05f, 0.5f)] public float deathFlashEdgeDepth = 0.18f;
     [Tooltip("满亮时的红色。")]
     public Color deathFlashColor = new Color(1f, 0.25f, 0.25f, 0.9f);
 
@@ -139,23 +139,25 @@ public class TuningLab : MonoBehaviour
     [Tooltip("起始档同时存在的残影数。")]
     [Range(0, 12)] public int ghostCountTier3 = 3;
     [Tooltip("起始档残影初始不透明度。")]
-    [Range(0f, 1f)] public float ghostAlphaTier3 = 0.35f;
+    [Range(0f, 1f)] public float ghostAlphaTier3 = 0.5f;
     [Tooltip("起始档残影存活（秒）。")]
-    public float ghostLifeTier3 = 0.18f;
+    public float ghostLifeTier3 = 0.6f;
     [Tooltip("顶档同时存在的残影数（tierCount=4 时即 V4）。")]
     [Range(0, 12)] public int ghostCountTopTier = 5;
     [Tooltip("顶档残影初始不透明度。")]
-    [Range(0f, 1f)] public float ghostAlphaTopTier = 0.55f;
+    [Range(0f, 1f)] public float ghostAlphaTopTier = 0.7f;
     [Tooltip("顶档残影存活（秒）。")]
-    public float ghostLifeTopTier = 0.28f;
+    public float ghostLifeTopTier = 0.8f;
     [Tooltip("拖尾亮点同屏上限。")]
-    [Range(0, 64)] public int trailCap = 24;
-    [Tooltip("拖尾亮点存活（秒）。")]
-    public float trailLife = 0.25f;
+    [Range(0, 128)] public int trailCap = 64;
+    [Tooltip("拖尾亮点存活（秒）：后段才淡出，像画笔留下的笔触。")]
+    public float trailLife = 2f;
+    [Tooltip("每隔几个物理步喷一个拖尾亮点（拉开成速度线，不糊在屁股上）。")]
+    [Range(1, 6)] public int trailEverySteps = 2;
     [Tooltip("拖尾亮点 V3 初始不透明度。")]
-    [Range(0f, 1f)] public float trailAlphaTier3 = 0.5f;
+    [Range(0f, 1f)] public float trailAlphaTier3 = 0.85f;
     [Tooltip("拖尾亮点 V4 初始不透明度。")]
-    [Range(0f, 1f)] public float trailAlphaTopTier = 0.8f;
+    [Range(0f, 1f)] public float trailAlphaTopTier = 1f;
 
     public LabPlayer PlayerA { get; private set; }
     public LabPlayer PlayerB { get; private set; }
@@ -668,31 +670,66 @@ public class TuningLab : MonoBehaviour
     void TriggerDeathFlash()
     {
         if (!deathFlashEnabled) return;
-        deathFlashLeft = Mathf.Max(0.01f, deathFlashHold + deathFlashFade);
+        deathFlashLeft = Mathf.Max(0.01f, deathFlashDuration);
     }
 
     void DrawDeathFlashGui()
     {
         if (deathFlashLeft <= 0f) return;
 
-        float hold = Mathf.Max(0.01f, deathFlashHold);
-        float fade = Mathf.Max(0.01f, deathFlashFade);
-        // 满亮段 multiplier=1，淡出段从 1 线性收到 0。
-        float multiplier = deathFlashLeft > hold
-            ? 1f
-            : Mathf.Clamp01(deathFlashLeft / fade);
+        float duration = Mathf.Max(0.05f, deathFlashDuration);
+        float progress = 1f - Mathf.Clamp01(deathFlashLeft / duration);
+
+        // 亮度闪烁：正弦脉动 × 整体衰减，中心频率由 deathFlashPulses 控制。
+        float pulses = Mathf.Max(0.5f, deathFlashPulses);
+        float envelope = 1f - progress;
+        float multiplier = envelope * Mathf.Max(0f, Mathf.Sin(progress * pulses * Mathf.PI));
 
         Color c = deathFlashColor;
         c.a *= multiplier;
+        if (c.a <= 0.004f) return;
 
-        float band = Screen.height * Mathf.Clamp(deathFlashBorderRatio, 0.01f, 0.15f);
         Color previous = GUI.color;
         GUI.color = c;
-        GUI.DrawTexture(new Rect(0f, 0f, Screen.width, band), Texture2D.whiteTexture);
-        GUI.DrawTexture(new Rect(0f, Screen.height - band, Screen.width, band), Texture2D.whiteTexture);
-        GUI.DrawTexture(new Rect(0f, band, band, Screen.height - band * 2f), Texture2D.whiteTexture);
-        GUI.DrawTexture(new Rect(Screen.width - band, band, band, Screen.height - band * 2f), Texture2D.whiteTexture);
+        float depthH = Screen.height * Mathf.Clamp(deathFlashEdgeDepth, 0.05f, 0.5f);
+        float depthW = Screen.width * Mathf.Clamp(deathFlashEdgeDepth, 0.05f, 0.5f);
+        GUI.DrawTexture(new Rect(0f, 0f, Screen.width, depthH), VignetteBar((int)depthH));
+        GUI.DrawTexture(new Rect(0f, Screen.height - depthH, Screen.width, depthH), VignetteBar((int)depthH));
+        GUI.DrawTexture(new Rect(0f, 0f, depthW, Screen.height), VignetteBar((int)depthW));
+        GUI.DrawTexture(new Rect(Screen.width - depthW, 0f, depthW, Screen.height), VignetteBar((int)depthW));
         GUI.color = previous;
+    }
+
+    static readonly System.Collections.Generic.Dictionary<int, Texture2D> vignetteBars =
+        new System.Collections.Generic.Dictionary<int, Texture2D>();
+
+    /// <summary>
+    /// 边缘渐晕条：1×H 渐变纹理，两端不透明、中心透明（smoothstep），
+    /// 双线性拉伸后整条带宽内没有硬边界；按高度缓存，运行时生成、不落资产。
+    /// </summary>
+    static Texture2D VignetteBar(int height)
+    {
+        int h = Mathf.Clamp(height, 16, 1024);
+        if (vignetteBars.TryGetValue(h, out var cached) && cached != null) return cached;
+
+        var tex = new Texture2D(1, h, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        var px = new Color32[h];
+        var white = new Color32(255, 255, 255, 255);
+        for (int y = 0; y < h; y++)
+        {
+            float t = y / (h - 1f);
+            float d = Mathf.Min(t, 1f - t) * 2f;             // 边缘 0 → 中心 1
+            px[y] = new Color32(255, 255, 255,
+                (byte)Mathf.RoundToInt((1f - d * d * (3f - 2f * d)) * 255f));
+        }
+        tex.SetPixels32(px);
+        tex.Apply();
+        vignetteBars[h] = tex;
+        return tex;
     }
 
     void DrawTeleportSelectionGui()
