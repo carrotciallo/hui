@@ -35,7 +35,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         Marquee = 15,
         Move = 16,
         HiddenBlock = 17,
-        Recall = 18
+        Recall = 18,
+        RepairBlock = 19
     }
 
     /// <summary>下一次拉选区时怎么处理当前选区。</summary>
@@ -60,7 +61,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         RespawnPoint = 8,
         TeleportPoint = 9,
         HiddenBlock = 10,
-        Recall = 11
+        Recall = 11,
+        RepairBlock = 12
     }
 
     struct Pick
@@ -76,7 +78,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     static readonly string[] ToolLabels =
     {
         "铺地形", "擦地形", "矩形", "竖绳", "横绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺", "冰块", "岩浆块", "重生点", "传送点",
-        "选区", "选择", "隐藏方块", "召回道具"
+        "选区", "选择", "隐藏方块", "召回道具", "修复方块"
     };
 
     static readonly string[] MarqueeModeLabels = { "重新选择", "增加选区", "删除选区" };
@@ -109,6 +111,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     Vector2 iceScroll;
     Vector2 magmaScroll;
     Vector2 hiddenScroll;
+    Vector2 repairScroll;
     Vector2 respawnScroll;
     Vector2 teleportScroll;
     Vector2 recallScroll;
@@ -284,6 +287,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawMagmas();
         EditorGUILayout.Space();
         DrawHiddenBlocks();
+        EditorGUILayout.Space();
+        DrawRepairBlocks();
         EditorGUILayout.Space();
         DrawRespawnPoints();
         EditorGUILayout.Space();
@@ -491,6 +496,15 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     if (GUILayout.Button("新建组", GUILayout.Width(64f)))
                         hiddenGroupId = level.Data.NextHiddenGroupId();
                 }
+                break;
+            case Tool.RepairBlock:
+                EditorGUILayout.HelpBox(
+                    "左键放一块 1×1 修复方块，按住拖可以连续铺。A 的红热边（热二）或灵体边碰到它的表面 → " +
+                    "那条边回到普通态；不限次数、不会被消耗，方块本身也能站、能挡路。\n" +
+                    "装填态（膛里有人）和幽魂态（四条边全碎）的 A 不响应。\n" +
+                    "碰到修复面不触发锻造：不会点热、不会砸碎、也不会因为热二再撞而死亡。\n" +
+                    "同格再点 = 删除。",
+                    MessageType.None);
                 break;
             case Tool.RespawnPoint:
                 EditorGUILayout.HelpBox(
@@ -1094,6 +1108,46 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 if (!EditorUtility.DisplayDialog("清空隐藏方块", "删掉所有隐藏方块？", "清空", "取消")) return;
                 Record("清空隐藏方块");
                 level.Data.ClearHiddenBlocks();
+                AfterStructuralEdit();
+            }
+        }
+    }
+
+    void DrawRepairBlocks()
+    {
+        EditorGUILayout.LabelField("修复方块", EditorStyles.boldLabel);
+        var data = level.Data;
+        if (data.repairBlocks == null) data.repairBlocks = new List<LabRepairBlockSpec>();
+        EditorGUILayout.LabelField("修复方块", level.RepairBlockCount + "（1×1，红热边/灵体边接触 → 那条边回普通，不消耗）");
+
+        repairScroll = EditorGUILayout.BeginScrollView(repairScroll, GUILayout.MaxHeight(120f));
+        for (int i = 0; i < data.repairBlocks.Count; i++)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                var block = data.repairBlocks[i];
+                EditorGUILayout.LabelField(
+                    string.Format("修 ({0}, {1})", block.cell.x, block.cell.y),
+                    EditorStyles.miniLabel, GUILayout.Width(110f));
+
+                if (GUILayout.Button("×", GUILayout.Width(24f)))
+                {
+                    Record("删修复方块");
+                    data.repairBlocks.RemoveAt(i);
+                    AfterStructuralEdit();
+                    break;
+                }
+            }
+        }
+        EditorGUILayout.EndScrollView();
+
+        using (new EditorGUI.DisabledScope(level.RepairBlockCount == 0))
+        {
+            if (GUILayout.Button("清空修复方块"))
+            {
+                if (!EditorUtility.DisplayDialog("清空修复方块", "删掉所有修复方块？", "清空", "取消")) return;
+                Record("清空修复方块");
+                level.Data.ClearRepairBlocks();
                 AfterStructuralEdit();
             }
         }
@@ -1719,6 +1773,39 @@ public sealed class LabLevelEditorWindow : EditorWindow
             }
         }
 
+        if (data.repairBlocks != null)
+        {
+            for (int i = 0; i < data.repairBlocks.Count; i++)
+            {
+                var block = data.repairBlocks[i];
+                if (!data.ContainsCell(block.cell))
+                    issues.Add("第 " + i + " 块修复方块不在编辑范围内：" + block.cell);
+                if (data.HasCell(block.cell))
+                    issues.Add("第 " + i + " 块修复方块和地形重叠：" + block.cell);
+                if (data.HasSpike(block.cell))
+                    issues.Add("第 " + i + " 块修复方块和地刺在同一格：" + block.cell);
+                if (data.HasIce(block.cell))
+                    issues.Add("第 " + i + " 块修复方块和冰块在同一格：" + block.cell);
+                if (data.HasMagma(block.cell))
+                    issues.Add("第 " + i + " 块修复方块和岩浆块在同一格：" + block.cell);
+
+                if (SpawnTouchesCell(data.spawnA, TuningLab.A_Pixels / (float)TuningLab.CellPixels, block.cell))
+                    issues.Add("第 " + i + " 块修复方块压在 A 的出生点上：" + block.cell);
+                if (SpawnTouchesCell(data.spawnB, TuningLab.B_Pixels / (float)TuningLab.CellPixels, block.cell))
+                    issues.Add("第 " + i + " 块修复方块压在 B 的出生点上：" + block.cell);
+
+                if (data.keys != null)
+                    for (int k = 0; k < data.keys.Count; k++)
+                        if (data.keys[k].Cells().Contains(block.cell))
+                            issues.Add("第 " + i + " 块修复方块和第 " + k + " 把钥匙在同一格：" + block.cell);
+
+                if (data.doors != null)
+                    for (int d = 0; d < data.doors.Count; d++)
+                        if (data.doors[d].Cells().Contains(block.cell))
+                            issues.Add("第 " + i + " 块修复方块在第 " + d + " 扇门里：" + block.cell);
+            }
+        }
+
         if (data.respawnPoints != null)
         {
             for (int i = 0; i < data.respawnPoints.Count; i++)
@@ -1775,10 +1862,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
 
         if (issues.Count == 0)
         {
-            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 个召回道具，{5} 扇门，{6} 根刺，{7} 块冰，{8} 块岩浆，{9} 个重生点，{10} 个传送点，{11} 个关卡分区，{12} 条隐藏方块。",
+            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 个召回道具，{5} 扇门，{6} 根刺，{7} 块冰，{8} 块岩浆，{9} 条隐藏方块，{10} 块修复方块，{11} 个重生点，{12} 个传送点，{13} 个关卡分区。",
                 level.SolidCellCount, level.MergedRectCount, level.RopeCount, level.KeyCount, level.RecallCount,
-                level.DoorCount, level.SpikeCount, level.IceCount, level.MagmaCount, level.RespawnPointCount,
-                level.TeleportCount, data.partitions != null ? data.partitions.Count : 0, level.HiddenBlockCount), level);
+                level.DoorCount, level.SpikeCount, level.IceCount, level.MagmaCount, level.HiddenBlockCount,
+                level.RepairBlockCount, level.RespawnPointCount, level.TeleportCount,
+                data.partitions != null ? data.partitions.Count : 0), level);
         }
         else
         {
@@ -1869,6 +1957,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         DrawIceHandles(data);
         DrawMagmaHandles(data);
         DrawHiddenBlockHandles(data);
+        DrawRepairBlockHandles(data);
         DrawRespawnPointHandles(data);
         DrawTeleportHandles(data);
         DrawSelectionRegion();
@@ -2148,6 +2237,35 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 {
                     Record(level.Data.HasHiddenBlock(cell) ? "隐藏方块加入本组" : "放隐藏方块");
                     level.Data.PlaceHiddenBlock(cell, hiddenGroupId);
+                }
+                AfterStructuralEdit();
+                break;
+
+            case Tool.RepairBlock:
+                if (!inBounds)
+                {
+                    Notify(view, "修复方块必须放在相机范围里。");
+                    return;
+                }
+                if (level.Data.HasCell(cell))
+                {
+                    Notify(view, "修复方块不能放在实心格里：" + cell);
+                    return;
+                }
+                if (level.Data.HasIce(cell) || level.Data.HasMagma(cell))
+                {
+                    Notify(view, "修复方块不能和冰/岩浆放在同一格：" + cell);
+                    return;
+                }
+                if (level.Data.HasRepairBlock(cell))
+                {
+                    Record("删修复方块");
+                    level.Data.RemoveRepairBlock(cell);
+                }
+                else
+                {
+                    Record("放修复方块");
+                    level.Data.PlaceRepairBlock(cell);
                 }
                 AfterStructuralEdit();
                 break;
@@ -2496,6 +2614,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         if (data.ices != null) data.ices.RemoveAll(ice => ice.cell == cell);
         if (data.magmas != null) data.magmas.RemoveAll(magma => magma.cell == cell);
         if (data.hiddenBlocks != null) data.hiddenBlocks.RemoveAll(block => block.cell == cell);
+        if (data.repairBlocks != null) data.repairBlocks.RemoveAll(block => block.cell == cell);
         if (data.respawnPoints != null)
             data.respawnPoints.RemoveAll(point => point.Cells().Contains(cell));
         if (data.teleports != null)
@@ -2565,6 +2684,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Ice:
             case Tool.Magma:
             case Tool.HiddenBlock:
+            case Tool.RepairBlock:
             case Tool.RespawnPoint:
             case Tool.TeleportPoint:
                 return true;
@@ -2596,6 +2716,8 @@ public sealed class LabLevelEditorWindow : EditorWindow
             }
             case Tool.HiddenBlock:
                 return !data.HasHiddenBlock(cell, hiddenGroupId);
+            case Tool.RepairBlock:
+                return !data.HasRepairBlock(cell);
             case Tool.RespawnPoint:
                 return !data.HasRespawnPoint(cell);
             case Tool.TeleportPoint:
@@ -2673,6 +2795,12 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 if (!data.ContainsCell(cell) || data.HasCell(cell)) return false;
                 return data.PlaceHiddenBlock(cell, hiddenGroupId);
 
+            case Tool.RepairBlock:
+                if (!add) return data.RemoveRepairBlock(cell);
+                if (!data.ContainsCell(cell) || data.HasCell(cell) || data.HasIce(cell)
+                    || data.HasMagma(cell)) return false;
+                return data.PlaceRepairBlock(cell);
+
             case Tool.RespawnPoint:
                 if (!add) return data.RemoveRespawnPoint(cell);
                 if (!data.ContainsCell(cell)) return false;
@@ -2722,7 +2850,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
     static RectInt CellRect(Vector2 point)
         => new RectInt(Mathf.FloorToInt(point.x), Mathf.FloorToInt(point.y), 1, 1);
 
-    /// <summary>这一格上最上层的物件。优先级：传送点 &gt; 重生点 &gt; 隐藏方块 &gt; 钥匙 &gt; 召回道具 &gt; 冰块/岩浆块 &gt; 地刺 &gt; 门 &gt; 绳 &gt; 地形。</summary>
+    /// <summary>这一格上最上层的物件。优先级：传送点 &gt; 重生点 &gt; 隐藏方块 &gt; 钥匙 &gt; 召回道具 &gt; 冰块 &gt; 岩浆块 &gt; 修复方块 &gt; 地刺 &gt; 门 &gt; 绳 &gt; 地形。</summary>
     Pick PickAt(Vector2Int cell)
     {
         var data = level.Data;
@@ -2763,6 +2891,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
                 if (data.magmas[i].cell == cell)
                     return new Pick { kind = PickKind.Magma, index = i };
 
+        if (data.repairBlocks != null)
+            for (int i = 0; i < data.repairBlocks.Count; i++)
+                if (data.repairBlocks[i].cell == cell)
+                    return new Pick { kind = PickKind.RepairBlock, index = i };
+
         if (data.spikes != null)
             for (int i = 0; i < data.spikes.Count; i++)
                 if (data.spikes[i].cell == cell)
@@ -2802,6 +2935,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Magma: return pick.index >= 0 && pick.index < data.magmas.Count;
             case PickKind.HiddenBlock:
                 return data.hiddenBlocks != null && pick.index >= 0 && pick.index < data.hiddenBlocks.Count;
+            case PickKind.RepairBlock: return pick.index >= 0 && pick.index < data.repairBlocks.Count;
             case PickKind.RespawnPoint: return pick.index >= 0 && pick.index < data.respawnPoints.Count;
             case PickKind.TeleportPoint: return pick.index >= 0 && pick.index < data.teleports.Count;
             default: return false;
@@ -2823,6 +2957,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.Magma: return new RectInt(data.magmas[pick.index].cell, Vector2Int.one);
             case PickKind.HiddenBlock:
                 return new RectInt(data.hiddenBlocks[pick.index].cell, Vector2Int.one);
+            case PickKind.RepairBlock: return new RectInt(data.repairBlocks[pick.index].cell, Vector2Int.one);
             case PickKind.RespawnPoint: return CellRect(data.respawnPoints[pick.index].position);
             case PickKind.TeleportPoint: return CellRect(data.teleports[pick.index].position);
             default: return new RectInt(0, 0, 0, 0);
@@ -2844,6 +2979,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case PickKind.HiddenBlock:
                 return "隐藏方块 组" + level.Data.hiddenBlocks[pick.index].groupId +
                     " @ " + level.Data.hiddenBlocks[pick.index].cell;
+            case PickKind.RepairBlock: return "修复方块 #" + pick.index;
             case PickKind.RespawnPoint: return "重生点 #" + pick.index;
             case PickKind.TeleportPoint: return "传送点 #" + pick.index;
             default: return "（无）";
@@ -3374,6 +3510,20 @@ public sealed class LabLevelEditorWindow : EditorWindow
         }
     }
 
+    /// <summary>修复方块和 A 同色；压在别的实体上画红，和校验里的冲突条件一致。</summary>
+    void DrawRepairBlockHandles(LabLevelData data)
+    {
+        if (data.repairBlocks == null) return;
+        for (int i = 0; i < data.repairBlocks.Count; i++)
+        {
+            var block = data.repairBlocks[i];
+            bool blocked = data.HasCell(block.cell) || data.HasIce(block.cell)
+                || data.HasMagma(block.cell) || data.HasSpike(block.cell);
+            Handles.color = blocked ? new Color(1f, 0.35f, 0.3f, 0.95f) : TuningLab.ColorA;
+            Handles.DrawWireCube(CellCenter(block.cell), Vector3.one);
+        }
+    }
+
     void DrawRespawnPointHandles(LabLevelData data)
     {
         if (data.respawnPoints == null) return;
@@ -3616,6 +3766,19 @@ public sealed class LabLevelEditorWindow : EditorWindow
             return;
         }
 
+        if (tool == Tool.RepairBlock)
+        {
+            bool blocked = !inBounds || data.HasCell(cell) || data.HasSpike(cell)
+                || data.HasIce(cell) || data.HasMagma(cell);
+            Handles.color = blocked
+                ? new Color(1f, 0.3f, 0.25f, 0.9f)
+                : new Color(TuningLab.ColorA.r, TuningLab.ColorA.g, TuningLab.ColorA.b, 0.9f);
+            Handles.DrawWireCube(CellCenter(cell), Vector3.one);
+            Handles.Label(CellCenter(cell) + Vector3.up * 0.6f,
+                data.HasRepairBlock(cell) ? "修复方块（再点删除）" : "修复方块");
+            return;
+        }
+
         if (tool == Tool.RespawnPoint)
         {
             bool blocked = !inBounds;
@@ -3686,6 +3849,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
             }
             case Tool.Magma: return new Color(1f, 0.34f, 0.12f, 0.95f);
             case Tool.HiddenBlock: return new Color(0.45f, 0.9f, 0.55f, 0.95f);
+            case Tool.RepairBlock: return TuningLab.ColorA;
             case Tool.RespawnPoint: return new Color(0.35f, 1f, 0.65f, 0.95f);
             case Tool.TeleportPoint: return new Color(0.8f, 0.5f, 1f, 0.95f);
             case Tool.Marquee: return new Color(0.35f, 0.9f, 1f, 0.95f);
