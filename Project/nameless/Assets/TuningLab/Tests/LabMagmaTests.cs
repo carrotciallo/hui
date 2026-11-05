@@ -168,6 +168,27 @@ public sealed class LabMagmaTests
         Assert.IsFalse(magma.Broken, "低速接触不破坏岩浆块");
     }
 
+    [UnityTest]
+    public IEnumerator TeleportFreezeDoesNotRecontactMagma()
+    {
+        MakeFloor();
+        MakeMagma(new Vector2Int(0, 0), 1);
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(0.5f, 1f + a.HalfHeight));
+        yield return WaitUntil(
+            () => a.Grounded && a.GetEdge(LabPlayer.Edge.Bottom) == LabPlayer.EdgeState.Hot2, 2f);
+
+        a.FreezeForTeleportSelection();
+        for (int i = 0; i < 5; i++) yield return new WaitForFixedUpdate();
+        a.ResumeFromTeleportSelection();
+        for (int i = 0; i < 10; i++) yield return new WaitForFixedUpdate();
+
+        Assert.IsTrue(a != null && a.IsAlive,
+            "传送选择冻结/取消不应把同一岩浆面重新算成接触");
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, a.GetEdge(LabPlayer.Edge.Bottom));
+    }
+
     // v3 破坏 / 红热不融 -------------------------------------------------
 
     [UnityTest]
@@ -186,10 +207,30 @@ public sealed class LabMagmaTests
 
         Assert.IsTrue(first.Broken, "v3 侧撞应破坏被撞块");
         Assert.IsTrue(second.Broken, "同组岩浆块一起碎");
+        yield return null;
+        yield return null;
+        Assert.IsTrue(a == null, "v3 撞击同时触发红热死亡");
     }
 
     [UnityTest]
-    public IEnumerator SideImpactBelowV3ForcesHotButDoesNotBreak()
+    public IEnumerator SideImpactAtV2KillsA()
+    {
+        MakeFloor();
+        var magma = MakeMagma(new Vector2Int(1, 0), 1);
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(0.1f, a.HalfHeight));
+        yield return WaitUntil(() => a.Grounded, 2f);
+
+        a.SetVelocity(new Vector2(lab.RedHotSpeed + 4f, 0f));
+        yield return WaitUntil(() => a == null, 2f);
+
+        Assert.IsTrue(a == null, "v2 撞击岩浆：撞击红热 + 强制红热 = 死亡");
+        Assert.IsFalse(magma.Broken, "v2 撞击不破坏岩浆块");
+    }
+
+    [UnityTest]
+    public IEnumerator SideImpactBelowV2ForcesHotButDoesNotBreak()
     {
         MakeFloor();
         var first = MakeMagma(new Vector2Int(1, 0), 1);
@@ -199,18 +240,19 @@ public sealed class LabMagmaTests
         a.Teleport(new Vector2(0.1f, a.HalfHeight));
         yield return WaitUntil(() => a.Grounded, 2f);
 
-        a.SetVelocity(new Vector2(lab.IceBreakSpeed + 4f, 0f));   // v2：冰会碎，岩浆不会
+        a.SetVelocity(new Vector2(lab.RedHotSpeed - 2f, 0f));   // v1：还不到撞击红热
         yield return WaitUntil(() => a.GetEdge(LabPlayer.Edge.Right) == LabPlayer.EdgeState.Hot2, 2f);
         for (int i = 0; i < 10; i++) yield return new WaitForFixedUpdate();
 
-        Assert.IsFalse(first.Broken, "v2 撞击不破坏岩浆块");
+        Assert.IsFalse(first.Broken, "v1 撞击不破坏岩浆块");
         Assert.IsFalse(second.Broken, "整组都没碎");
+        Assert.IsTrue(a != null && a.IsAlive, "v1 撞击只强制红热，不应死亡");
         Assert.AreEqual(LabPlayer.EdgeState.Hot2, a.GetEdge(LabPlayer.Edge.Right),
             "接触后右边被强制热二");
     }
 
     [UnityTest]
-    public IEnumerator HotEdgeContactDoesNotMeltMagma()
+    public IEnumerator HotEdgeContactKillsA()
     {
         MakeFloor();
         var first = MakeMagma(new Vector2Int(1, 0), 1);
@@ -222,12 +264,11 @@ public sealed class LabMagmaTests
 
         a.StrikeEdge(LabPlayer.Edge.Right, true);                 // 红热边侧撞
         a.SetVelocity(new Vector2(15f, 0f));
-        for (int i = 0; i < 20; i++) yield return new WaitForFixedUpdate();
+        yield return WaitUntil(() => a == null, 2f);
 
-        Assert.IsFalse(first.Broken, "红热边接触不会融掉岩浆块");
+        Assert.IsTrue(a == null, "红热边接触岩浆应死亡");
+        Assert.IsFalse(first.Broken, "撞击速度不到 v3，岩浆块不碎");
         Assert.IsFalse(second.Broken, "同组也不受影响");
-        Assert.AreEqual(LabPlayer.EdgeState.Hot2, a.GetEdge(LabPlayer.Edge.Right),
-            "强制热二后边不会被打回普通");
     }
 
     [UnityTest]
@@ -267,6 +308,9 @@ public sealed class LabMagmaTests
         Assert.IsTrue(magmas[0].Broken, "合并碰撞体也要能定位并破坏被撞的那一块");
         for (int i = 1; i < magmas.Length; i++)
             Assert.IsTrue(magmas[i].Broken, "同组岩浆一起碎");
+        yield return null;
+        yield return null;
+        Assert.IsTrue(a == null, "v3 撞击同时触发红热死亡");
     }
 
     [UnityTest]
@@ -364,6 +408,36 @@ public sealed class LabMagmaTests
             "岩浆和地形的接缝不应把右边加热");
     }
 
+    [UnityTest]
+    public IEnumerator LeavingAndRecontactingMagmaKillsA()
+    {
+        MakeSandwichLevel();
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        a.Teleport(new Vector2(5.5f, 1f + a.HalfHeight));
+        yield return WaitUntil(() => a.Grounded, 2f);
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, a.GetEdge(LabPlayer.Edge.Bottom),
+            "第一次踩上岩浆只强制热二");
+
+        // 往左走下岩浆、回到实心地形：离开表面，但这块边仍是热二。
+        for (int i = 0; i < 30; i++)
+        {
+            a.SetVelocity(new Vector2(-lab.walkSpeed, a.Velocity.y));
+            yield return new WaitForFixedUpdate();
+        }
+        Assert.IsTrue(a != null && a.IsAlive, "离开岩浆表面不应死亡");
+
+        // 再往右走回岩浆：热二边第一次重新接触 → 死亡。
+        for (int i = 0; i < 40 && a != null; i++)
+        {
+            a.SetVelocity(new Vector2(lab.walkSpeed, a.Velocity.y));
+            yield return new WaitForFixedUpdate();
+        }
+
+        yield return WaitUntil(() => a == null, 2f);
+        Assert.IsTrue(a == null, "热二边再次接触岩浆应死亡");
+    }
+
     // 工具 ---------------------------------------------------------------
 
     void MakeFloor()
@@ -413,6 +487,19 @@ public sealed class LabMagmaTests
         for (int x = 0; x < solidCells; x++) level.Data.AddCell(new Vector2Int(x, 0));
         for (int x = 0; x < magmaCells; x++)
             level.Data.PlaceMagma(new Vector2Int(solidCells + x, 0), 1);
+        level.Data.Normalize();
+        level.BuildRuntime(root.transform, slick);
+        return level;
+    }
+
+    /// <summary>实心—岩浆—实心，用来验证离开岩浆后重新接触。</summary>
+    LabLevel MakeSandwichLevel()
+    {
+        var level = root.AddComponent<LabLevel>();
+        lab.level = level;
+        for (int x = 0; x < 3; x++) level.Data.AddCell(new Vector2Int(x, 0));
+        for (int x = 3; x < 8; x++) level.Data.PlaceMagma(new Vector2Int(x, 0), 1);
+        for (int x = 8; x < 11; x++) level.Data.AddCell(new Vector2Int(x, 0));
         level.Data.Normalize();
         level.BuildRuntime(root.transform, slick);
         return level;
