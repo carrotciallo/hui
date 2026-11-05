@@ -244,7 +244,7 @@ public sealed class LabPhantom : MonoBehaviour
     /// <summary>把膛里的玩家放回幻影外侧，恢复进入时的速度。</summary>
     public void EjectLoaded(LabPlayer player)
     {
-        if (loaded == null) return;
+        if (loaded == null || player != loaded) return;
         var b = loaded;
         loaded = null;
         converterTimer = 0f;

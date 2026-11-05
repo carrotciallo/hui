@@ -1504,6 +1504,16 @@ public sealed class LabLevelEditorWindow : EditorWindow
                     for (int d = 0; d < data.doors.Count; d++)
                         if (data.doors[d].Cells().Contains(recall.cell))
                             issues.Add("第 " + i + " 个召回道具在第 " + d + " 扇门里：" + recall.cell);
+
+                if (data.respawnPoints != null)
+                    for (int r = 0; r < data.respawnPoints.Count; r++)
+                        if (data.respawnPoints[r].Cells().Contains(recall.cell))
+                            issues.Add("第 " + i + " 个召回道具在第 " + r + " 个重生点里：" + recall.cell);
+
+                if (data.teleports != null)
+                    for (int t = 0; t < data.teleports.Count; t++)
+                        if (data.teleports[t].Cells().Contains(recall.cell))
+                            issues.Add("第 " + i + " 个召回道具在第 " + t + " 个传送点里：" + recall.cell);
             }
         }
 
