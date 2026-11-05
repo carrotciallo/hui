@@ -438,14 +438,14 @@ public class TuningLab : MonoBehaviour
     {
         if (ActiveRespawnPoint != null)
         {
-            ActiveRespawnPoint.RespawnPlayers(this);
+            ActiveRespawnPoint.RespawnRecordedPlayers(this);
             return;
         }
 
         if (respawnPoints.Count == 1 && respawnPoints[0] != null)
         {
             ActivateRespawnPoint(respawnPoints[0]);
-            respawnPoints[0].RespawnPlayers(this);
+            respawnPoints[0].RespawnRecordedPlayers(this);
             return;
         }
 

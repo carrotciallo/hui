@@ -704,6 +704,40 @@ public class LabPlayer : MonoBehaviour
     public bool AnyHot => edgeStates[0] != EdgeState.Normal || edgeStates[1] != EdgeState.Normal
                        || edgeStates[2] != EdgeState.Normal || edgeStates[3] != EdgeState.Normal;
 
+    /// <summary>四条边的状态快照；A 的形态（u/L/=/‖/矛/灵体）和红热/灵体边都由它决定。</summary>
+    public struct FormState
+    {
+        public EdgeState left;
+        public EdgeState bottom;
+        public EdgeState right;
+        public EdgeState top;
+
+        public static FormState Normal => new FormState
+        {
+            left = EdgeState.Normal,
+            bottom = EdgeState.Normal,
+            right = EdgeState.Normal,
+            top = EdgeState.Normal
+        };
+    }
+
+    public FormState CaptureForm() => new FormState
+    {
+        left = edgeStates[(int)Edge.Left],
+        bottom = edgeStates[(int)Edge.Bottom],
+        right = edgeStates[(int)Edge.Right],
+        top = edgeStates[(int)Edge.Top]
+    };
+
+    /// <summary>把四条边恢复成快照；灵体遮罩、形态和贴图都由 SetEdge 同步。</summary>
+    public void ApplyForm(FormState state)
+    {
+        SetEdge(Edge.Top, state.top);
+        SetEdge(Edge.Bottom, state.bottom);
+        SetEdge(Edge.Left, state.left);
+        SetEdge(Edge.Right, state.right);
+    }
+
     /// <summary>红热态变化的外抛接口。形态由"哪几条边成了灵体"决定，挂这里。</summary>
     public event System.Action<LabPlayer, Edge, EdgeState, EdgeState> EdgeStateChanged;
 

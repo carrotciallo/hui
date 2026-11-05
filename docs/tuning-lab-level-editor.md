@@ -35,7 +35,7 @@
 | `Assets/TuningLab/LabVerticalRope.cs` | 竖绳；`ApplyShape` 同时服务预览和 Play |
 | `Assets/TuningLab/LabHorizontalRope.cs` | 横绳平台；零/一级挡住、二级向下穿过、三级以上反弹并提升一级 |
 | `Assets/TuningLab/LabIce.cs` | 冰块：`groupId` 编组、单块融化、整组破坏和地图重置恢复 |
-| `Assets/TuningLab/LabRespawnPoint.cs` | 重生点：3×3 触发区，任一玩家从区域外进入即双人固定重生并刷新地图；`ApplyShape` 同时服务预览和 Play |
+| `Assets/TuningLab/LabRespawnPoint.cs` | 重生点：3×3 触发区，任一玩家从区域外进入即记录两人形态并双人固定重生；`ApplyShape` 同时服务预览和 Play |
 | `Assets/TuningLab/LabTeleportPoint.cs` | 传送点：3×3 触发区；两人进入后打开全互联终点选择；`ApplyShape` 同时服务预览和 Play |
 | `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据：实心格、绳、钥匙/门、地刺、冰块、重生点、传送点、出生点、相机尺寸、**关卡分区** |
 | `Assets/TuningLab/Level/LabLevel.cs` | 数据 → 合并 `BoxCollider2D` / 绳 / 地刺 / 冰块 / 重生点 / 传送点；编辑器预览和 Play 共用 |
@@ -353,12 +353,14 @@
 | 条件 | 行为 |
 | --- | --- |
 | 只有一人死亡 | 该玩家隐藏冻结（无碰撞、不可操作、镜头不再跟随），另一人继续 |
-| 两人都死亡，有激活重生点 | 两人以全新状态回该点的 A 左 / B 右固定位置，清钥匙并重置地图 |
-| 两人都死亡，场景里只有一个重生点 | 回这个点（即使还没接触过） |
+| 两人都死亡，有激活重生点 | 两人按该点最后一次激活时记录的形态回 A 左 / B 右固定位置，清钥匙并重置地图 |
+| 两人都死亡，场景里只有一个重生点 | 回这个点（即使还没接触过；没有记录就用全新状态） |
 | 两人都死亡，没有重生点，`RespawnAtSpawn` | 两人回出生点并重置地图 |
 | 两人都死亡，没有重生点，`DestroyPlayer` | 销毁死亡玩家 |
 
-重生点由任一玩家从区域外进入 3×3 触发区时激活，不再要求钥匙；多个重生点按实际接触切换且同时只有一个激活。触发时地图只重置一次，两人清空钥匙和运动状态，并分别回到以重生点为中心、左右各 1 格的固定位置。已经在区域里、贴着边缘停留不会重复触发；全员离开后再次进入才再次触发。被传送、复活或出生直接放进区域不算“进入”。单人死亡等待期间，存活者走进任意重生点会把两人一起复活。
+重生点由任一玩家从区域外进入 3×3 触发区时激活，不再要求钥匙；多个重生点按实际接触切换且同时只有一个激活。触发时地图只重置一次，两人清空钥匙和运动状态，并分别回到以重生点为中心、左右各 1 格的固定位置。已经在区域里、贴着边缘停留不会重复触发；全员离开后再次进入才再次触发。被传送、复活或出生直接放进区域不算“进入”。
+
+激活时会记录两人的四条边状态（A 的形态、红热边和灵体边都由它决定）。两人都存活时进点，两人保留当前形态并刷新记录；一死一活时，活着的人保留形态、死的人以全新状态复活，记录同时刷新（死的人按全新状态记录）。两人都死亡时按最后一次激活的记录复活；从没被激活过的点用全新状态。
 
 关卡编辑器的“重生点”工具会把点写入 `LabLevelData`，预览和 Play 都由 `LabLevel.Build` 生成 3×3 触发器。点击同一格可删除，编辑器面板也支持逐个删除和清空；分区移动、删除和撤销会同步处理这些点。
 
@@ -379,7 +381,7 @@
 | `Assets/TuningLab/LabDoor.cs` | 门 |
 | `Assets/TuningLab/LabSpike.cs` | 地刺 |
 | `Assets/TuningLab/LabIce.cs` | 冰块：编组、单块融化、整组破坏和恢复 |
-| `Assets/TuningLab/LabRespawnPoint.cs` | 重生点：3×3 触发、双人固定重生和地图刷新 |
+| `Assets/TuningLab/LabRespawnPoint.cs` | 重生点：3×3 触发、形态记录、双人固定重生和地图刷新 |
 | `Assets/TuningLab/LabTeleportPoint.cs` | 传送点：3×3 触发、全互联终点选择和传送 |
 | `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据和分区 |
 | `Assets/TuningLab/Level/LabLevel.cs` | 数据到碰撞体和运行时物体的生成 |

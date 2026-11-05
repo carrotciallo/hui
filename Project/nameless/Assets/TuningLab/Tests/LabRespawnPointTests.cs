@@ -106,7 +106,7 @@ public sealed class LabRespawnPointTests
     }
 
     [UnityTest]
-    public IEnumerator EnteringCheckpointResetsMapAndBothPlayerStates()
+    public IEnumerator EnteringCheckpointResetsMapButKeepsForms()
     {
         var checkpointPosition = new Vector2(0f, 5f);
         var checkpoint = MakeCheckpoint(checkpointPosition);
@@ -136,11 +136,12 @@ public sealed class LabRespawnPointTests
         Assert.AreEqual(0, lab.PlayerB.KeyCount);
         Assert.AreEqual(Vector2.zero, lab.PlayerA.Velocity);
         Assert.AreEqual(Vector2.zero, lab.PlayerB.Velocity);
-        for (int i = 0; i < 4; i++)
-        {
-            Assert.AreEqual(LabPlayer.EdgeState.Normal, lab.PlayerA.GetEdge((LabPlayer.Edge)i));
-            Assert.AreEqual(LabPlayer.EdgeState.Normal, lab.PlayerB.GetEdge((LabPlayer.Edge)i));
-        }
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, lab.PlayerA.GetEdge(LabPlayer.Edge.Left),
+            "活着进点应保留 A 的形态");
+        Assert.AreEqual(LabPlayer.EdgeState.Spirit, lab.PlayerB.GetEdge(LabPlayer.Edge.Top),
+            "活着进点应保留 B 的边框状态");
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, lab.PlayerA.GetEdge(LabPlayer.Edge.Top));
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, lab.PlayerB.GetEdge(LabPlayer.Edge.Left));
         Assert.AreSame(checkpoint, lab.ActiveRespawnPoint);
     }
 
@@ -251,6 +252,115 @@ public sealed class LabRespawnPointTests
         Assert.AreEqual(checkpointPosition.x + 1f, lab.PlayerB.transform.position.x, 0.001f);
         Assert.AreEqual(checkpointPosition.y, lab.PlayerA.transform.position.y, 0.001f);
         Assert.AreEqual(checkpointPosition.y, lab.PlayerB.transform.position.y, 0.001f);
+    }
+
+    [UnityTest]
+    public IEnumerator BothDeathsRespawnWithFormsRecordedAtActivation()
+    {
+        var checkpointPosition = new Vector2(0f, 5f);
+        MakeCheckpoint(checkpointPosition);
+        yield return null;
+        MakeKinematic(lab.PlayerA, lab.PlayerB);
+
+        lab.PlayerA.Teleport(Outside(checkpointPosition));
+        lab.PlayerB.Teleport(Outside(checkpointPosition) + Vector2.right * 3f);
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
+
+        // 激活瞬间 A：上/下灵体 + 左热二；B 普通。
+        lab.PlayerA.SetEdge(LabPlayer.Edge.Top, LabPlayer.EdgeState.Spirit);
+        lab.PlayerA.SetEdge(LabPlayer.Edge.Bottom, LabPlayer.EdgeState.Spirit);
+        lab.PlayerA.SetEdge(LabPlayer.Edge.Left, LabPlayer.EdgeState.Hot2);
+        MoveBody(lab.PlayerA, checkpointPosition);
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
+
+        // 激活后把形态改掉：两人都死时应该用激活时的快照，而不是当前形态。
+        lab.PlayerA.SetEdge(LabPlayer.Edge.Top, LabPlayer.EdgeState.Normal);
+        lab.PlayerA.SetEdge(LabPlayer.Edge.Bottom, LabPlayer.EdgeState.Normal);
+        lab.PlayerA.SetEdge(LabPlayer.Edge.Left, LabPlayer.EdgeState.Normal);
+        lab.PlayerA.SetEdge(LabPlayer.Edge.Right, LabPlayer.EdgeState.Spirit);
+        yield return new WaitForFixedUpdate();
+
+        yield return MoveBothOutside(checkpointPosition);
+        lab.PlayerA.Kill();
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
+        lab.PlayerB.Kill();
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
+
+        Assert.IsTrue(lab.PlayerA.IsAlive);
+        Assert.IsTrue(lab.PlayerB.IsAlive);
+        Assert.AreEqual(LabPlayer.EdgeState.Spirit, lab.PlayerA.GetEdge(LabPlayer.Edge.Top),
+            "A 应恢复激活时记录的上边");
+        Assert.AreEqual(LabPlayer.EdgeState.Spirit, lab.PlayerA.GetEdge(LabPlayer.Edge.Bottom),
+            "A 应恢复激活时记录的下边");
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, lab.PlayerA.GetEdge(LabPlayer.Edge.Left),
+            "A 应恢复激活时记录的左边");
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, lab.PlayerA.GetEdge(LabPlayer.Edge.Right),
+            "A 的右边在激活时是普通边");
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, lab.PlayerB.GetEdge(LabPlayer.Edge.Top),
+            "B 记录的是全新状态");
+    }
+
+    [UnityTest]
+    public IEnumerator OneDeadActivationRevivesFreshAndRefreshesRecord()
+    {
+        var checkpointPosition = new Vector2(0f, 5f);
+        MakeCheckpoint(checkpointPosition);
+        yield return null;
+        MakeKinematic(lab.PlayerA, lab.PlayerB);
+
+        // 第一次两人存活激活：记录 A 下边灵体。
+        lab.PlayerA.Teleport(Outside(checkpointPosition));
+        lab.PlayerB.Teleport(Outside(checkpointPosition) + Vector2.right * 3f);
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
+        lab.PlayerA.SetEdge(LabPlayer.Edge.Bottom, LabPlayer.EdgeState.Spirit);
+        MoveBody(lab.PlayerA, checkpointPosition);
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
+        yield return MoveBothOutside(checkpointPosition);
+
+        // B 死；A 换一套形态后进点，记录应刷新成 A 当前形态 + B 全新状态。
+        lab.PlayerB.Kill();
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
+
+        lab.PlayerA.SetEdge(LabPlayer.Edge.Bottom, LabPlayer.EdgeState.Normal);
+        lab.PlayerA.SetEdge(LabPlayer.Edge.Top, LabPlayer.EdgeState.Spirit);
+        lab.PlayerA.SetEdge(LabPlayer.Edge.Left, LabPlayer.EdgeState.Hot2);
+        MoveBody(lab.PlayerA, checkpointPosition);
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
+
+        Assert.IsTrue(lab.PlayerB.IsAlive, "存活者进点应复活队友");
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, lab.PlayerB.GetEdge(LabPlayer.Edge.Top),
+            "死的人应以全新状态复活");
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, lab.PlayerB.GetEdge(LabPlayer.Edge.Bottom));
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, lab.PlayerB.GetEdge(LabPlayer.Edge.Left));
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, lab.PlayerB.GetEdge(LabPlayer.Edge.Right));
+        Assert.AreEqual(LabPlayer.EdgeState.Spirit, lab.PlayerA.GetEdge(LabPlayer.Edge.Top),
+            "活着进点应保留当前形态");
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, lab.PlayerA.GetEdge(LabPlayer.Edge.Left));
+
+        // 离开后两人都死：A 应拿到刷新后的记录，而不是第一次的下边灵体。
+        yield return MoveBothOutside(checkpointPosition);
+        lab.PlayerA.Kill();
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
+        lab.PlayerB.Kill();
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
+
+        Assert.IsTrue(lab.PlayerA.IsAlive);
+        Assert.AreEqual(LabPlayer.EdgeState.Spirit, lab.PlayerA.GetEdge(LabPlayer.Edge.Top),
+            "记录应在第二次激活时刷新");
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, lab.PlayerA.GetEdge(LabPlayer.Edge.Left));
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, lab.PlayerA.GetEdge(LabPlayer.Edge.Bottom),
+            "第一次记录的下边灵体不应被复活出来");
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, lab.PlayerB.GetEdge(LabPlayer.Edge.Top));
     }
 
     [UnityTest]
