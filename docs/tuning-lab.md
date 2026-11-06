@@ -22,6 +22,7 @@ Tuning Lab 是当前项目唯一的规则调试台，用来验证玩家移动、
 - `P`：像素网格。
 - `Tab`：格线。
 - `F1`：手碎一条边，顺序固定 上 → 下 → 左 → 右；`F2`：恢复四条边框。用来逐个看碎边组合出的形态，不用真去砸。
+- `Esc`：打开/关闭纯图标设置界面。打开时所有玩法冻结（`Time.timeScale = 0`），再按 `Esc` 或点右上角关闭图标恢复；关闭后回到暂停前的 `timeScale`，玩家位置、速度和各类计时都不重置。传送门选择阶段的 `Esc` 仍然只取消选择。
 
 B 被装进 u 形大炮的膛里时（A 是 u 形且 B 以冲刺态撞在炮口上），B 不可视、移动无效、不算在地面、充能不回；
 B 的冲刺键 `.` 变成**开炮**，把 B 按进入方向的反向打出去，`v' = √(Vb² + 一个等级间距的 v²)`，A 这边一切照常。
@@ -31,6 +32,24 @@ B 的冲刺键 `.` 变成**开炮**，把 B 按进入方向的反向打出去，
 把另一名玩家拉到施法者头顶并在旧位置留下幻影；规则见 §3.10。
 
 V3/V4 会留下残影和拖尾；任一玩家死亡时屏幕边缘闪红。音效由运行时 `LabAudio` 挂载，不依赖场景对象。
+
+## 设置界面
+
+`LabSettingsUI` 和音效/HUD 一样在运行时挂载，只用 IMGUI 和程序生成的色块，不依赖 Canvas、prefab 或字体。界面不出现文字，所有行都由图标和控件表达：
+
+| 图标 | 控件 | 当前行为 |
+| --- | --- | --- |
+| 喇叭 | 水平滑块 | 主音量，写入 `AudioListener.volume` |
+| 音符 | 水平滑块 | 音乐音量，写入 `LabAudio.MusicVolume`（当前无音乐轨，先存值） |
+| 爆炸 | 水平滑块 | 音效音量，写入 `LabAudio.SfxVolume` |
+| 显示器 | 左右箭头 + 档位点 | 在去重后的 `Screen.resolutions` 档位间切换；档位过多时等距保留最多 6 档 |
+| 全屏 / 窗口 | 两个切换按钮 | `Screen.SetResolution` 的窗口模式 |
+| 太阳 | 滑块（锁定） | 亮度预留位，只存取不应用 |
+| 手柄 | 按键占位（锁定） | 按键绑定预留位 |
+
+设置存到 `Application.persistentDataPath/settings.json`：保存先写 `settings.tmp`，再 `File.Replace` 正式档并留下 `settings.backup.json`；读取顺序是正式档 → 备份 → 默认值，坏档不会被自动覆盖。`LabSettingsStore.Sanitize` 把越界音量、尺寸收口。
+
+图标从 `Resources/SettingsIcons/<name>.png` 读取，`LabSettingsUI.IconResourceFolder` 和文件名是替换入口；缺图时用运行时生成的占位棋盘。当前 16×16 PNG 的导入设置是 Default、Point、Uncompressed、无 mipmap。
 
 具体规则以当前代码和 HUD 读数为准；历史速度规格不再作为实现依据。
 
@@ -66,6 +85,9 @@ Assets/TuningLab/
 ├── LabVisual.cs          玩家边框/眼睛
 ├── LabSpeedFeedback.cs   V3/V4 残影与拖尾
 ├── LabAudio.cs           运行时音效（12 个 Cue）
+├── LabSettingsUI.cs      纯图标设置界面、Esc 暂停/恢复
+├── LabSettingsStore.cs   设置 JSON、备份与坏档恢复
+├── Resources/SettingsIcons/  16×16 设置图标（同名 PNG 可替换）
 ├── LabVerticalRope.cs    竖绳行为
 ├── LabHorizontalRope.cs  横绳平台行为
 ├── LabKey.cs / LabDoor.cs

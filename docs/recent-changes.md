@@ -13,11 +13,12 @@
 - 判据修复：双人撞击补齐锻造门槛（#65）；A 碎边后仍可拾取钥匙（#67）。
 - 传送门进出场动画收尾；相机 `SnapFocus` 与阶段机接入。
 - 冰块运行时保持默认冰蓝填充，外圈显示 2 像素组色边框，和编辑器手柄共用 `LabIce.GroupColor`；前 1024 个组号不重复。
+- 设置界面（#71）：`LabSettingsUI` + `LabSettingsStore`，Esc 打开时 `Time.timeScale = 0`，再按 Esc 或点关闭图标恢复；纯图标行覆盖主/音乐/音效音量、分辨率、全屏，并保留亮度和按键绑定占位。设置写入 `persistentDataPath/settings.json`，临时文件替换 + 备份 + 坏档回退。图标在 `Assets/TuningLab/Resources/SettingsIcons/`，同名 PNG 可替换。
 
 ### 验证与文档
 
 - SelfCheck 新增隐藏方块和召回道具数据段；PlayCheck 覆盖召回道具、幻影和 `MapReset`。
-- PlayMode 规格覆盖 Forge 23、Cannon 14、Ice 22、Magma 18、Rope 15、Respawn 14、Teleport 11、Spike 9、Recall 9、Phantom 8、KeyDoor 4。
+- PlayMode 规格覆盖 Forge 23、Cannon 14、Ice 22、Magma 18、Rope 15、Respawn 14、Teleport 11、Spike 9、Recall 9、Phantom 8、KeyDoor 5、Settings 9，共 157 条。
 - 文档按当前架构重写：README、基准入口、编辑器文档、现行规则、术语表、ADR 注记和历史复盘。
 
 ## 2026-11-02

@@ -35,6 +35,8 @@
 | `Assets/TuningLab/LabVisual.cs` | 玩家分层视觉（外圈等级 / 边框 / 眼睛） |
 | `Assets/TuningLab/LabSpeedFeedback.cs` | 速度反馈：V3/V4 残影与拖尾，对象池回收 |
 | `Assets/TuningLab/LabAudio.cs` | 运行时音效播放器：12 个 Cue，`Resources.LoadAll` 取素材，无场景引用 |
+| `Assets/TuningLab/LabSettingsUI.cs` | 纯图标设置界面：Esc 暂停/恢复、音量、分辨率、全屏和预留位 |
+| `Assets/TuningLab/LabSettingsStore.cs` | 设置 JSON：版本、临时文件、备份和坏档恢复 |
 | `Assets/TuningLab/LabCamera.cs` | 跟随 A/B 中点；按 B 查当前分区的 bounds/min-max，并做混合 |
 | `Assets/TuningLab/LabVerticalRope.cs` | 竖绳；零/一级挡住、二级沿接触法线穿过、三级以上沿法线反弹并提升一级；`ApplyShape` 同时服务预览和 Play |
 | `Assets/TuningLab/LabHorizontalRope.cs` | 横绳平台；零/一级挡住、二级向下穿过、三级以上反弹并提升一级 |
@@ -406,6 +408,8 @@
 | `Assets/TuningLab/LabVisual.cs` | 玩家分层视觉和边框状态 |
 | `Assets/TuningLab/LabSpeedFeedback.cs` | V3/V4 残影和拖尾 |
 | `Assets/TuningLab/LabAudio.cs` | 12 个 Cue 的运行时音效播放器 |
+| `Assets/TuningLab/LabSettingsUI.cs` | 纯图标设置界面、Esc 暂停/恢复 |
+| `Assets/TuningLab/LabSettingsStore.cs` | 设置存档、备份与坏档恢复 |
 | `Assets/TuningLab/LabCamera.cs` | A/B 中点跟随和分区相机范围 |
 | `Assets/TuningLab/LabVerticalRope.cs` | 竖绳及其形状应用 |
 | `Assets/TuningLab/LabHorizontalRope.cs` | 横绳平台及其形状应用 |
@@ -451,6 +455,6 @@
 - 传送点按双人进入运行时标记；只有已标记点可互为终点，未进入的点不会出现在候选列表。
 - 隐藏方块的揭示是单局内的不可逆过程；`MapReset` 不会恢复，只有场景重载才回到不透明。
 - 召回幻影最多 3 个（FIFO）；炮/L 幻影的出口按被召回者原形态决定，不按进入方向反向。
-- 音效是运行时 `Resources.LoadAll` 挂载，没有场景引用、没有音量 UI；静音入口是静态 `LabAudio.Muted`。
+- 音效是运行时 `Resources.LoadAll` 挂载，没有场景引用；音量在 `LabSettingsUI` 里调，静音入口仍是静态 `LabAudio.Muted`。音乐音量当前只存值，还没有音乐轨。
 - 残影/拖尾和死亡闪红的参数在 `TuningLab` Inspector 上，不写进关卡数据。
 - `docs/策划案` 仍可能包含清理前的旧游戏描述；关卡编辑以本文和 `Assets/TuningLab` 代码为准。
