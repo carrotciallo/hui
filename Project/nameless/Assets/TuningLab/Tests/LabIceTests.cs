@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -71,6 +72,56 @@ public sealed class LabIceTests
             Assert.IsNotNull(ices[i].GetComponent<SpriteRenderer>().sprite, "冰块有看得见的贴图");
         }
 
+        yield return null;
+    }
+
+    // 组色 ---------------------------------------------------------------
+
+    [Test]
+    public void IceGroupColorsAreDistinctForManyGroups()
+    {
+        var seen = new HashSet<Color32>();
+        for (int groupId = 0; groupId < LabIce.GroupColorCount; groupId++)
+        {
+            Color32 color = LabIce.GroupColor(groupId);
+            Assert.IsTrue(seen.Add(color), "组号 " + groupId + " 的组色与前面的组重复");
+        }
+
+        Assert.AreEqual(LabIce.DefaultBorderColor, LabIce.GroupColor(0), "0 号组使用深蓝边框");
+        Assert.AreNotEqual(LabIce.DefaultColor, LabIce.GroupColor(0), "0 号组边框和填充不能同色");
+        Assert.AreNotEqual(LabIce.GroupColor(1), LabIce.GroupColor(2), "相邻组号颜色不同");
+    }
+
+    [UnityTest]
+    public IEnumerator RuntimeIceKeepsBlueFillAndUsesPerGroupBorder()
+    {
+        var level = root.AddComponent<LabLevel>();
+        lab.level = level;
+        level.Data.PlaceIce(new Vector2Int(0, 0), 1);
+        level.Data.PlaceIce(new Vector2Int(2, 0), 2);
+        level.Data.Normalize();
+
+        level.BuildRuntime(root.transform, slick);
+
+        var ices = root.GetComponentsInChildren<LabIce>();
+        Assert.AreEqual(2, ices.Length, "两格各一块冰");
+
+        var first = ices[0].GetComponent<SpriteRenderer>();
+        var second = ices[1].GetComponent<SpriteRenderer>();
+        Assert.AreEqual(LabIce.DefaultColor, first.color, "填充保持默认冰蓝");
+        Assert.AreEqual(LabIce.DefaultColor, second.color, "填充保持默认冰蓝");
+
+        Assert.IsNotNull(ices[0].GroupBorder, "1 号组有边框");
+        Assert.IsNotNull(ices[1].GroupBorder, "2 号组有边框");
+        Assert.AreEqual(LabIce.GroupColor(1), ices[0].GroupBorder.color, "1 号组边框色");
+        Assert.AreEqual(LabIce.GroupColor(2), ices[1].GroupBorder.color, "2 号组边框色");
+        Assert.AreNotEqual(ices[0].GroupBorder.color, ices[1].GroupBorder.color,
+            "不同组的边框颜色不同");
+
+        var texture = ices[0].GroupBorder.sprite.texture;
+        Assert.AreEqual(1f, texture.GetPixel(0, 0).a, 0.02f, "组色边框不透明");
+        Assert.AreEqual(0f, texture.GetPixel(texture.width / 2, texture.height / 2).a,
+            0.02f, "边框中间透明，露出蓝色填充");
         yield return null;
     }
 

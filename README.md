@@ -72,7 +72,7 @@ Project/nameless/
 | 玩家移动、跳跃、冲刺、五档速度和相机 | 已完成基础版本 | [机制策划案](docs/策划案/回-机制.md) |
 | 红热锻造、A 形态、L 形转向器和大炮 | 已完成基础版本 | [Issue #14](https://github.com/sfher/hui/issues/14)、[#15](https://github.com/sfher/hui/issues/15)、[#21](https://github.com/sfher/hui/issues/21) |
 | 钥匙、门、重生点、传送点（含进出场动画） | 已完成基础版本 | [Issue #18](https://github.com/sfher/hui/issues/18)、[#19](https://github.com/sfher/hui/issues/19)、[#20](https://github.com/sfher/hui/issues/20) |
-| 冰块（#29）、竖绳/横绳（#27）、地刺（#34） | 已进入基准 | 现行规则 §3.8 / §3.9 与编辑器文档 |
+| 冰块（#29，含运行时组色边框）、竖绳/横绳（#27）、地刺（#34） | 已进入基准 | 现行规则 §3.8 / §3.9 与编辑器文档 |
 | 隐藏方块（#59） | 已进入基准 | `LabHiddenBlock` + 关卡数据 + 编辑器工具 |
 | 召回与幻影（#69） | 已进入基准 | `LabRecallPickup` / `LabPhantom` + 编辑器工具 + 契约测试 |
 | 音效（#60）、速度/死亡反馈（#62） | 已进入基准 | `LabAudio` / `LabSpeedFeedback` / 死亡闪红 |
