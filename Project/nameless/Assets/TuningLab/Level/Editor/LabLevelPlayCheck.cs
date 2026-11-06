@@ -337,6 +337,9 @@ public static class LabLevelPlayCheck
                 "冰块生成在 " + center + "，实际 " + ice.transform.position);
             Check(sb, ref fails, ice.groupId == IceGroup,
                 "冰块组号 = " + IceGroup + "，实际 " + ice.groupId);
+            Check(sb, ref fails,
+                ice.GetComponent<SpriteRenderer>().color == LabIce.GroupColor(IceGroup),
+                "冰块运行时使用组色");
 
             var iceBody = ice.GetComponent<BoxCollider2D>();
             Check(sb, ref fails, iceBody != null && !iceBody.isTrigger
