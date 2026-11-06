@@ -674,7 +674,7 @@ public class LabPlayer : MonoBehaviour
     }
 
     /// <summary>
-    /// 结算一次场景撞击。普通地形和绳反弹共用；冰和岩浆有自己的结算，不走这里。
+    /// 结算一次场景撞击。普通地形走这里；绳反弹、冰和岩浆有自己的结算，不走这里。
     /// normal 从物件指向玩家，impact 是碰撞前沿 normal 的分量。
     /// </summary>
     public void ApplyTerrainImpact(Vector2 normal, float impact)
@@ -683,6 +683,19 @@ public class LabPlayer : MonoBehaviour
         if (impact < lab.ForgeSpeed) return;
         StrikeEdge(EdgeFor(-normal), impact >= lab.RedHotSpeed);
         LabAudio.PlayImpact(LastImpactTier);
+    }
+
+    /// <summary>
+    /// 绳反弹的边结算：只把普通边点到热二，不推进地形撞击的塌框 / 碎边状态机。
+    /// 反复在绳上弹只会让同一条边保持红热，不会被自己的反弹砸死。
+    /// </summary>
+    public void ApplyRopeBounceHeat(Vector2 normal, float impact)
+    {
+        if (lab == null || !canBeRedHot) return;
+        if (impact < lab.RedHotSpeed) return;
+
+        Edge edge = EdgeFor(-normal);
+        if (edgeStates[(int)edge] == EdgeState.Normal) SetEdge(edge, EdgeState.Hot2);
     }
 
     static bool IsPhantom(Collider2D collider) =>

@@ -9,7 +9,7 @@ using UnityEngine;
 ///   二级         →  沿法线穿过：只判一次，恢复入射速度，忽略碰撞直到离开绳体
 ///   三级及以上   →  沿法线弹回，弹回速度 = 入射速度 + 一个等级间距（和横绳一致）
 ///
-/// 绳接触不参与地形锻造；只有弹回这一种情况会按红热撞击结算边态。
+/// 绳接触不参与地形锻造；只有弹回这一种情况会把接触边点到热二，热二再弹不会塌框。
 ///
 /// 相邻的竖绳可以用 chainId 归成一个"长绳"，长绳逻辑通过 <see cref="Contacted"/> 事件接入。
 /// </summary>
@@ -178,8 +178,8 @@ public class LabVerticalRope : MonoBehaviour
         // 三级及以上：沿法线弹回，弹回速度和横绳共用同一套算法
         float speed = BounceSpeed(player, normal);
         player.ApplyBounce(normal, speed);
-        // 绳接触不锻造；只有反弹这一种情况按正常红热撞击结算。
-        player.ApplyTerrainImpact(normal, impact);
+        // 绳接触不锻造；只有反弹这一种情况会把接触边点到热二，热二再弹不会塌框。
+        player.ApplyRopeBounceHeat(normal, impact);
         Raise(player, tier, normal, false, true);
     }
 

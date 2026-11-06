@@ -83,6 +83,31 @@ public sealed class LabForgeTests
     }
 
     [UnityTest]
+    public IEnumerator RopeBounceHeatKeepsEdgeHotInsteadOfCollapsing()
+    {
+        var a = MakeA();
+
+        a.ApplyRopeBounceHeat(Vector2.up, lab.RedHotSpeed);
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, a.GetEdge(LabPlayer.Edge.Bottom),
+            "绳反弹把普通边点到热二");
+
+        a.ApplyRopeBounceHeat(Vector2.up, lab.RedHotSpeed);
+        Assert.IsTrue(a.IsAlive, "热二边再被绳弹回不该塌框");
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, a.GetEdge(LabPlayer.Edge.Bottom));
+
+        a.ApplyRopeBounceHeat(Vector2.up, 0f);
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, a.GetEdge(LabPlayer.Edge.Bottom),
+            "不够红热门槛的反弹不该把热二边砸成灵体");
+
+        var b = MakeA("B_Chunk", false);
+        b.ApplyRopeBounceHeat(Vector2.up, lab.RedHotSpeed);
+        Assert.AreEqual(LabPlayer.EdgeState.Normal, b.GetEdge(LabPlayer.Edge.Bottom),
+            "B 没有边框，不参与绳反弹点边");
+
+        yield return null;
+    }
+
+    [UnityTest]
     public IEnumerator RedHotStrikeOnHot2EdgeKillsA()
     {
         var a = MakeA();
