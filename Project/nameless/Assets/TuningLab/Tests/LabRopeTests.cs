@@ -9,7 +9,8 @@ using UnityEngine.TestTools;
 /// 两条症状：判定箱比绳本身左右各多出 7 格；三级以上撞绳弹回不保留入射速度。
 /// 绳一律走关卡数据（LabLevelData → LabLevel.BuildRuntime），和关卡编辑器里摆出来的是同一条几何。
 /// 竖绳另按“零/一级当墙、二级穿过、三级以上按横绳公式弹回”验收。
-/// 绳不参与地形锻造：接触 / 下落 / 穿过都不改边态，只有三级以上的弹回按正常红热撞击结算。
+/// 绳不参与地形锻造：接触 / 下落 / 穿过都不改边态，只有三级以上的弹回把接触边点到热二；
+/// 热二再被弹回不会塌框——弹回不是地形撞击，不能拿“热二遇热就死”那套状态机砸自己。
 /// </summary>
 public sealed class LabRopeTests
 {
@@ -354,7 +355,22 @@ public sealed class LabRopeTests
         Assert.AreEqual(3, run.contacts[0].tier);
         Assert.IsTrue(run.contacts[0].bounced);
         Assert.AreEqual(LabPlayer.EdgeState.Hot2, run.player.GetEdge(LabPlayer.Edge.Bottom),
-            "三级落在横绳上反弹仍按红热撞击结算底边");
+            "三级落在横绳上反弹仍把底边点到热二");
+    }
+
+    [UnityTest]
+    public IEnumerator HorizontalRopeBounceTwiceKeepsOneHotEdgeAndPlayerAlive()
+    {
+        var run = new HorizontalRopeRun();
+        // 第一次弹回把底边点到热二；弹上去再落回同一根绳就是第二下。
+        yield return RunIntoHorizontalRope(new Vector2(0f, 4.5f), new Vector2(0f, -37f), 2.4f, run);
+
+        Assert.GreaterOrEqual(run.contacts.Count, 2, "弹回去应该再落回同一根绳，用例要覆盖第二下");
+        Assert.IsTrue(run.contacts[1].bounced);
+        Assert.IsTrue(run.player != null && run.player.IsAlive,
+            "第二次落绳不能再把热二底边砸塌，绳反弹不是地形撞击");
+        Assert.AreEqual(LabPlayer.EdgeState.Hot2, run.player.GetEdge(LabPlayer.Edge.Bottom),
+            "反复弹回只保持同一条边热二");
     }
 
     IEnumerator RunIntoHorizontalRope(Vector2 start, Vector2 velocity, float duration, HorizontalRopeRun run)
