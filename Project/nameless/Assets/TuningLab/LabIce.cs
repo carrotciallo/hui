@@ -98,6 +98,7 @@ public sealed class LabIce : MonoBehaviour
             spriteRenderer.sprite = TuningLab.WhiteSprite;
             spriteRenderer.color = color;
             spriteRenderer.sortingOrder = 1;
+            LabArt.Apply(spriteRenderer, "ice");
             spriteRenderer.enabled = !Broken;
         }
 

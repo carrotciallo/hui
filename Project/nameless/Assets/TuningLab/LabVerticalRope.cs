@@ -279,8 +279,8 @@ public class LabVerticalRope : MonoBehaviour
 
             var sr = strip.GetComponent<SpriteRenderer>();
             if (sr == null) sr = strip.gameObject.AddComponent<SpriteRenderer>();
-            sr.sprite = StripSprite();
-            sr.color = color;
+            sr.sprite = LabArt.Load("rope-v") ?? StripSprite();
+            sr.color = LabArt.Load("rope-v") != null ? Color.white : color;
             sr.sortingOrder = 5;
         }
 

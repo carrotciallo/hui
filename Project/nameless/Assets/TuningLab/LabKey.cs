@@ -35,6 +35,7 @@ public sealed class LabKey : MonoBehaviour
             sprite.sprite = cachedSprite;
             sprite.color = color;
             sprite.sortingOrder = 2;
+            LabArt.Apply(sprite, "key");
         }
     }
 

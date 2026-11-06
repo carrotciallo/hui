@@ -1284,6 +1284,7 @@ public class TuningLab : MonoBehaviour
         sr.sprite = WhiteSprite;
         sr.color = SolidColor;
         sr.sortingOrder = 0;
+        LabArt.Apply(sr, "terrain", true);
 
         var bc = go.AddComponent<BoxCollider2D>();
         bc.size = Vector2.one;

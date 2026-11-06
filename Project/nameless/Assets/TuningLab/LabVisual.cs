@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 玩家的分层视觉，全部运行时生成（纯白贴图 + 染色），不产出任何美术资源。
+/// 玩家分层视觉：选定的像素遮罩 + 独立状态染色，眼睛与速度外圈保持程序绘制。
 ///
 ///   外圈   = 速度等级（比碰撞箱大 2px，允许超出）
 ///   中间   = 碰撞箱本身，四条边独立染色 = 红热态（只有 A 有边）
@@ -122,6 +122,14 @@ public class LabVisual : MonoBehaviour
         go.transform.localPosition = localPos;
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = sprite;
+        // Keep edge/eye/ring geometry and all thirteen frame combinations independent.
+        if (name == "Body") sr.sprite = LabArt.Part("body-b", 10, 10) ?? sprite;
+        else if (name.StartsWith("Edge_"))
+        {
+            bool horizontal = name == "Edge_Top" || name == "Edge_Bottom";
+            sr.sprite = LabArt.Part(horizontal ? "edge-h" : "edge-v", horizontal ? 14 : 2,
+                horizontal ? 2 : 10) ?? sprite;
+        }
         sr.sortingOrder = sortingOrder;
         parts.Add(sr);
         return sr;

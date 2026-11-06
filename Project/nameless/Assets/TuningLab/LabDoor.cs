@@ -37,6 +37,7 @@ public sealed class LabDoor : MonoBehaviour
             renderer.sprite = cachedSprite;
             renderer.color = IsOpen ? openColor : closedColor;
             renderer.sortingOrder = 1;
+            LabArt.Apply(renderer, "door-closed");
         }
 
         if (detector == null)
