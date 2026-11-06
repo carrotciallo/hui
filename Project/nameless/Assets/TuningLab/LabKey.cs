@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>可被玩家装入身体的钥匙。钥匙本体被收集后消失，钥匙数量记在玩家身上。</summary>
@@ -6,7 +7,10 @@ public sealed class LabKey : MonoBehaviour
 {
     public Color color = new Color(1f, 0.85f, 0.1f);
     public bool Collected { get; private set; }
+    /// <summary>灵体消散时吐出的临时钥匙：捡用规则和普通钥匙一样，但地图重置会把它清掉。</summary>
+    public bool IsTemporary { get; private set; }
 
+    static readonly List<LabKey> temporaries = new List<LabKey>();
     static Sprite cachedSprite;
 
     void Awake() => ApplyShape();
@@ -40,12 +44,44 @@ public sealed class LabKey : MonoBehaviour
         if (player != null) TryCollect(player);
     }
 
+    /// <summary>持钥上限让"捡不动"变成常态：站着不动、把手里那把花掉之后，脚下的钥匙要能立刻补捡。</summary>
+    void OnTriggerStay2D(Collider2D other)
+    {
+        var player = other.GetComponentInParent<LabPlayer>();
+        if (player != null) TryCollect(player);
+    }
+
     public bool TryCollect(LabPlayer player)
     {
         if (Collected || player == null || !player.TryCollectKey(this)) return false;
         Collected = true;
         Destroy(gameObject);
         return true;
+    }
+
+    /// <summary>在给定格心长出一把临时钥匙，登记到重置名单。</summary>
+    public static LabKey SpawnTemporary(Vector2 cellCenter)
+    {
+        var go = new GameObject("TempKey");
+        go.transform.position = cellCenter;
+        go.AddComponent<BoxCollider2D>();
+        go.AddComponent<SpriteRenderer>();
+        var key = go.AddComponent<LabKey>();
+        key.IsTemporary = true;
+        temporaries.Add(key);
+        return key;
+    }
+
+    /// <summary>地图重置（复活 / 传送）时清掉所有临时钥匙；关卡数据里的普通钥匙由 LabLevel 重新长回来。</summary>
+    public static void ClearTemporaries()
+    {
+        for (int i = 0; i < temporaries.Count; i++)
+        {
+            LabKey key = temporaries[i];
+            if (key == null) continue;
+            Destroy(key.gameObject);
+        }
+        temporaries.Clear();
     }
 
     static Sprite MakeSprite()
