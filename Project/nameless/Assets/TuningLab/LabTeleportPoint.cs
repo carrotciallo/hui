@@ -44,6 +44,7 @@ public sealed class LabTeleportPoint : MonoBehaviour
             renderer.sprite = cachedSprite;
             renderer.color = inactiveColor;
             renderer.sortingOrder = -1;
+            LabArt.Apply(renderer, "portal");
         }
     }
 

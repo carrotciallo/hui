@@ -55,6 +55,7 @@ public sealed class LabHiddenBlock : MonoBehaviour
         spriteRenderer.sprite = TuningLab.WhiteSprite;
         spriteRenderer.color = CurrentColor();
         spriteRenderer.sortingOrder = SortingOrder;
+        LabArt.Apply(spriteRenderer, "terrain");
     }
 
     void Update()
