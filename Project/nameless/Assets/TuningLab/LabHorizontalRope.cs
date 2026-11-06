@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>
 /// 横绳：16×4 像素的平台。零级/一级挡住，二级允许向下通过，
 /// 三级及以上向上弹回并提升一个速度等级。
-/// 绳接触不参与地形锻造；只有弹回这一种情况会按红热撞击结算边态。
+/// 绳接触不参与地形锻造；只有弹回这一种情况会把接触边点到热二，热二再弹不会塌框。
 /// </summary>
 [RequireComponent(typeof(BoxCollider2D))]
 public sealed class LabHorizontalRope : MonoBehaviour
@@ -92,8 +92,8 @@ public sealed class LabHorizontalRope : MonoBehaviour
         }
 
         player.ApplyBounce(Vector2.up, BounceSpeed(player));
-        // 绳接触不锻造；只有反弹这一种情况按正常红热撞击结算。
-        player.ApplyTerrainImpact(Vector2.up, impact);
+        // 绳接触不锻造；只有反弹这一种情况会把接触边点到热二，热二再弹不会塌框。
+        player.ApplyRopeBounceHeat(Vector2.up, impact);
         LabAudio.Play(LabAudio.Cue.RopeBounce);
         Raise(player, tier, false, true);
     }

@@ -433,8 +433,8 @@ public class LabPlayer : MonoBehaviour
 
                 if (onIce)
                 {
-                    // a = g：v² 每 4 格增加一个等级间距；已经超速时不反向减速。
-                    float cap = lab.IceMaxSpeed;
+                    // a = g：v² 每 4 格增加一个等级间距；已经超速时不反向减速。上限和下落共用。
+                    float cap = lab.TopTierSpeed;
                     if (moveX * v.x < cap)
                         v.x = Mathf.MoveTowards(v.x, moveX * cap, lab.gravity * dt);
                 }
@@ -473,7 +473,8 @@ public class LabPlayer : MonoBehaviour
             LabAudio.Play(LabAudio.Cue.Jump);
         }
 
-        if (v.y < -lab.maxFallSpeed) v.y = -lab.maxFallSpeed;
+        // 下落封顶和冰面加速共用同一个顶档上限：到顶档后速度不再涨，读数也不会超过顶档。
+        if (v.y < -lab.TopTierSpeed) v.y = -lab.TopTierSpeed;
 
         // ---- 驮着走：站在队友头上时横向跟随他，自己的方向键仍然有效（用来在头上挪位置）----
         // 冲刺那几段不接管，否则会在别人头上冲刺时被硬拉回来
@@ -699,7 +700,7 @@ public class LabPlayer : MonoBehaviour
     }
 
     /// <summary>
-    /// 结算一次场景撞击。普通地形和绳反弹共用；冰和岩浆有自己的结算，不走这里。
+    /// 结算一次场景撞击。普通地形走这里；绳反弹、冰和岩浆有自己的结算，不走这里。
     /// normal 从物件指向玩家，impact 是碰撞前沿 normal 的分量。
     /// </summary>
     public void ApplyTerrainImpact(Vector2 normal, float impact)
@@ -708,6 +709,19 @@ public class LabPlayer : MonoBehaviour
         if (impact < lab.ForgeSpeed) return;
         StrikeEdge(EdgeFor(-normal), impact >= lab.RedHotSpeed);
         LabAudio.PlayImpact(LastImpactTier);
+    }
+
+    /// <summary>
+    /// 绳反弹的边结算：只把普通边点到热二，不推进地形撞击的塌框 / 碎边状态机。
+    /// 反复在绳上弹只会让同一条边保持红热，不会被自己的反弹砸死。
+    /// </summary>
+    public void ApplyRopeBounceHeat(Vector2 normal, float impact)
+    {
+        if (lab == null || !canBeRedHot) return;
+        if (impact < lab.RedHotSpeed) return;
+
+        Edge edge = EdgeFor(-normal);
+        if (edgeStates[(int)edge] == EdgeState.Normal) SetEdge(edge, EdgeState.Hot2);
     }
 
     static bool IsPhantom(Collider2D collider) =>
@@ -1582,6 +1596,8 @@ public class LabPlayer : MonoBehaviour
             case 2: return new Color(1f, 0.55f, 0.15f);   // v2 橙
             case 3: return new Color(0.3f, 0.8f, 1f);     // v3 蓝
             case 4: return Color.white;                   // v4 白
+            case 5: return new Color(0.72f, 0.42f, 1f);   // v5 紫
+            case 6: return new Color(1f, 0.28f, 0.68f);   // v6 品红
             default: return new Color(0.36f, 0.62f, 1f);  // v0
         }
     }

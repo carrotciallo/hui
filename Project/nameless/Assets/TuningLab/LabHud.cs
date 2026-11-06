@@ -134,7 +134,6 @@ public class LabHud : MonoBehaviour
         lab.dashCooldown = Slider("冲刺充能时间", lab.dashCooldown, 0.1f, 3f, "0.00");
         lab.dashDistanceCells = Slider("冲刺位移(格)", lab.dashDistanceCells, 0f, 8f, "0.0");
         lab.dashOverV0Cells = Slider("Vd1 高出 v0(格)", lab.dashOverV0Cells, 0.01f, 1f, "0.00");
-        lab.maxFallSpeed = Slider("最大下落速度", lab.maxFallSpeed, 10f, 60f, "0.0");
 
         GUILayout.Space(4f);
         lab.holdToJump = GUILayout.Toggle(lab.holdToJump, " 按住跳跃连跳", small);
@@ -147,6 +146,7 @@ public class LabHud : MonoBehaviour
         lab.tierCount = Mathf.RoundToInt(Slider("等级数（不含 v0）", lab.tierCount, 1f, 6f, "0"));
         lab.tierFirstCells = Slider("首级门槛(格)", lab.tierFirstCells, 0.5f, 10f, "0.0");
         lab.tierSpacingCells = Slider("每级间距(格)", lab.tierSpacingCells, 0.5f, 6f, "0.0");
+        lab.capOverTopCells = Slider("上限高出顶档(格)", lab.capOverTopCells, 0.1f, 16f, "0.0");
         lab.redHotTierIndex = Mathf.RoundToInt(Slider("红热门槛级", lab.redHotTierIndex, 0f, 4f, "0"));
         lab.forgeTierIndex = Mathf.RoundToInt(Slider("锻造门槛级", lab.forgeTierIndex, 0f, 4f, "0"));
         lab.iceBreakTierIndex = Mathf.RoundToInt(Slider("冰块破坏级", lab.iceBreakTierIndex, 0f, 4f, "0"));
@@ -168,12 +168,12 @@ public class LabHud : MonoBehaviour
         lab.groundBrake = 30f;
         lab.airBrake = 0f;
         lab.dashCooldown = 0.8f;
-        lab.tierCount = 4;
+        lab.tierCount = 6;
         lab.tierFirstCells = 4f;
         lab.tierSpacingCells = 4f;
+        lab.capOverTopCells = 4f;
         lab.redHotTierIndex = 1;
         lab.forgeTierIndex = 0;
-        lab.maxFallSpeed = TierMath.SpeedForCells(17f, g);
     }
 
     float Slider(string name, float value, float min, float max, string format)
@@ -261,6 +261,8 @@ public class LabHud : MonoBehaviour
             GUILayout.Label(string.Format("v{0}/v{1}  {2:0.0} 格  v={3:0.0}  v²={4:0}",
                 i, i + 1, cells, sp, sp * sp), small);
         }
+        GUILayout.Label(string.Format("顶档上限  {0:0.0} 格  v={1:0.0}   下落 / 冰面共用；大炮 / 绳可以超过",
+            lab.CellsForSpeed(lab.TopTierSpeed), lab.TopTierSpeed), small);
 
         GUILayout.Space(6f);
         GUILayout.Label("像素密度", title);

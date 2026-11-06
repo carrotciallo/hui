@@ -31,7 +31,7 @@ B 的冲刺键 `.` 变成**开炮**，把 B 按进入方向的反向打出去，
 召回需要先在关卡里放召回道具（基准室内没有）。拾取后 HUD 显示“召回 已解锁”：A 按 `Q`、B 按右 `Shift`，
 把另一名玩家拉到施法者头顶并在旧位置留下幻影；规则见 §3.10。
 
-V3/V4 会留下残影和拖尾；任一玩家死亡时屏幕边缘闪红。音效由运行时 `LabAudio` 挂载，不依赖场景对象。
+V3 起会留下残影和拖尾（顶档 V6 更多更亮）；任一玩家死亡时屏幕边缘闪红。音效由运行时 `LabAudio` 挂载，不依赖场景对象。
 
 ## 设置界面
 
@@ -83,7 +83,7 @@ Assets/TuningLab/
 ├── LabPlayer.cs          移动、跳跃、冲刺、碰撞、形态、召回输入
 ├── LabCamera.cs          双人跟随、缩放和分区相机范围
 ├── LabVisual.cs          玩家边框/眼睛
-├── LabSpeedFeedback.cs   V3/V4 残影与拖尾
+├── LabSpeedFeedback.cs   V3 起 / 顶档 V6 残影与拖尾
 ├── LabAudio.cs           运行时音效（12 个 Cue）
 ├── LabSettingsUI.cs      纯图标设置界面、Esc 暂停/恢复
 ├── LabSettingsStore.cs   设置 JSON、备份与坏档恢复

@@ -82,17 +82,18 @@ public class TuningLab : MonoBehaviour
     [Tooltip("一次灵体状态存在的时间（秒）。从四条边全碎那一刻开始计，中途不暂停，耗尽即死并吐出一把临时钥匙。")]
     [Min(0.01f)] public float spiritDuration = 6f;
 
-    /// <summary>没有检查点时的死亡后果。</summary>
+    /// <summary>关卡里没有任何重生点时的死亡后果。</summary>
     public enum DeathFallback
     {
-        /// <summary>沿用实验台行为：直接把死掉的人销毁，只剩队友。</summary>
+        /// <summary>沿用实验台行为：把死亡的玩家直接销毁。</summary>
         DestroyPlayer = 0,
         /// <summary>重开本关：两人回出生点，门重新关上、被捡走的钥匙长回来。</summary>
         RespawnAtSpawn = 1
     }
 
     [Header("死亡")]
-    [Tooltip("地刺/塌框致死时，本关没有已激活的检查点：销毁本人（原实验台行为）还是重开本关回出生点。\n" +
+    [Tooltip("两人都死亡、且本关一个重生点都没有时才生效：销毁两人（原实验台行为）还是重开本关回出生点。\n" +
+             "关卡里有重生点时一律强制触发重生点，两人以普通状态复活。\n" +
              "带地刺的正式关卡要用 RespawnAtSpawn，否则第一脚踩空就把人删了。")]
     public DeathFallback deathWhenNoCheckpoint = DeathFallback.DestroyPlayer;
 
@@ -101,12 +102,12 @@ public class TuningLab : MonoBehaviour
     public float tierFirstCells = 4f;
     [Tooltip("每级之间的落差（格）。4 = 4/8/12/16 格。")]
     public float tierSpacingCells = 4f;
-    [Tooltip("等级数（不含零级）。4 → 零级..四级。")]
-    [Range(1, 6)] public int tierCount = 4;
+    [Tooltip("等级数（不含零级）。6 → 零级..六级。碰撞只读到顶档：更快的速度仍按顶档算。")]
+    [Range(1, 6)] public int tierCount = 6;
 
-    [Header("上限")]
-    [Tooltip("要能掉出最高一级：maxFall ≥ √(2·g·最高门槛)。g=50、门槛 16 格时需要 40。")]
-    public float maxFallSpeed = 42f;
+    [Header("速度上限")]
+    [Tooltip("顶档上限 = 顶档门槛 + 这个格数。下落和冰面加速共用同一个值；必须 > 0，否则速度永远差一点进不了顶档。默认 4 = 一个等级间距。")]
+    [Min(0.01f)] public float capOverTopCells = 4f;
 
     // 1 格 = 16 px，原生 384×216 = 24 × 13.5 格。改这个等于重做所有关卡尺寸，别乱动。
     public const int CellPixels = 16;
@@ -154,7 +155,7 @@ public class TuningLab : MonoBehaviour
     [Range(0f, 1f)] public float ghostAlphaTier3 = 0.5f;
     [Tooltip("起始档残影存活（秒）。")]
     public float ghostLifeTier3 = 0.6f;
-    [Tooltip("顶档同时存在的残影数（tierCount=4 时即 V4）。")]
+    [Tooltip("顶档同时存在的残影数（tierCount=6 时即 V6）。")]
     [Range(0, 12)] public int ghostCountTopTier = 5;
     [Tooltip("顶档残影初始不透明度。")]
     [Range(0f, 1f)] public float ghostAlphaTopTier = 0.7f;
@@ -168,7 +169,7 @@ public class TuningLab : MonoBehaviour
     [Range(1, 6)] public int trailEverySteps = 2;
     [Tooltip("拖尾亮点 V3 初始不透明度。")]
     [Range(0f, 1f)] public float trailAlphaTier3 = 0.85f;
-    [Tooltip("拖尾亮点 V4 初始不透明度。")]
+    [Tooltip("拖尾亮点顶档（V6）初始不透明度。")]
     [Range(0f, 1f)] public float trailAlphaTopTier = 1f;
 
     public LabPlayer PlayerA { get; private set; }
@@ -261,8 +262,11 @@ public class TuningLab : MonoBehaviour
     public float IceBreakSpeed => SpeedForCells(Boundary(Mathf.Max(0, IceBreakTier - 1)));
     /// <summary>岩浆块整组破坏的碰撞门槛：固定三级（该等级的下边界速度）。</summary>
     public float MagmaBreakSpeed => SpeedForCells(Boundary(Mathf.Max(0, LabMagma.BreakTier - 1)));
-    /// <summary>冰面加速的上限：最高等级的名义顶端（默认 v4 ≈ 44.72）。</summary>
-    public float IceMaxSpeed => SpeedForCells(Boundary(MaxTier - 1) + Mathf.Max(0.01f, tierSpacingCells));
+    /// <summary>
+    /// 顶档上限：下落速度和冰面加速都封在这里（默认 6 级 → 24 + 4 = 28 格 ≈ 52.92）。
+    /// 大炮、绳子反弹、双人互换是冲量，可以超过它；超过后等级读数仍是顶档。
+    /// </summary>
+    public float TopTierSpeed => SpeedForCells(Boundary(MaxTier - 1) + Mathf.Max(0.01f, capOverTopCells));
     /// <summary>大炮发射的增量 = 一个等级间距的 v²（= 2·g·间距格数）。v' = √(Vb² + 这个数)。</summary>
     public float CannonBoostV2 => 2f * gravity * Mathf.Max(0.01f, tierSpacingCells);
 
@@ -300,6 +304,7 @@ public class TuningLab : MonoBehaviour
         }
     }
 
+    /// <summary>等级读数上限：碰撞只认到这一级，更快的速度不会解锁更强的效果。</summary>
     public int MaxTier => Bounds.Length;
     public float Boundary(int index) => index >= 0 && index < Bounds.Length ? Bounds[index] : 0f;
 
@@ -557,8 +562,9 @@ public class TuningLab : MonoBehaviour
 
     /// <summary>
     /// 任意一名玩家死亡后由 <see cref="LabPlayer.Kill"/> 调用。
-    /// 单人只是隐藏等待；两人都死亡才结算：有激活的重生点就双人重生，
-    /// 否则只在场景里只有一个重生点时回它，再否则按 <see cref="deathWhenNoCheckpoint"/> 处理。
+    /// 单人只是隐藏等待；两人都死亡才结算：强制触发一个重生点（优先最后激活的点，
+    /// 没激活过就选离最后一次死亡位置最近的点），两人以普通状态双人重生；
+    /// 关卡里没有重生点时才按 <see cref="deathWhenNoCheckpoint"/> 处理。
     /// </summary>
     public void NotifyPlayerDied(LabPlayer deadPlayer)
     {
@@ -578,16 +584,15 @@ public class TuningLab : MonoBehaviour
 
     void ResolveTeamDeath(LabPlayer deadPlayer)
     {
-        if (ActiveRespawnPoint != null)
-        {
-            ActiveRespawnPoint.RespawnRecordedPlayers(this);
-            return;
-        }
+        // 两人都死亡一律强制触发：有激活的点回激活点，没有就回离最后一次死亡最近的点。
+        LabRespawnPoint point = ActiveRespawnPoint != null
+            ? ActiveRespawnPoint
+            : NearestRespawnPoint(TeamDeathPosition(deadPlayer));
 
-        if (respawnPoints.Count == 1 && respawnPoints[0] != null)
+        if (point != null)
         {
-            ActivateRespawnPoint(respawnPoints[0]);
-            respawnPoints[0].RespawnRecordedPlayers(this);
+            ActivateRespawnPoint(point);
+            point.ForceRespawn(this);
             return;
         }
 
@@ -599,6 +604,34 @@ public class TuningLab : MonoBehaviour
         }
 
         DestroyDeadPlayers(deadPlayer);
+    }
+
+    /// <summary>强制触发的参考位置：最后一次死亡的位置；没有死亡位置时回落到存活玩家。</summary>
+    Vector2 TeamDeathPosition(LabPlayer deadPlayer)
+    {
+        if (deadPlayer != null) return deadPlayer.transform.position;
+        if (PlayerA != null) return PlayerA.transform.position;
+        if (PlayerB != null) return PlayerB.transform.position;
+        return Vector2.zero;
+    }
+
+    /// <summary>离参考位置最近的重生点；同距离取注册顺序靠前的那个，保证结果确定。</summary>
+    LabRespawnPoint NearestRespawnPoint(Vector2 position)
+    {
+        for (int i = respawnPoints.Count - 1; i >= 0; i--)
+            if (respawnPoints[i] == null) respawnPoints.RemoveAt(i);
+
+        LabRespawnPoint nearest = null;
+        float best = float.MaxValue;
+        for (int i = 0; i < respawnPoints.Count; i++)
+        {
+            var point = respawnPoints[i];
+            float distance = ((Vector2)point.transform.position - position).sqrMagnitude;
+            if (distance >= best) continue;
+            best = distance;
+            nearest = point;
+        }
+        return nearest;
     }
 
     void DestroyDeadPlayers(LabPlayer deadPlayer)

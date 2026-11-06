@@ -2,8 +2,9 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 3×3 重生点：任一玩家从区域外进入触发区时激活，并记录两人的边框形态。
-/// 活着进点的人保留当前形态，已死亡的人以全新状态复活；两人都死亡时按记录形态一起重生。
+/// 3×3 重生点：任一玩家从区域外进入触发区时激活；两人都死亡时由 <see cref="TuningLab"/> 强制触发。
+/// 触发时重置地图、清钥匙，并把两人放回点中心左右各 1 格：活着进点的人保留当前形态，
+/// 两人都死亡后的强制触发一律以普通状态复活。
 /// 已经在区域里、贴着边缘停留都不会重复触发；全员离开后再次进入才再次触发。
 /// 被传送、复活或出生直接放进区域不算“进入”。
 /// </summary>
@@ -19,11 +20,6 @@ public sealed class LabRespawnPoint : MonoBehaviour
     SpriteRenderer renderer;
     readonly HashSet<LabPlayer> touching = new HashSet<LabPlayer>();
     bool contactResolved;
-
-    // 形态记录：激活时把两人当时的四条边存下来，两人都死亡后按它复活。
-    bool hasFormRecord;
-    LabPlayer.FormState formA;
-    LabPlayer.FormState formB;
 
     // 每名玩家上一次采样时的状态。只有“活着、不在膛里”的身体从区域外跨进来才算进入；
     // TeleportCount 变了说明这次重叠是传送/复活放进去的，也不能算进入。
@@ -159,74 +155,33 @@ public sealed class LabRespawnPoint : MonoBehaviour
 
     public bool IsTouching(LabPlayer player) => player != null && touching.Contains(player);
 
-    /// <summary>
-    /// 玩家进入触发区：先记录两人当前形态，再传送两人、清钥匙、重置地图。
-    /// 活着的人保留当前形态；已经死亡的人以全新状态复活（同时按全新状态记录）。
-    /// </summary>
-    public void RespawnOnEnter(TuningLab owner)
-    {
-        if (owner == null) return;
-        contactResolved = true;
-        RecordForms(owner);
-        owner.ResetMap();
-        PlacePlayer(owner.PlayerA, (Vector2)transform.position + Vector2.left);
-        PlacePlayer(owner.PlayerB, (Vector2)transform.position + Vector2.right);
-    }
+    /// <summary>进点触发：活着的人保留当前形态；已经死亡的人以普通状态复活。</summary>
+    public void RespawnOnEnter(TuningLab owner) => RespawnTeam(owner, true);
 
-    /// <summary>
-    /// 两人都死亡时结算：按最后一次激活时记录的状态复活；这条点从没被激活过则用全新状态。
-    /// </summary>
-    public void RespawnRecordedPlayers(TuningLab owner)
+    /// <summary>两人都死亡时的强制触发：两人都清回普通状态，从点左右两侧站起来。</summary>
+    public void ForceRespawn(TuningLab owner) => RespawnTeam(owner, false);
+
+    /// <summary>一次触发只重置一次地图：两人清空钥匙和运动状态，再放回点左右各 1 格。</summary>
+    void RespawnTeam(TuningLab owner, bool keepLivingForms)
     {
         if (owner == null) return;
         contactResolved = true;
         owner.ResetMap();
-        ReviveWithRecord(owner.PlayerA, (Vector2)transform.position + Vector2.left, formA);
-        ReviveWithRecord(owner.PlayerB, (Vector2)transform.position + Vector2.right, formB);
+        PlacePlayer(owner.PlayerA, (Vector2)transform.position + Vector2.left, keepLivingForms);
+        PlacePlayer(owner.PlayerB, (Vector2)transform.position + Vector2.right, keepLivingForms);
     }
 
-    void RecordForms(TuningLab owner)
-    {
-        formA = CaptureForm(owner.PlayerA);
-        formB = CaptureForm(owner.PlayerB);
-        hasFormRecord = true;
-    }
-
-    static LabPlayer.FormState CaptureForm(LabPlayer player)
-        => player != null && player.IsAlive ? player.CaptureForm() : LabPlayer.FormState.Normal;
-
-    /// <summary>进点时活着的人保留形态；死的人用 ReviveAt 的全新状态从点位上站起来。</summary>
-    static void PlacePlayer(LabPlayer player, Vector2 position)
+    /// <summary>
+    /// 把一名玩家放到点位上。死亡的人先以普通状态复活；活着的人按 keepForm 决定
+    /// 保留当前形态，还是走 <see cref="LabPlayer.Teleport"/> 把四条边清回普通状态。
+    /// </summary>
+    static void PlacePlayer(LabPlayer player, Vector2 position, bool keepForm)
     {
         if (player == null) return;
         player.ClearKeys();
-        if (player.IsAlive) player.TeleportPreservingState(position, Vector2.zero);
-        else player.ReviveAt(position);
-    }
-
-    void ReviveWithRecord(LabPlayer player, Vector2 position, LabPlayer.FormState form)
-    {
-        if (player == null) return;
-        player.ClearKeys();
-        player.ReviveAt(position);
-        if (hasFormRecord) player.ApplyForm(form);
-    }
-
-    public void ResetPoint()
-    {
-        IsActive = false;
-        contactResolved = false;
-        touching.Clear();
-        trackedA = null;
-        trackedB = null;
-        activeA = false;
-        activeB = false;
-        insideA = false;
-        insideB = false;
-        hasFormRecord = false;
-        formA = LabPlayer.FormState.Normal;
-        formB = LabPlayer.FormState.Normal;
-        if (renderer != null) renderer.color = inactiveColor;
+        if (!player.IsAlive) player.ReviveAt(position);                   // ReviveAt → Teleport → ResetEdges
+        else if (keepForm) player.TeleportPreservingState(position, Vector2.zero);
+        else player.Teleport(position);
     }
 
     static Sprite MakeSprite()

@@ -59,7 +59,7 @@ public sealed class LabSpeedFeedback : MonoBehaviour
         Expire(dots, dt);
     }
 
-    /// <summary>顶档 = tierCount（默认 4 时即 V4）；其余档位共用起始参数。</summary>
+    /// <summary>顶档 = tierCount（默认 6 时即 V6）；其余档位共用起始参数。</summary>
     bool IsTopTier(int tier) => lab != null && tier >= Mathf.Max(2, lab.tierCount);
 
     void TrySpawnGhost()
