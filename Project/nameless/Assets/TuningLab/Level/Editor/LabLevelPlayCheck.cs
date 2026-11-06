@@ -338,8 +338,11 @@ public static class LabLevelPlayCheck
             Check(sb, ref fails, ice.groupId == IceGroup,
                 "冰块组号 = " + IceGroup + "，实际 " + ice.groupId);
             Check(sb, ref fails,
-                ice.GetComponent<SpriteRenderer>().color == LabIce.GroupColor(IceGroup),
-                "冰块运行时使用组色");
+                ice.GetComponent<SpriteRenderer>().color == LabIce.DefaultColor,
+                "冰块填充保持默认冰蓝");
+            Check(sb, ref fails,
+                ice.GroupBorder != null && ice.GroupBorder.color == LabIce.GroupColor(IceGroup),
+                "冰块运行时使用组色边框");
 
             var iceBody = ice.GetComponent<BoxCollider2D>();
             Check(sb, ref fails, iceBody != null && !iceBody.isTrigger

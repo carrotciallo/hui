@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// 一格冰块：1×1 的实体方块，可以站立和滑行。
-/// 视觉是按 groupId 推导的组色边框 + 半透明填充，编辑器手柄和运行时共用同一套颜色。
+/// 视觉是默认冰蓝填充 + 按 groupId 推导的 2 像素组色边框，编辑器手柄和运行时共用同一套颜色。
 ///
 /// 破坏有两条路，都由玩家侧结算：
 ///   组内任意一块沿接触法线被 v2 撞击 → 整组一起碎（优先于红热）；
@@ -20,6 +20,8 @@ using UnityEngine;
 public sealed class LabIce : MonoBehaviour
 {
     public static readonly Color DefaultColor = new Color(0.42f, 0.75f, 1f);
+    /// <summary>0 号组的边框色：比填充更深，避免和默认冰蓝混在一起。</summary>
+    public static readonly Color DefaultBorderColor = new Color(0.12f, 0.42f, 0.85f);
 
     /// <summary>组色序列的长度：前 1024 个 groupId 的颜色互不重复（测试覆盖）。</summary>
     public const int GroupColorCount = 1024;
@@ -29,16 +31,20 @@ public sealed class LabIce : MonoBehaviour
 
     public Vector2Int cell;
     public int groupId;
-    [Tooltip("勾选后按 groupId 自动取组色；取消后使用下面的 color 自定义。")]
+    [Tooltip("勾选后按 groupId 自动取边框组色；取消后边框使用下面的 color，填充始终是默认冰蓝。")]
     public bool useGroupColor = true;
     public Color color = DefaultColor;
 
-    static Sprite cachedSprite;
+    static Sprite cachedBorderSprite;
 
     public bool Broken { get; private set; }
 
+    /// <summary>组色边框的渲染器；填充仍然是原来那块默认冰蓝。</summary>
+    public SpriteRenderer GroupBorder => borderRenderer;
+
     BoxCollider2D body;
     SpriteRenderer spriteRenderer;
+    SpriteRenderer borderRenderer;
     CompositeCollider2D composite;
 
     void Awake() => ApplyShape();
@@ -51,13 +57,13 @@ public sealed class LabIce : MonoBehaviour
     void OnDisable() => All.Remove(this);
 
     /// <summary>
-    /// 由一个 groupId 推导稳定的组色。0 号组保留默认冰蓝；其余组用黄金角散列，
+    /// 由一个 groupId 推导稳定的边框色。0 号组用深蓝；其余组用黄金角散列，
     /// 再叠加饱和度和明度的低频变化，前 <see cref="GroupColorCount"/> 组互不重复。
     /// 编辑器手柄和运行时边框都调用这一个函数，保证两边颜色一致。
     /// </summary>
     public static Color GroupColor(int groupId)
     {
-        if (groupId == 0) return DefaultColor;
+        if (groupId == 0) return DefaultBorderColor;
 
         float hue = Mathf.Repeat(0.58f + groupId * 0.61803398875f, 1f);
         float saturation = 0.50f + 0.25f * Mathf.Repeat(groupId * 0.41421356237f, 1f);
@@ -88,11 +94,31 @@ public sealed class LabIce : MonoBehaviour
         if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
         if (spriteRenderer != null)
         {
-            spriteRenderer.sprite = IceSprite();
-            spriteRenderer.color = useGroupColor ? GroupColor(groupId) : color;
+            // 填充保持原版冰块的蓝色；组色只加在外圈边框上。
+            spriteRenderer.sprite = TuningLab.WhiteSprite;
+            spriteRenderer.color = color;
             spriteRenderer.sortingOrder = 1;
             spriteRenderer.enabled = !Broken;
         }
+
+        EnsureBorder();
+        if (borderRenderer != null)
+        {
+            borderRenderer.color = useGroupColor ? GroupColor(groupId) : color;
+            borderRenderer.enabled = !Broken;
+        }
+    }
+
+    /// <summary>边框是冰块的子物体，只有 2 像素宽的边，中间透明，露出蓝色填充。</summary>
+    void EnsureBorder()
+    {
+        if (borderRenderer != null) return;
+
+        var go = new GameObject("GroupBorder");
+        go.transform.SetParent(transform, false);
+        borderRenderer = go.AddComponent<SpriteRenderer>();
+        borderRenderer.sprite = BorderSprite();
+        borderRenderer.sortingOrder = 2;
     }
 
     /// <summary>只碎这一块；所在组的其它冰块不动。</summary>
@@ -120,6 +146,7 @@ public sealed class LabIce : MonoBehaviour
         Broken = true;
         if (body != null) body.enabled = false;
         if (spriteRenderer != null) spriteRenderer.enabled = false;
+        if (borderRenderer != null) borderRenderer.enabled = false;
     }
 
     /// <summary>地图重置 / 复活时恢复：碰撞和渲染都回来。</summary>
@@ -139,12 +166,12 @@ public sealed class LabIce : MonoBehaviour
     }
 
     /// <summary>
-    /// 运行时冰块的贴图：2 像素透明边框 + 半透明填充。颜色由 SpriteRenderer.color 统一染色，
+    /// 组色边框的贴图：2 像素不透明边框，中间完全透明。颜色由 SpriteRenderer.color 染色，
     /// 所以同一张贴图能显示任意组色，不需要每组生成一张贴图。
     /// </summary>
-    static Sprite IceSprite()
+    static Sprite BorderSprite()
     {
-        if (cachedSprite != null) return cachedSprite;
+        if (cachedBorderSprite != null) return cachedBorderSprite;
 
         const int size = TuningLab.CellPixels;
         const int border = 2;
@@ -161,14 +188,14 @@ public sealed class LabIce : MonoBehaviour
                 bool edge = x < border || y < border || x >= size - border || y >= size - border;
                 pixels[y * size + x] = edge
                     ? new Color32(255, 255, 255, 255)
-                    : new Color32(255, 255, 255, 64);
+                    : new Color32(0, 0, 0, 0);
             }
         }
         texture.SetPixels32(pixels);
         texture.Apply();
-        cachedSprite = Sprite.Create(texture, new Rect(0f, 0f, size, size),
+        cachedBorderSprite = Sprite.Create(texture, new Rect(0f, 0f, size, size),
             new Vector2(0.5f, 0.5f), TuningLab.CellPixels);
-        return cachedSprite;
+        return cachedBorderSprite;
     }
 
     /// <summary>这个点落在哪一块未破坏的冰上；合并地形需要靠接触点找回是哪一格。</summary>

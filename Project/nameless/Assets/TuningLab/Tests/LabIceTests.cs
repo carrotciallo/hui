@@ -87,12 +87,13 @@ public sealed class LabIceTests
             Assert.IsTrue(seen.Add(color), "组号 " + groupId + " 的组色与前面的组重复");
         }
 
-        Assert.AreEqual(LabIce.DefaultColor, LabIce.GroupColor(0), "0 号组保留默认冰蓝");
+        Assert.AreEqual(LabIce.DefaultBorderColor, LabIce.GroupColor(0), "0 号组使用深蓝边框");
+        Assert.AreNotEqual(LabIce.DefaultColor, LabIce.GroupColor(0), "0 号组边框和填充不能同色");
         Assert.AreNotEqual(LabIce.GroupColor(1), LabIce.GroupColor(2), "相邻组号颜色不同");
     }
 
     [UnityTest]
-    public IEnumerator RuntimeIceUsesPerGroupBorderColor()
+    public IEnumerator RuntimeIceKeepsBlueFillAndUsesPerGroupBorder()
     {
         var level = root.AddComponent<LabLevel>();
         lab.level = level;
@@ -107,14 +108,20 @@ public sealed class LabIceTests
 
         var first = ices[0].GetComponent<SpriteRenderer>();
         var second = ices[1].GetComponent<SpriteRenderer>();
-        Assert.AreEqual(LabIce.GroupColor(1), first.color, "运行时冰块使用 1 号组色");
-        Assert.AreEqual(LabIce.GroupColor(2), second.color, "运行时冰块使用 2 号组色");
-        Assert.AreNotEqual(first.color, second.color, "不同组的冰块颜色不同");
+        Assert.AreEqual(LabIce.DefaultColor, first.color, "填充保持默认冰蓝");
+        Assert.AreEqual(LabIce.DefaultColor, second.color, "填充保持默认冰蓝");
 
-        var texture = first.sprite.texture;
+        Assert.IsNotNull(ices[0].GroupBorder, "1 号组有边框");
+        Assert.IsNotNull(ices[1].GroupBorder, "2 号组有边框");
+        Assert.AreEqual(LabIce.GroupColor(1), ices[0].GroupBorder.color, "1 号组边框色");
+        Assert.AreEqual(LabIce.GroupColor(2), ices[1].GroupBorder.color, "2 号组边框色");
+        Assert.AreNotEqual(ices[0].GroupBorder.color, ices[1].GroupBorder.color,
+            "不同组的边框颜色不同");
+
+        var texture = ices[0].GroupBorder.sprite.texture;
         Assert.AreEqual(1f, texture.GetPixel(0, 0).a, 0.02f, "组色边框不透明");
-        Assert.Less(texture.GetPixel(texture.width / 2, texture.height / 2).a, 0.5f,
-            "内部填充半透明");
+        Assert.AreEqual(0f, texture.GetPixel(texture.width / 2, texture.height / 2).a,
+            0.02f, "边框中间透明，露出蓝色填充");
         yield return null;
     }
 
