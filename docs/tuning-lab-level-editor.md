@@ -15,43 +15,49 @@
 
    这会生成 `Assets/Scenes/TuningLab.unity`。
 
-需要在命令行验证“能否编译并通过数据检查”时，在仓库根目录执行：
+需要在命令行验证“能否编译并通过数据检查”时，见 §7.1 的 `LabLevelSelfCheck.RunBatch` 命令。
+
 ## 1. 边界
 
 - **唯一规则基准**：`Assets/TuningLab/`。速度等级、跳/冲/撞、玩家尺寸、相机都以这里为准。
 - **1 格 = 1 世界单位 = 16px**；原生分辨率 384×216；所有位置、尺寸、速度都用格描述。
 - **关卡场景必须从 Tuning Lab 派生**：复制 `TuningLab.unity`，挂 `LabLevel`，用 `TuningLab.CaptureBaseline()` 写入基准房间。
 - **一个 scene 放全部关卡**：`LabLevelData` 里一份地形/绳/出生点 + 多个 `LabLevelPartition`。
-- **不再维护旧 World/Prototype/Materials/Forms 场景和脚本**；`Assets` 只保留 TuningLab、TuningLab 场景/Levels、URP Settings。
+- **不再维护旧 World/Prototype/Materials/Forms 场景和脚本**；`Assets` 只保留 TuningLab、TuningLab 场景/Levels、`Sounds`、URP Settings。
 - 旧文档（README/策划案等）仍保留，但描述的是清理前的旧游戏；以本文和 `Assets/TuningLab` 代码为准。
 
 ## 2. 代码地图
 
 | 文件 | 职责 |
 | --- | --- |
-| `Assets/TuningLab/TuningLab.cs` | 参数、内置房间描述 `DescribeRoom`、`CaptureBaseline`、相机 `GetCameraFrame`、HUD/网格 |
-| `Assets/TuningLab/LabPlayer.cs` | 方块玩家：移动、跳、四向冲刺、撞击、驮带 |
+| `Assets/TuningLab/TuningLab.cs` | 参数、内置房间描述 `DescribeRoom`、`CaptureBaseline`、相机 `GetCameraFrame`、HUD/网格、音效/表现层挂载和死亡闪红 |
+| `Assets/TuningLab/LabPlayer.cs` | 方块玩家：移动、跳、四向冲刺、撞击、驮带、形态、召回输入与幻影膛 |
+| `Assets/TuningLab/LabVisual.cs` | 玩家分层视觉（外圈等级 / 边框 / 眼睛） |
+| `Assets/TuningLab/LabSpeedFeedback.cs` | 速度反馈：V3/V4 残影与拖尾，对象池回收 |
+| `Assets/TuningLab/LabAudio.cs` | 运行时音效播放器：12 个 Cue，`Resources.LoadAll` 取素材，无场景引用 |
 | `Assets/TuningLab/LabCamera.cs` | 跟随 A/B 中点；按 B 查当前分区的 bounds/min-max，并做混合 |
 | `Assets/TuningLab/LabVerticalRope.cs` | 竖绳；零/一级挡住、二级沿接触法线穿过、三级以上沿法线反弹并提升一级；`ApplyShape` 同时服务预览和 Play |
 | `Assets/TuningLab/LabHorizontalRope.cs` | 横绳平台；零/一级挡住、二级向下穿过、三级以上反弹并提升一级 |
 | `Assets/TuningLab/LabIce.cs` | 冰块：`groupId` 编组、单块融化、整组破坏和地图重置恢复；冰面并入地形合并碰撞，滑行不碎不卡脚 |
 | `Assets/TuningLab/LabMagma.cs` | 岩浆块：每个接触面首次接触强制红热、热二边再接触死亡、v2+ 撞击死亡、v3 整组破坏和地图重置恢复 |
+| `Assets/TuningLab/LabHiddenBlock.cs` | 隐藏方块：无实体、外形与墙一致，按组盖住物件；玩家完全进入整组后永久半透明，地图重置不恢复 |
 | `Assets/TuningLab/LabRecallPickup.cs` | 召回道具：1×1 触发区，任一玩家拾取后全队永久解锁召回，地图重置不刷新 |
 | `Assets/TuningLab/LabPhantom.cs` | 召回留下的幻影：复制被召回者形态、只对另一名玩家生效、最多 3 个 FIFO；A 的 u/L 幻影可让 B 从底面进入 |
 | `Assets/TuningLab/LabRespawnPoint.cs` | 重生点：3×3 触发区，任一玩家从区域外进入即记录两人形态并双人固定重生；`ApplyShape` 同时服务预览和 Play |
-| `Assets/TuningLab/LabTeleportPoint.cs` | 传送点：3×3 触发区；两人进入后打开全互联终点选择；`ApplyShape` 同时服务预览和 Play |
-| `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据：实心格、绳、钥匙/门、地刺、冰块、岩浆块、召回道具、重生点、传送点、出生点、相机尺寸、**关卡分区** |
-| `Assets/TuningLab/Level/LabLevel.cs` | 数据 → 合并 `BoxCollider2D` / 绳 / 地刺 / 冰块 / 岩浆块 / 召回道具 / 重生点 / 传送点；编辑器预览和 Play 共用 |
+| `Assets/TuningLab/LabTeleportPoint.cs` | 传送点：3×3 触发区；两人进入后播放进出场动画并打开全互联终点选择 |
+| `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据：实心格、绳、钥匙/门、地刺、冰块、岩浆块、隐藏方块、召回道具、重生点、传送点、出生点、相机尺寸、**关卡分区** |
+| `Assets/TuningLab/Level/LabLevel.cs` | 数据 → 合并 `BoxCollider2D` / 绳 / 地刺 / 冰块 / 岩浆块 / 隐藏方块 / 召回道具 / 重生点 / 传送点；编辑器预览和 Play 共用 |
 | `Assets/TuningLab/Level/Editor/LabLevelScene.cs` | 从 `TuningLab.unity` 派生关卡场景；默认 `Level 1` 分区 |
-| `Assets/TuningLab/Level/Editor/LabLevelEditorWindow.cs` | 关卡编辑器：地形/绳/出生点/分区/相机/机关面板 |
-| `Assets/TuningLab/Level/Editor/LabLevelSelfCheck.cs` | 纯数据自检（基准 73 格 ↔ 8 块、分区移动/删除、相机分区内外） |
+| `Assets/TuningLab/Level/Editor/HiddenBlockDemoLevel.cs` | 生成隐藏方块演示关（`GameJam → Build HiddenBlock Demo Level`） |
+| `Assets/TuningLab/Level/Editor/LabLevelEditorWindow.cs` | 关卡编辑器：地形/绳/出生点/分区/相机/机关/隐藏方块/召回道具面板 |
+| `Assets/TuningLab/Level/Editor/LabLevelSelfCheck.cs` | 纯数据自检（基准 73 格 ↔ 8 块、分区移动/删除、相机分区内外、隐藏方块、召回道具） |
 | `Assets/TuningLab/Level/Editor/LabLevelPlayCheck.cs` | 临时派关卡 → 进 Play → 真实物理检查 → 退出/删场景 |
 
 ## 3. 数据与生成
 
 ### 3.1 `LabLevelData`
 
-- `solids`：实心格；`ropes`：竖绳/横绳；`keys`、`recalls`、`doors`、`spikes`、`ices`、`magmas`、`respawnPoints`、`teleports`：机关；`spawnA/B`：脚底落点。
+- `solids`：实心格；`ropes`：竖绳/横绳；`keys`、`recalls`、`doors`、`spikes`、`ices`、`magmas`、`hiddenBlocks`、`respawnPoints`、`teleports`：机关；`spawnA/B`：脚底落点。
 - `teleports` 只存位置：所有传送点互为终点，不存配对关系；进入任意一个后从其余点里选择出口。
 - `cameraMinSize / cameraMaxSize`：**关卡级**相机跟随尺寸（正交 size，半高）。
 - `bounds`：编辑范围；没有分区时也作为单关相机 clamp 范围。
@@ -63,11 +69,12 @@
 
 - 把 `solids` 合并成尽量少的矩形，每个矩形一个 `BoxCollider2D`；竖绳生成 `LabVerticalRope`，横绳生成 `LabHorizontalRope`。
 - 所有实心矩形、冰块和岩浆块并入同一个 `LabTerrainField` 的 `CompositeCollider2D`：冰—冰、冰—地形、岩浆—岩浆、岩浆—地形的接缝都没有可碰撞的内侧竖面，走上表面/冰面时不会被接缝卡住，也不会把上表面滑行误判成侧面接触。
-- 钥匙、门、地刺、冰块、岩浆块、召回道具、重生点、传送点都逐格/逐点生成；冰块和岩浆块按 `groupId` 共享整组破坏。冰块/岩浆块的视觉和破坏仍然逐块，破坏/重置后重建一次合并几何。
+- 钥匙、门、地刺、冰块、岩浆块、隐藏方块、召回道具、重生点、传送点都逐格/逐点生成；冰块和岩浆块按 `groupId` 共享整组破坏。冰块/岩浆块的视觉和破坏仍然逐块，破坏/重置后重建一次合并几何。
+- 隐藏方块逐格生成 `LabHiddenBlock`，只有 `SpriteRenderer`、没有碰撞体，`SortingOrder = 6`，盖住地形/门/冰/岩浆/刺/钥匙和绳，但低于玩家。同一格的多个组各自独立判定。
 - 召回道具只生成一个触发区；被拾取后销毁，`MapReset` 故意不重建它（能力存在 `TuningLab.RecallUnlocked` 上，重置不清空）。
 - 传送点生成后由 `TuningLab` 统一注册；选择终点时不依赖场景里的手工引用。
 - 绳子规格保存在 `LabRopeSpec.orientation`；旧数据缺省为竖绳。
-- 地图重置时恢复被拾取的钥匙、关回门并恢复所有冰块和岩浆块。
+- 地图重置时恢复被拾取的钥匙、关回门并恢复所有冰块和岩浆块；隐藏方块的“已揭示”状态和召回能力一样不被 `MapReset` 重置，只有场景重载才恢复。
 - **预览和 Play 走同一条 `Build`**：编辑器里看到的几何就是 Play 撞到的几何。
 - 预览物体带 `HideFlags.DontSaveInEditor`，不写进场景；`OnEnable` 重建，`ClearGenerated` 清理。
 - 运行时用 `TuningLab.WhiteSprite` / 运行时材质；不依赖外部 Sprite 资产，避免烘焙场景丢引用。
@@ -100,6 +107,8 @@
 - 分区工具：空白处拖出新分区；分区内部拖动移动；重叠时预览变红、不能创建。
 - 冰块工具：同一格再点同组 = 删除，换组号再点 = 改组；「新建组」取当前最大组号 + 1。
 - 岩浆块工具：操作和冰块一致；同格再点同组 = 删除，换组号再点 = 改组。岩浆块和冰块不能放在同一格。
+- 隐藏方块工具：按组判断；同一格可以同时属于多个组（嵌套组）。同格同组再点 = 摘掉这一组；换组号再点 = 加入新组。隐藏方块无实体，校验检查编辑范围、地形、负组号和出生点，不阻止与钥匙/门/绳同格。
+- 召回道具工具：1×1，同一格再点删除；拾取后销毁，地图重置不刷新。
 - 传送点工具：左键放 3×3 传送点，同一格再点删除；所有传送点自动全互联，Scene 视图会用连线标出。
 - 选区工具：同一时间只有一个选区；重新选择会换掉旧选区，增加选区按并集把新矩形并进去，删除选区按矩形挖掉一块。
 - 所有修改走 `Undo.RecordObject`，改完 `AfterStructuralEdit()` / `RebuildPreview()`。
@@ -125,15 +134,15 @@
 
 | 类型 | 例子 | 放哪 | 进 `LabLevelData`？ |
 | --- | --- | --- | --- |
-| 全局系统 | 相机、输入、管理器 | `Assets/TuningLab/` | 否 |
-| 一次性场景物件 | 只在一个场景手摆的触发器 | `Assets/TuningLab/Level/` | 否 |
-| 关卡内容 | 弹簧、移动平台、新机关 | `Assets/TuningLab/Level/` | **是（推荐）** |
+| 全局系统 | 相机、音效、表现层 | `Assets/TuningLab/` | 否 |
+| 一次性场景物件 | 只在一个场景手摆的触发器 | `Assets/TuningLab/` | 否 |
+| 关卡内容 | 弹簧、移动平台、新机关 | 运行时组件放 `Assets/TuningLab/`，数据和生成放 `Assets/TuningLab/Level/` | **是（推荐）** |
 
 只要策划要在编辑器里摆、撤销、跟着分区移动、存盘后重新生成，就走第三条：
 
 1. **数据**：在 `LabLevelData.cs` 加 `[Serializable]` spec、`List<>`、`Normalize`、`CopyFrom`、`Add/Move/Delete`；空间物件要接进 `MovePartition/TranslatePartition/DeletePartition`，还要接进 `MoveContents/DeleteContents/CountContents`，选区和选择工具才会带上它。
 2. **生成**：在 `LabLevel.Build` 里生成真实物体，预览/Play 同路径；尺寸 = 碰撞 = 视觉；不要依赖已删的 `Assets/Art`。组件把初始化写进 `ApplyShape()`，`Build` 里显式调一次，编辑器预览才不会是一坨看不见的空物体。
-3. **运行时**：自己的 `MonoBehaviour` 放 `Assets/TuningLab/Level/`；和玩家交互用 `LabPlayer` 公开接口/碰撞回调；不要往 `LabPlayer` 塞表现逻辑，也不要另起一套速度规则。
+3. **运行时**：自己的 `MonoBehaviour` 放 `Assets/TuningLab/`（和 `LabIce` / `LabHiddenBlock` 同级）；数据/spec 和生成仍放 `Assets/TuningLab/Level/`；和玩家交互用 `LabPlayer` 公开接口/碰撞回调；不要往 `LabPlayer` 塞表现逻辑，也不要另起一套速度规则。
 4. **编辑器**：`LabLevelEditorWindow` 加工具、`ToolLabels`、面板、`Record`、`AfterStructuralEdit`、Handles 预览、校验；再把它接进 `IsPlaceTool / ShouldAddAtStart / ApplyToolAtCell`（拖动连续摆放）、`EraseObjectsAt`（擦地形带掉）、`PickAt / PickArea / ValidPick / PickLabel`（选择与拖动），这样"拖动摆放 + 擦除 + 选区 + 选择"四件事就自动有了。
 5. **默认值**：规则/基准放 `TuningLab` Inspector；关卡内容放 `LabLevelData`。
 6. **资源**：每个 `.cs/.prefab/.png` 和文件夹都要 `.meta`；`.cs` 用 LF。
@@ -152,7 +161,7 @@
 
 ## 7. 验证
 
-工程里没有旧的 `Assets/Tests`；验证靠三条线。
+工程里没有旧的 `Assets/Tests`；验证靠 SelfCheck、PlayCheck、`Assets/TuningLab/Tests/` 的 PlayMode 规格和编辑器手测。
 
 ### 7.1 纯数据/数学自检
 
@@ -204,7 +213,7 @@
 | `4` | 选区 |
 | `5` | 选择 |
 
-**只允许这四个快捷键，禁止新增其它快捷键。** 其它工具（矩形、绳、出生点、分区、钥匙、门、地刺、冰块、岩浆块、重生点、传送点）从工具面板选择；网格显示和“跳到关卡”也在面板里操作。
+**只允许这四个快捷键，禁止新增其它快捷键。** 其它工具（矩形、绳、出生点、分区、钥匙、门、地刺、冰块、岩浆块、隐藏方块、召回道具、重生点、传送点）从工具面板选择；网格显示和“跳到关卡”也在面板里操作。
 
 常用操作：
 
@@ -213,14 +222,16 @@
 - 地刺面板选择朝上、朝下、朝左或朝右；同一格再次放置会改方向，不会生成第二根。
 - 冰块按 `groupId` 编组；同一格再次放置同组会删除，换组号再点会改组。`0` 也是普通组，「新建组」会取当前最大组号 + 1。
 - 岩浆块同样按 `groupId` 编组，操作和冰块一致；岩浆块和冰块不能放在同一格。校验会提示「和地形重叠」「和地刺同格」「和冰块同格」「压在出生点上」。
+- 隐藏方块按 `groupId` 编组；同一格可以属于多个组（嵌套组），各组独立判定是否揭示。它不是实体，玩家可以穿过；只有整个身体完全落在该组格子并集内时才会把整组变半透明。
+- 召回道具是 1×1 触发区：同一格再点删除；拾取后全队永久解锁召回，地图重置不会刷回来。
 - 重生点是 3×3 触发区：同一格再点一次删除。面板可以逐个删除或清空；校验会提示「在地形里」和「两个重生点重叠」。
 - 传送点也是 3×3 触发区：同一格再点一次删除；所有已标记传送点互为终点，Scene 视图用连线表示全互联。至少让两个传送点被双人进入并标记后，冲刺才会进入选择。校验会提示「在地形里」「重合」「触发区重叠」和「只有一个传送点」。
 - 分区工具在空白处拖出分区，在分区内部拖动可移动分区；重叠分区会标红并且不能创建。
-- 面板中的 **钥匙 / 门**、**地刺**、**冰块**、**岩浆块**、**重生点**、**传送点**、**分区**可以逐条删除或清空。
-- 所有摆放工具都能**按住拖动连续摆放**：钥匙、门、竖绳、横绳、地刺、冰块、岩浆块、重生点、传送点，拖着走一路铺过去。开关型工具（地刺 / 冰块 / 岩浆块 / 重生点 / 传送点）按第一格的状态决定这一笔是"放"还是"删"，整笔保持一致。
-- **擦地形**不只擦实心格：这一格上的钥匙、门、地刺、冰块、岩浆块、重生点、传送点、绳也一起擦掉，拖动可以连续擦。
+- 面板中的 **钥匙 / 门**、**地刺**、**冰块**、**岩浆块**、**隐藏方块**、**召回道具**、**重生点**、**传送点**、**分区**可以逐条删除或清空。
+- 所有摆放工具都能**按住拖动连续摆放**：钥匙、门、竖绳、横绳、地刺、冰块、岩浆块、隐藏方块、召回道具、重生点、传送点，拖着走一路铺过去。开关型工具（地刺 / 冰块 / 岩浆块 / 隐藏方块 / 召回道具 / 重生点 / 传送点）按第一格的状态决定这一笔是"放"还是"删"，整笔保持一致。
+- **擦地形**不只擦实心格：这一格上的钥匙、门、地刺、冰块、岩浆块、隐藏方块、召回道具、重生点、传送点、绳也一起擦掉，拖动可以连续擦。
 - **选区工具**（`4`）：左键拖出一个矩形，起点和对角是它的两个顶点。**同一时间只有一个选区**；下一次拉选区怎么处理它由面板的三种模式决定——**重新选择**（默认，换掉旧的）、**增加选区**（按并集把新矩形并进当前选区，可以拼出不规则形状）、**删除选区**（从当前选区里按矩形挖掉一块）。选区只存在于编辑器，不写进关卡数据。
-- **选择工具**（`5`）：点中物件后拖动移动它；**只要场景里有选区，不管鼠标从哪里开始拖，都拖动选区框和里面的全部内容**（地形格、绳、钥匙、门、地刺、冰块、岩浆块、重生点、传送点都算，出生点和关卡分区不算）；框扫过、但原本不在选区里的物件不会被带走。删除用「选区 / 选择」面板里的 **删除选区内容** 按钮；移动和删除都可撤销。
+- **选择工具**（`5`）：点中物件后拖动移动它；**只要场景里有选区，不管鼠标从哪里开始拖，都拖动选区框和里面的全部内容**（地形格、绳、钥匙、门、地刺、冰块、岩浆块、隐藏方块、召回道具、重生点、传送点都算，出生点和关卡分区不算）；框扫过、但原本不在选区里的物件不会被带走。删除用「选区 / 选择」面板里的 **删除选区内容** 按钮；移动和删除都可撤销。
 - 所有编辑操作都支持撤销/重做。
 
 地图数据保存在 `LabLevelData` 中，不要直接修改预览生成出来的碰撞体。预览和 Play 使用同一条生成路径，所以编辑器里看到的几何就是运行时实际碰撞的几何。
@@ -273,6 +284,9 @@
 - 钥匙、门、地刺、竖绳、横绳的尺寸、方向、碰撞和重置正常；
 - 冰块的 1×1 碰撞、组号、冰面滑行（含 v2+）不碎不卡脚、红热融一块、侧面 v2 碎整组和地图重置恢复正常；
 - 岩浆块的 1×1 碰撞、组号、首次接触强制红热、持续接触不重复触发、热二边再接触死亡、v2+ 撞击死亡、v3 碎整组和地图重置恢复正常；
+- 隐藏方块的 1×1 视觉、组号、嵌套组、玩家完全进入后整组永久半透明、地图重置不恢复、场景重载恢复；
+- 召回道具的 1×1 触发区、拾取后全队解锁、地图重置不刷新；幻影的格心吸附、形态复制、仅对方可碰撞、FIFO 3 个和幻影炮/L 幻影；
+- V3/V4 残影与拖尾、死亡边框闪红、12 个音效 Cue 正常；
 - 传送点的 3×3 触发区、双人进入标记、两个标记点门槛、A/D 切换终点、Enter 确认、Escape 取消、地图重置和吞钥匙正常；
 - B 在分区内和分区外时，相机范围正确；
 - 没有新字段或分区的旧关卡仍能打开。
@@ -290,8 +304,10 @@
 - 地刺按 `{ cell, dir }` 保存；每格最多一根，碰到即死。
 - 冰块按 `{ cell, groupId }` 保存；1×1 实体，可站立/滑行。冰和地形共用合并碰撞，冰面滑行只产生顶面接触，不会卡脚；在冰面上加速到 v2/v3 不算撞击，不会碎冰。只有侧面/非承重接触才按 v2 整组碎；红热边只在非承重接触时融一块并把边回普通，冰格落在玩家脚下 footprint 内（含不同分组交界处的侧向接触）不会融掉脚下。冰面按住方向按 `a = g` 加速，4 格升一级，封顶 v4；松手保留滑行。
 - 岩浆块按 `{ cell, groupId }` 保存；1×1 实体，可站立，走动按普通地面（不是冰面）。每条边只在第一次接触某个岩浆面时强制热二，持续贴着不重复触发；离开表面再接触才重新按第一次接触算。强制红热走 `StrikeEdge` 的死亡状态机：热二边接触岩浆直接死亡；灵体边不可复锻，不会被岩浆重新加热。以 v2 及以上沿法线撞上岩浆时，撞击红热和强制红热叠加，同样死亡；v3 撞击仍整组破坏。地图重置时恢复。
+- 隐藏方块按 `{ cell, groupId }` 保存；无实体、外形与墙一致。同一格允许多个组；任一玩家的整个身体完全落入某一组的格子并集时，整组永久变半透明。`MapReset` 不恢复已揭示的组，只有场景重载才恢复。
 - 召回道具按 `{ cell }` 保存；1×1 触发区。任一玩家拾取后全队永久解锁召回，A 按 `Q`、B 按右 `Shift`：施法者头顶有 1 格空位时，把另一名玩家传送到头顶，并在其旧位置留下一个吸附格心的幻影。幻影复制被召回者当时的形态，只和另一名玩家交互，最多同时 3 个（FIFO）。A 的 u 炮 / L 转向器幻影允许 B 从底面进入；其他形态（含“2048/矛”）是普通方块。地图重置清空幻影，但保留能力、不刷新已拾取的道具。
 - 传送点按 `{ position }` 保存；3×3 触发区，双人进入后运行时标记；至少两个已标记点才可进入选择，选择时 `A/D` 选终点、`Enter` 确认、`Escape` 取消；传送会重置地图并吞掉钥匙。
+- 表现层不是关卡数据：V3/V4 残影和拖尾、死亡边框闪红、12 个运行时音效 Cue 都由 `LabSpeedFeedback` / `LabVisual` / `TuningLab` / `LabAudio` 负责，不需要在关卡里摆放，也不写进 `LabLevelData`。
 - 预览生成物不保存到场景；运行时重新从数据生成。
 
 ### 场景用途
@@ -299,7 +315,7 @@
 | 场景 | 用途 |
 | --- | --- |
 | `Assets/Scenes/TuningLab.unity` | 规则基准和调试台，禁止手改 |
-| `Assets/Scenes/Levels/Level_01.unity` | 正式关卡 |
+| `Assets/Scenes/Levels/` | 正式关卡和单机制验证关（`KeyDoor_Test`、`传送测试`、`RespawnTeleport_Test`、`Final Map` 等） |
 | `Assets/Scenes/Levels/ddebug room.unity` | 临时调试房，可随意验证组件 |
 
 先在 `ddebug room` 或新建的小关卡里验证组件，再放进正式地图。
@@ -310,7 +326,7 @@
 
 1. **定义数据**：在 `LabLevelData.cs` 添加 `[Serializable]` spec、`List<>`、`Normalize()`、`CopyFrom()` 和增删改方法。
 2. **接入分区操作**：在 `MovePartition`、`TranslatePartition`、`DeletePartition` 中处理这个组件。
-3. **实现运行时组件**：放在 `Assets/TuningLab/Level/`，只使用现有 `LabPlayer` 接口和碰撞回调，不另起一套速度规则。
+3. **实现运行时组件**：放在 `Assets/TuningLab/`，只使用现有 `LabPlayer` 接口和碰撞回调，不另起一套速度规则。
 4. **接入生成**：在 `LabLevel.Build` 中生成真实物体；预览和 Play 必须走同一条路径。
 5. **保持三者一致**：尺寸、碰撞和视觉都由同一份数据决定。
 6. **接入编辑器**：在 `LabLevelEditorWindow` 增加工具、面板、Undo、Scene Handles 和校验。
@@ -321,9 +337,9 @@
 
 | 类型 | 示例 | 位置 | 是否进 `LabLevelData` |
 | --- | --- | --- | --- |
-| 全局系统 | 相机、输入、管理器 | `Assets/TuningLab/` | 否 |
-| 单场景物件 | 只手摆一次的触发器 | `Assets/TuningLab/Level/` | 否 |
-| 关卡内容 | 弹簧、移动平台、新机关 | `Assets/TuningLab/Level/` | 是，推荐 |
+| 全局系统 | 相机、音效、表现层 | `Assets/TuningLab/` | 否 |
+| 单场景物件 | 只手摆一次的触发器 | `Assets/TuningLab/` | 否 |
+| 关卡内容 | 弹簧、移动平台、新机关 | 运行时组件 `Assets/TuningLab/`；数据和生成 `Assets/TuningLab/Level/` | 是，推荐 |
 
 ## 原理和代码地图
 
@@ -333,7 +349,8 @@
 
 - `solids`：实心格；
 - `ropes`：竖绳/横绳；
-- `keys`、`doors`、`spikes`、`ices`、`magmas`：机关；
+- `keys`、`recalls`、`doors`、`spikes`、`ices`、`magmas`、`hiddenBlocks`：机关；
+- `respawnPoints`、`teleports`：3×3 触发点；
 - `spawnA/B`：出生点脚底位置；
 - `cameraMinSize/cameraMaxSize`：关卡级相机尺寸；
 - `bounds`：编辑范围和无分区时的相机范围；
@@ -343,7 +360,7 @@
 
 `LabLevel.Build` 会把实心格合并成尽量少的矩形 `BoxCollider2D`，再生成绳、钥匙、门、地刺、冰块和岩浆块。钥匙、门、地刺、冰块、岩浆块的 `ApplyShape()` 同时用于预览和 Play，因此不会出现“看起来能走、实际撞不到”的两套几何。
 
-地图重置时，`LabLevel` 会重新生成被拾取的钥匙、关回门并恢复所有冰块和岩浆块。运行时订阅 `TuningLab.MapReset`，清理生成物时退订。
+地图重置时，`LabLevel` 会重新生成被拾取的钥匙、关回门并恢复所有冰块和岩浆块，同时清空幻影；召回能力和隐藏方块的已揭示状态不会被 `MapReset` 重置，已拾取的召回道具也不会重新生成。运行时订阅 `TuningLab.MapReset`，清理生成物时退订。
 
 ### 相机如何选择范围
 
@@ -384,21 +401,28 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `Assets/TuningLab/TuningLab.cs` | 规则参数、基准房间、HUD、网格和相机范围 |
-| `Assets/TuningLab/LabPlayer.cs` | 玩家移动、跳、冲刺、撞击和死亡 |
+| `Assets/TuningLab/TuningLab.cs` | 规则参数、基准房间、HUD、网格、相机范围、音效/表现层挂载和死亡闪红 |
+| `Assets/TuningLab/LabPlayer.cs` | 玩家移动、跳、冲刺、撞击、形态、死亡、召回输入和幻影膛 |
+| `Assets/TuningLab/LabVisual.cs` | 玩家分层视觉和边框状态 |
+| `Assets/TuningLab/LabSpeedFeedback.cs` | V3/V4 残影和拖尾 |
+| `Assets/TuningLab/LabAudio.cs` | 12 个 Cue 的运行时音效播放器 |
 | `Assets/TuningLab/LabCamera.cs` | A/B 中点跟随和分区相机范围 |
 | `Assets/TuningLab/LabVerticalRope.cs` | 竖绳及其形状应用 |
 | `Assets/TuningLab/LabHorizontalRope.cs` | 横绳平台及其形状应用 |
 | `Assets/TuningLab/LabKey.cs` | 钥匙 |
+| `Assets/TuningLab/LabRecallPickup.cs` | 召回道具：拾取解锁 |
+| `Assets/TuningLab/LabPhantom.cs` | 召回幻影：形态复制、选择性碰撞、FIFO、幻影炮/L 幻影 |
 | `Assets/TuningLab/LabDoor.cs` | 门 |
 | `Assets/TuningLab/LabSpike.cs` | 地刺 |
 | `Assets/TuningLab/LabIce.cs` | 冰块：编组、单块融化、整组破坏和恢复 |
 | `Assets/TuningLab/LabMagma.cs` | 岩浆块：编组、每个接触面首次接触强制红热、热二再接触死亡、v2+ 撞击死亡、v3 整组破坏和恢复 |
+| `Assets/TuningLab/LabHiddenBlock.cs` | 隐藏方块：无实体、按组揭示、永久半透明 |
 | `Assets/TuningLab/LabRespawnPoint.cs` | 重生点：3×3 触发、形态记录、双人固定重生和地图刷新 |
-| `Assets/TuningLab/LabTeleportPoint.cs` | 传送点：3×3 触发、全互联终点选择和传送 |
+| `Assets/TuningLab/LabTeleportPoint.cs` | 传送点：3×3 触发、进出场动画、全互联终点选择和传送 |
 | `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据和分区 |
 | `Assets/TuningLab/Level/LabLevel.cs` | 数据到碰撞体和运行时物体的生成 |
 | `Assets/TuningLab/Level/Editor/LabLevelScene.cs` | 从 Tuning Lab 派生关卡 scene |
+| `Assets/TuningLab/Level/Editor/HiddenBlockDemoLevel.cs` | 隐藏方块演示关生成 |
 | `Assets/TuningLab/Level/Editor/LabLevelEditorWindow.cs` | 编辑器工具、面板和 Scene 预览 |
 | `Assets/TuningLab/Level/Editor/LabLevelSelfCheck.cs` | 纯数据自检 |
 | `Assets/TuningLab/Level/Editor/LabLevelPlayCheck.cs` | 临时关卡的真实物理检查 |
@@ -413,6 +437,7 @@
 6. **重叠检查必须在数据层拒绝。** 不能只在编辑器里显示警告。
 7. **不要把 ProjectSettings、用户生成的关卡和 packages-lock 的无关改动带进提交。**
 8. **冰块/岩浆块的组号 0 是普通组。** 编辑器默认从 1 开始分配新组；手动把多块冰或岩浆设成 0 会让它们共享整组破坏。它们都不并入 `MergedRects`，必须逐格生成才能单块结算。岩浆块和冰块不允许占同一格。
+9. **隐藏方块按组揭示，不是按格。** 同一格可以属于多个组（嵌套组）；判定是“某一组的格子并集是否完整包住玩家”，不是单块是否被踩到。揭示不可逆且不被地图重置恢复。
 
 ## 当前限制
 
@@ -424,4 +449,8 @@
 - 地形/冰/岩浆共用合并碰撞体，接触点正好落在不同物块边界时按回退 0.02 格后的格子归属，边界上的单点接触可能只算其中一侧。
 - 冰面加速按 `a = g` 持续加速，封顶 v4；已超速的玩家在冰面上不会被强制减速。
 - 传送点按双人进入运行时标记；只有已标记点可互为终点，未进入的点不会出现在候选列表。
-- README 和 `docs/策划案` 仍可能包含清理前的旧游戏描述；关卡编辑以本文和 `Assets/TuningLab` 代码为准。
+- 隐藏方块的揭示是单局内的不可逆过程；`MapReset` 不会恢复，只有场景重载才回到不透明。
+- 召回幻影最多 3 个（FIFO）；炮/L 幻影的出口按被召回者原形态决定，不按进入方向反向。
+- 音效是运行时 `Resources.LoadAll` 挂载，没有场景引用、没有音量 UI；静音入口是静态 `LabAudio.Muted`。
+- 残影/拖尾和死亡闪红的参数在 `TuningLab` Inspector 上，不写进关卡数据。
+- `docs/策划案` 仍可能包含清理前的旧游戏描述；关卡编辑以本文和 `Assets/TuningLab` 代码为准。
