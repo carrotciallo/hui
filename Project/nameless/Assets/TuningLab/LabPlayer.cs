@@ -130,7 +130,8 @@ public class LabPlayer : MonoBehaviour
     public int SpiritMask => spiritMask;
     public LabForm Form => form;
     /// <summary>
-    /// 灵体态：四条边全碎，穿透一切实体、不能冲刺，唯一保留的交互是钥匙（ADR-0007）。
+    /// 灵体态：四条边全碎，穿透一切实体、不受任何力，按输入四向匀速移动（斜向同速），
+    /// 冲刺禁用，唯一保留的交互是钥匙（ADR-0007）。
     /// 由 form 派生，不另开一套状态位。
     /// </summary>
     public bool IsIntangible => form == LabForm.Spirit;
@@ -308,19 +309,24 @@ public class LabPlayer : MonoBehaviour
             if (converterLoadTimer <= 0f) FireConverter();
         }
 
-        // 灵体：存在时间不因为贴地、贴墙、在空中而停表；耗尽就是死亡。
+        // 灵体：存在时间照走；不受任何力，速度直接由输入方向决定（ADR-0007 修订）。
+        // 上下左右和斜向都是同一个移动速度，松手立刻停；重力、空气制动、摩擦、跳跃都不参与。
         if (IsIntangible)
         {
             TickSpirit(dt);
             if (IsDead) return;
             SweepKeys();
+            dashQueued = false;
+            jumpBuffer = 0f;
+            v = SpiritVelocity(new Vector2(moveX, vertInput), lab.walkSpeed);
+            rb.gravityScale = 0f;
+            rb.linearVelocity = v;
+            lastFixedVelocity = v;
+            return;
         }
 
         bool wasGrounded = grounded;
         grounded = ProbeGround();
-
-        // 灵体的碰撞箱是触发器，物理引擎不再托人：只保留"踩住实心顶面"这一条豁免（ADR-0007）。
-        if (IsIntangible && grounded && v.y < 0f) v.y = 0f;
 
         if (grounded && !wasGrounded) OnLand();
         if (!grounded && wasGrounded) BeginAir();
@@ -1029,25 +1035,52 @@ public class LabPlayer : MonoBehaviour
     }
 
     // ------------------------------------------------------------------
-    // 灵体态（Issue #64 / ADR-0007）：限时的穿透态，只认钥匙，时间耗尽即死
+    // 灵体态（Issue #64 / ADR-0007）：限时的穿透态，不受力、四向匀速移动，只认钥匙，时间耗尽即死
     // ------------------------------------------------------------------
 
     /// <summary>
     /// 进入灵体：把碰撞箱改成触发器。这一步一次关掉所有交互 —— 碰撞回调不再触发
     /// （锻造、岩浆、冰、双人动量、大炮装填全停），触发器对触发器也不发回调（地刺、门都不算）。
     /// 代价是钥匙也一起没了回调，所以唯一保留的交互要在 FixedUpdate 里自己扫。
+    /// 同时清掉速度、冲刺和接触状态：灵体不受任何力，移动由 <see cref="SpiritVelocity"/> 每步直接给（ADR-0007 修订）。
     /// </summary>
     void EnterSpirit()
     {
         if (col != null) col.isTrigger = true;
+        if (rb != null)
+        {
+            rb.gravityScale = 0f;
+            rb.linearVelocity = Vector2.zero;
+        }
+        grounded = false;
+        support = null;
+        playerContactTimer = 0f;
+        coyoteTimer = 0f;
+        dashQueued = false;
+        dashPhase = DashPhase.None;
+        dashTimer = 0f;
+        dashLock = 0f;
+        gliding = false;
+        jumpBuffer = 0f;
         spiritTimer = lab != null ? lab.spiritDuration : 6f;
     }
 
-    /// <summary>离开灵体（复活、传送、形态被改写）：交还实心碰撞箱。</summary>
+    /// <summary>离开灵体（复活、传送、形态被改写）：交还实心碰撞箱和重力。</summary>
     void ExitSpirit()
     {
         if (col != null) col.isTrigger = false;
+        if (rb != null) rb.gravityScale = lab != null ? lab.GravityScale : 5.1f;
         spiritTimer = 0f;
+    }
+
+    /// <summary>
+    /// 灵体的移动速度：输入方向归一化后乘移动速度，上下左右和斜向都是同一个速度。
+    /// 灵体不受任何力（重力、摩擦、空气制动都不参与），所以这个速度每物理步直接写给刚体，松手就是 0。
+    /// </summary>
+    public static Vector2 SpiritVelocity(Vector2 input, float speed)
+    {
+        if (input.sqrMagnitude > 1f) input.Normalize();
+        return input * speed;
     }
 
     /// <summary>灵体的存在时间：从进入那一刻开始计，中途不暂停；耗尽就是死亡。</summary>

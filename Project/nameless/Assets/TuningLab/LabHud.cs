@@ -356,7 +356,7 @@ public class LabHud : MonoBehaviour
                 EdgeGlyph(p.GetEdge(LabPlayer.Edge.Right))), small);
             GUILayout.Label("　形态  " + p.FormLabel, small);
             if (p.IsIntangible)
-                GUILayout.Label(string.Format("　灵体  剩余存在时间 {0:0.0}s   穿透实体 / 不能冲刺 / 只认钥匙",
+                GUILayout.Label(string.Format("　灵体  剩余存在时间 {0:0.0}s   穿透实体 / 四向匀速移动（斜向同速）/ 无冲刺、跳跃 / 只认钥匙",
                     p.SpiritTimeLeft), small);
             GUILayout.Label("　大炮  " + ChamberText(p), small);
         }

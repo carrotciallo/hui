@@ -9,6 +9,7 @@
 - 隐藏方块（#59）：`LabHiddenBlock` + `LabLevelData.hiddenBlocks` + 关卡编辑器工具 + 演示关；无实体、按组永久半透明、`MapReset` 不恢复。
 - 音效（#60）：`LabAudio` 运行时挂载，12 个 Cue；素材在 `Assets/Sounds/Resources/`，不依赖场景引用。
 - 速度/死亡反馈（#62）：`LabSpeedFeedback` 的 V3/V4 残影与拖尾，`TuningLab` 的死亡边框闪红。
+- 灵体态（#64）修订：四条边全碎后不受任何力，按输入四向匀速移动（斜向同速、松手即停），冲刺禁用；离开灵体恢复重力（[ADR-0007](adr/0007-spirit-intangible-timer.md)）。
 - 召回与幻影（#69）：`LabRecallPickup` / `LabPhantom`；A 按 `Q`、B 按右 `Shift`，头顶 1 格有空间时把另一名玩家拉到头顶并在旧位置留下幻影；最多 3 个 FIFO。
 - 判据修复：双人撞击补齐锻造门槛（#65）；A 碎边后仍可拾取钥匙（#67）。
 - 传送门进出场动画收尾；相机 `SnapFocus` 与阶段机接入。
@@ -18,7 +19,7 @@
 ### 验证与文档
 
 - SelfCheck 新增隐藏方块和召回道具数据段；PlayCheck 覆盖召回道具、幻影和 `MapReset`。
-- PlayMode 规格覆盖 Forge 23、Cannon 14、Ice 22、Magma 18、Rope 15、Respawn 14、Teleport 11、Spike 9、Recall 9、Phantom 8、KeyDoor 5、Settings 9，共 157 条。
+- PlayMode 规格覆盖 Forge 23、Cannon 14、Ice 22、Magma 18、Rope 15、Respawn 14、Teleport 11、Spike 9、Recall 9、Phantom 8、KeyDoor 5、Settings 9、Spirit 4，共 161 条。
 - 文档按当前架构重写：README、基准入口、编辑器文档、现行规则、术语表、ADR 注记和历史复盘。
 
 ## 2026-11-02
