@@ -78,17 +78,18 @@ public class TuningLab : MonoBehaviour
     [Tooltip("隐藏方块被任一玩家完全进入后整组保持的不透明度（0.5 = 半透明）。只在揭示那一刻取值，之后改不影响已揭示的组。")]
     [Range(0f, 1f)] public float hiddenRevealedAlpha = 0.5f;
 
-    /// <summary>没有检查点时的死亡后果。</summary>
+    /// <summary>关卡里没有任何重生点时的死亡后果。</summary>
     public enum DeathFallback
     {
-        /// <summary>沿用实验台行为：直接把死掉的人销毁，只剩队友。</summary>
+        /// <summary>沿用实验台行为：把死亡的玩家直接销毁。</summary>
         DestroyPlayer = 0,
         /// <summary>重开本关：两人回出生点，门重新关上、被捡走的钥匙长回来。</summary>
         RespawnAtSpawn = 1
     }
 
     [Header("死亡")]
-    [Tooltip("地刺/塌框致死时，本关没有已激活的检查点：销毁本人（原实验台行为）还是重开本关回出生点。\n" +
+    [Tooltip("两人都死亡、且本关一个重生点都没有时才生效：销毁两人（原实验台行为）还是重开本关回出生点。\n" +
+             "关卡里有重生点时一律强制触发重生点，两人以普通状态复活。\n" +
              "带地刺的正式关卡要用 RespawnAtSpawn，否则第一脚踩空就把人删了。")]
     public DeathFallback deathWhenNoCheckpoint = DeathFallback.DestroyPlayer;
 
@@ -517,8 +518,9 @@ public class TuningLab : MonoBehaviour
 
     /// <summary>
     /// 任意一名玩家死亡后由 <see cref="LabPlayer.Kill"/> 调用。
-    /// 单人只是隐藏等待；两人都死亡才结算：有激活的重生点就双人重生，
-    /// 否则只在场景里只有一个重生点时回它，再否则按 <see cref="deathWhenNoCheckpoint"/> 处理。
+    /// 单人只是隐藏等待；两人都死亡才结算：强制触发一个重生点（优先最后激活的点，
+    /// 没激活过就选离最后一次死亡位置最近的点），两人以普通状态双人重生；
+    /// 关卡里没有重生点时才按 <see cref="deathWhenNoCheckpoint"/> 处理。
     /// </summary>
     public void NotifyPlayerDied(LabPlayer deadPlayer)
     {
@@ -538,16 +540,15 @@ public class TuningLab : MonoBehaviour
 
     void ResolveTeamDeath(LabPlayer deadPlayer)
     {
-        if (ActiveRespawnPoint != null)
-        {
-            ActiveRespawnPoint.RespawnRecordedPlayers(this);
-            return;
-        }
+        // 两人都死亡一律强制触发：有激活的点回激活点，没有就回离最后一次死亡最近的点。
+        LabRespawnPoint point = ActiveRespawnPoint != null
+            ? ActiveRespawnPoint
+            : NearestRespawnPoint(TeamDeathPosition(deadPlayer));
 
-        if (respawnPoints.Count == 1 && respawnPoints[0] != null)
+        if (point != null)
         {
-            ActivateRespawnPoint(respawnPoints[0]);
-            respawnPoints[0].RespawnRecordedPlayers(this);
+            ActivateRespawnPoint(point);
+            point.ForceRespawn(this);
             return;
         }
 
@@ -559,6 +560,34 @@ public class TuningLab : MonoBehaviour
         }
 
         DestroyDeadPlayers(deadPlayer);
+    }
+
+    /// <summary>强制触发的参考位置：最后一次死亡的位置；没有死亡位置时回落到存活玩家。</summary>
+    Vector2 TeamDeathPosition(LabPlayer deadPlayer)
+    {
+        if (deadPlayer != null) return deadPlayer.transform.position;
+        if (PlayerA != null) return PlayerA.transform.position;
+        if (PlayerB != null) return PlayerB.transform.position;
+        return Vector2.zero;
+    }
+
+    /// <summary>离参考位置最近的重生点；同距离取注册顺序靠前的那个，保证结果确定。</summary>
+    LabRespawnPoint NearestRespawnPoint(Vector2 position)
+    {
+        for (int i = respawnPoints.Count - 1; i >= 0; i--)
+            if (respawnPoints[i] == null) respawnPoints.RemoveAt(i);
+
+        LabRespawnPoint nearest = null;
+        float best = float.MaxValue;
+        for (int i = 0; i < respawnPoints.Count; i++)
+        {
+            var point = respawnPoints[i];
+            float distance = ((Vector2)point.transform.position - position).sqrMagnitude;
+            if (distance >= best) continue;
+            best = distance;
+            nearest = point;
+        }
+        return nearest;
     }
 
     void DestroyDeadPlayers(LabPlayer deadPlayer)
