@@ -35,6 +35,7 @@ public sealed class LabRecallPickup : MonoBehaviour
             sprite.sprite = cachedSprite;
             sprite.color = color;
             sprite.sortingOrder = 2;
+            LabArt.Apply(sprite, "recall");
         }
     }
 

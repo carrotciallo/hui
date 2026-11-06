@@ -56,6 +56,7 @@ public sealed class LabRespawnPoint : MonoBehaviour
             renderer.sprite = cachedSprite;
             renderer.color = IsActive ? activeColor : inactiveColor;
             renderer.sortingOrder = -1;
+            LabArt.Apply(renderer, "checkpoint");
         }
     }
 

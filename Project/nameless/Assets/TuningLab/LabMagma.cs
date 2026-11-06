@@ -68,6 +68,7 @@ public sealed class LabMagma : MonoBehaviour
             spriteRenderer.sprite = TuningLab.WhiteSprite;
             spriteRenderer.color = color;
             spriteRenderer.sortingOrder = 1;
+            LabArt.Apply(spriteRenderer, "magma");
             spriteRenderer.enabled = !Broken;
         }
     }

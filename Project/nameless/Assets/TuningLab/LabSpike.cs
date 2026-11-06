@@ -49,6 +49,7 @@ public sealed class LabSpike : MonoBehaviour
             spriteRenderer.flipY = spec.dir == LabSpikeDir.Down;
             spriteRenderer.color = color;
             spriteRenderer.sortingOrder = 1;
+            LabArt.Apply(spriteRenderer, vertical ? "spikes-side" : "spikes-up");
         }
     }
 

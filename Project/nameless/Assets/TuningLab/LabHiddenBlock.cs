@@ -55,11 +55,12 @@ public sealed class LabHiddenBlock : MonoBehaviour
         spriteRenderer.sprite = TuningLab.WhiteSprite;
         spriteRenderer.color = CurrentColor();
         spriteRenderer.sortingOrder = SortingOrder;
+        LabArt.Apply(spriteRenderer, "terrain");
     }
 
     void Update()
     {
-        if (Revealed || lab == null || groupCells == null) return;
+        if (Revealed || lab == null || lab.Paused || groupCells == null) return;
         if (CoversFully(lab.PlayerA) || CoversFully(lab.PlayerB)) RevealGroup();
     }
 

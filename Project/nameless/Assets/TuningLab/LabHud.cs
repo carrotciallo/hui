@@ -97,7 +97,7 @@ public class LabHud : MonoBehaviour
 
     void OnGUI()
     {
-        if (lab == null) return;
+        if (lab == null || lab.Paused) return;
         EnsureStyles();
 
         Time.timeScale = lab.timeScale;

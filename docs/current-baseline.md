@@ -9,6 +9,8 @@
 - 关卡数据：`Assets/TuningLab/Level/LabLevelData.cs`
 - 关卡生成：`Assets/TuningLab/Level/LabLevel.cs`
 - 音效素材：`Assets/Sounds/Resources/`（运行时 `LabAudio` 挂载，不依赖场景引用）
+- 设置界面：`Assets/TuningLab/LabSettingsUI.cs`，图标在 `Assets/TuningLab/Resources/SettingsIcons/`
+- 设置存档：`Assets/TuningLab/LabSettingsStore.cs` → `Application.persistentDataPath/settings.json`
 - 基准场景：`Assets/Scenes/TuningLab.unity`
 - 正式关卡：`Assets/Scenes/Levels/`
 - 1 格 = 1 世界单位 = 16px
@@ -26,6 +28,7 @@
 - 玩家：移动、跳跃、四向冲刺、速度等级、双人动量互换、红热锻造、碎边形态、u 大炮、L 转向器、灵体态（限时穿透，耗尽即死并掉临时钥匙）。
 - 关卡物件：竖绳/横绳、钥匙/门、地刺、冰块、岩浆块、隐藏方块、重生点、传送点、召回道具、幻影。
 - 表现层：V3 起、顶档 V6 的残影与拖尾、死亡边框闪红、运行时音效（12 个 Cue，无场景引用）。
+- 设置：纯图标 IMGUI；Esc 打开/关闭，打开时 `Time.timeScale = 0`，关闭恢复暂停前的值；主音量、音乐/音效音量、分辨率、全屏可用，亮度与按键绑定为预留位。
 - 数据/生成：`LabLevelData` → `LabLevel.Build`，编辑器预览与 Play 共用同一条生成路径。
 
 ## 场景与菜单

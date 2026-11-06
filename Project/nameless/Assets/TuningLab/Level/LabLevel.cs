@@ -206,6 +206,7 @@ public sealed class LabLevel : MonoBehaviour
         sr.sprite = TuningLab.WhiteSprite;
         sr.color = TuningLab.SolidColor;
         sr.sortingOrder = 0;
+            LabArt.Apply(sr, "terrain", true);
 
         var bc = go.AddComponent<BoxCollider2D>();
         bc.size = Vector2.one;

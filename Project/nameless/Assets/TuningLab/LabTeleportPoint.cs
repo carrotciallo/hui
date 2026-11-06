@@ -44,6 +44,7 @@ public sealed class LabTeleportPoint : MonoBehaviour
             renderer.sprite = cachedSprite;
             renderer.color = inactiveColor;
             renderer.sortingOrder = -1;
+            LabArt.Apply(renderer, "portal");
         }
     }
 
@@ -60,7 +61,7 @@ public sealed class LabTeleportPoint : MonoBehaviour
 
     void Update()
     {
-        if (lab == null || lab.TeleportBusy) return;
+        if (lab == null || lab.TeleportBusy || lab.Paused) return;
 
         // 死亡/进膛会关掉碰撞箱但不会发 OnTriggerExit，所以每帧按真实包围盒重新判定。
         aInside = IsInside(lab.PlayerA);

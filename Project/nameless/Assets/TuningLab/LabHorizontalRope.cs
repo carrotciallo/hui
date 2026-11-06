@@ -141,6 +141,7 @@ public sealed class LabHorizontalRope : MonoBehaviour
         visual.localRotation = Quaternion.identity;
         visual.localScale = new Vector3(length, 1f, 1f);
         renderer.sortingOrder = 5;
+        LabArt.Apply(renderer, "rope-h", true);
     }
 
     static Sprite ropeSprite;
