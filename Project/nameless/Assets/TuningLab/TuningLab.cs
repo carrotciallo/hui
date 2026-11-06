@@ -78,6 +78,10 @@ public class TuningLab : MonoBehaviour
     [Tooltip("隐藏方块被任一玩家完全进入后整组保持的不透明度（0.5 = 半透明）。只在揭示那一刻取值，之后改不影响已揭示的组。")]
     [Range(0f, 1f)] public float hiddenRevealedAlpha = 0.5f;
 
+    [Header("灵体态")]
+    [Tooltip("一次灵体状态存在的时间（秒）。从四条边全碎那一刻开始计，中途不暂停，耗尽即死并吐出一把临时钥匙。")]
+    [Min(0.01f)] public float spiritDuration = 6f;
+
     /// <summary>关卡里没有任何重生点时的死亡后果。</summary>
     public enum DeathFallback
     {
@@ -603,6 +607,7 @@ public class TuningLab : MonoBehaviour
     public void ResetMap()
     {
         LabPhantom.ClearAll();
+        LabKey.ClearTemporaries();
         MapReset?.Invoke();
     }
 
