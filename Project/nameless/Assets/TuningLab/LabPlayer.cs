@@ -229,7 +229,7 @@ public class LabPlayer : MonoBehaviour
 
     void Update()
     {
-        if (IsDead || (lab != null && lab.TeleportBusy)) return;
+        if (IsDead || (lab != null && (lab.TeleportBusy || lab.Paused))) return;
         ReadInput();
 
         // 膛里的 B：移动无效，冲刺键改成给宿主开炮。
@@ -269,7 +269,7 @@ public class LabPlayer : MonoBehaviour
 
     void FixedUpdate()
     {
-        if (lab == null || IsDead) return;
+        if (lab == null || IsDead || lab.Paused) return;
 
         if (teleportFrozen || lab.TeleportBusy)
         {

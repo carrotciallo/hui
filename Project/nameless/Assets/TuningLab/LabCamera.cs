@@ -73,6 +73,7 @@ public sealed class LabCamera : MonoBehaviour
     void LateUpdate()
     {
         if (cam == null) return;
+        if (lab != null && lab.Paused) return;
 
         if (focusActive)
         {

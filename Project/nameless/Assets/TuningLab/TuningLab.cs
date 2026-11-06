@@ -176,7 +176,12 @@ public class TuningLab : MonoBehaviour
     public Camera Cam { get; private set; }
     public LabHud Hud { get; private set; }
     public LabAudio Sound { get; private set; }
+    public LabSettingsUI SettingsUI { get; private set; }
     public LabRespawnPoint ActiveRespawnPoint { get; private set; }
+
+    /// <summary>设置界面打开时所有玩法冻结；关闭后恢复暂停前的 timeScale。</summary>
+    public bool Paused { get; private set; }
+    float pausedTimeScale = 1f;
     public event System.Action MapReset;
     /// <summary>任一玩家死亡后广播（唯一必达点在 NotifyPlayerDied）；现阶段只有边框闪红订阅。</summary>
     public event System.Action<LabPlayer> PlayerDied;
@@ -384,6 +389,8 @@ public class TuningLab : MonoBehaviour
     {
         if (level == null) level = GetComponent<LabLevel>();
         if (autoBuild) BuildAll();
+        // 已经烘焙好的旧关卡不会再跑 BuildAll；有 HUD 就说明是完整调试台/关卡，补挂设置界面。
+        else if (GetComponent<LabHud>() != null) EnsureSettingsUI();
     }
 
     void OnValidate()
@@ -444,10 +451,38 @@ public class TuningLab : MonoBehaviour
         if (Sound == null) Sound = gameObject.GetComponent<LabAudio>();
         if (Sound == null) Sound = gameObject.AddComponent<LabAudio>();
         Sound.Bind(this);
+
+        // 设置界面同样运行时挂载；编辑器烘焙场景时只把组件留在场景里，不在这里应用窗口设置。
+        EnsureSettingsUI();
+    }
+
+    void EnsureSettingsUI()
+    {
+        if (SettingsUI == null) SettingsUI = gameObject.GetComponent<LabSettingsUI>();
+        if (SettingsUI == null) SettingsUI = gameObject.AddComponent<LabSettingsUI>();
+        if (Application.isPlaying) SettingsUI.Bind(this);
+    }
+
+    /// <summary>暂停/恢复由设置界面调用；只改 timescale，不销毁或禁用任何玩法对象。</summary>
+    public void SetPaused(bool paused)
+    {
+        if (Paused == paused) return;
+        Paused = paused;
+
+        if (paused)
+        {
+            pausedTimeScale = Time.timeScale;
+            Time.timeScale = 0f;
+        }
+        else
+        {
+            Time.timeScale = pausedTimeScale > 0f ? pausedTimeScale : timeScale;
+        }
     }
 
     void OnDestroy()
     {
+        Paused = false;
         AbortTeleport();
         Time.timeScale = 1f;
         LabPhantom.ClearAll();
@@ -455,6 +490,7 @@ public class TuningLab : MonoBehaviour
 
     void Update()
     {
+        if (Paused) return;
         if (deathFlashLeft > 0f) deathFlashLeft = Mathf.Max(0f, deathFlashLeft - Time.deltaTime);
 
         var kb = UnityEngine.InputSystem.Keyboard.current;
@@ -858,6 +894,7 @@ public class TuningLab : MonoBehaviour
 
     void OnGUI()
     {
+        if (Paused) return;
         if (TeleportSelecting) DrawTeleportSelectionGui();
         DrawDeathFlashGui();
     }
