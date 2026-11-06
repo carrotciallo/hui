@@ -64,6 +64,11 @@ public class LabAudio : MonoBehaviour
     /// <summary>静音开关（关掉后所有 Cue 都不再发声，已开始的尾音不管）。</summary>
     public static bool Muted;
 
+    /// <summary>音效音量倍率，由设置界面写入；主音量仍由 AudioListener.volume 统一控制。</summary>
+    public static float SfxVolume = 1f;
+    /// <summary>音乐音量倍率。当前没有音乐轨，先存值给后续音乐系统使用。</summary>
+    public static float MusicVolume = 1f;
+
     readonly AudioClip[][] clips = new AudioClip[Folders.Length][];
     readonly int[] cursor = new int[Folders.Length];
     readonly float[] lastPlayed = new float[Folders.Length];
@@ -145,7 +150,7 @@ public class LabAudio : MonoBehaviour
 
         var voice = voices[nextVoice];
         nextVoice = (nextVoice + 1) % VoiceCount;
-        voice.volume = Volumes[index];
+        voice.volume = Volumes[index] * Mathf.Clamp01(SfxVolume);
         float jitter = PitchJitter[index];
         voice.pitch = jitter > 0f ? 1f + Random.Range(-jitter, jitter) : 1f;
         voice.PlayOneShot(clip, 1f);

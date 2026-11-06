@@ -2,7 +2,7 @@
 
 Unity 双人协作平台解谜原型。当前仓库的**唯一开发基准是 Tuning Lab**，正式关卡从它派生，旧 `World` 架构、旧编辑器和旧测试房不再作为开发依据。
 
-> **当前进度（2026-11-06）**：核心玩家、速度/冲刺、红热锻造、A 形态、大炮、L 形转向器、钥匙与门、重生点、传送点、冰块、绳子、地刺、隐藏方块、召回/幻影、音效和速度/死亡反馈已经进入 Tuning Lab；关卡编辑器、SelfCheck/PlayCheck 和 PlayMode 规格已建立。美术资源和完整主线关卡仍在进行。
+> **当前进度（2026-11-06）**：核心玩家、速度/冲刺、红热锻造、A 形态、大炮、L 形转向器、钥匙与门、重生点、传送点、冰块、绳子、地刺、隐藏方块、召回/幻影、音效、速度/死亡反馈和纯图标设置界面已经进入 Tuning Lab；关卡编辑器、SelfCheck/PlayCheck 和 PlayMode 规格已建立。美术资源和完整主线关卡仍在进行。
 
 ## 先看这里：参考索引
 
@@ -44,6 +44,9 @@ Project/nameless/
 │     ├─ LabVisual.cs             # 边框/眼睛
 │     ├─ LabSpeedFeedback.cs      # V3/V4 残影与拖尾
 │     ├─ LabAudio.cs              # 运行时音效
+│     ├─ LabSettingsUI.cs         # 纯图标设置界面、Esc 暂停/恢复
+│     ├─ LabSettingsStore.cs      # 设置 JSON、备份与坏档恢复
+│     ├─ Resources/SettingsIcons/ # 16×16 像素图标（同名 PNG 可替换）
 │     ├─ Lab*.cs                  # 相机、绳、钥匙/门、刺、冰、岩浆、隐藏方块、召回/幻影等
 │     ├─ Level/
 │     │  ├─ LabLevelData.cs       # 格子、绳、机关、出生点、相机和分区数据
@@ -76,6 +79,7 @@ Project/nameless/
 | 隐藏方块（#59） | 已进入基准 | `LabHiddenBlock` + 关卡数据 + 编辑器工具 |
 | 召回与幻影（#69） | 已进入基准 | `LabRecallPickup` / `LabPhantom` + 编辑器工具 + 契约测试 |
 | 音效（#60）、速度/死亡反馈（#62） | 已进入基准 | `LabAudio` / `LabSpeedFeedback` / 死亡闪红 |
+| 纯图标设置界面（#71） | 已进入基准 | `LabSettingsUI` / `LabSettingsStore`，Esc 打开并暂停；音量、分辨率、全屏、亮度/按键预留位 |
 | 判据修复：双人锻造门槛（#65）、形态不拦拾取（#67） | 已修 | 规则文档 §3.4 / §3.5 |
 | 纯数据 Self Check、真实物理 Play Check、PlayMode 测试 | 已建立 | [当前项目基准](docs/current-baseline.md) |
 
@@ -86,7 +90,7 @@ Project/nameless/
 | [#63](https://github.com/sfher/hui/issues/63) | 冠军拼图 / 修复方块 | 未实现；A 的红热边/灵体边接触后回普通边。 |
 | [#64](https://github.com/sfher/hui/issues/64) | 幽魂态 | 未实现；全碎边的限时无实体状态。 |
 | [#66](https://github.com/sfher/hui/issues/66) | 传送门相对位置保留 | 未实现；传送后相对站位保持。 |
-| [#70](https://github.com/sfher/hui/issues/70) / [#71](https://github.com/sfher/hui/issues/71) / [#72](https://github.com/sfher/hui/issues/72) | 主页 / 设置 / 图标 UI | 未开始；当前 HUD 仍是调试用 IMGUI。 |
+| [#70](https://github.com/sfher/hui/issues/70) / [#72](https://github.com/sfher/hui/issues/72) | 主页 / 图标 UI | 未开始；当前 HUD 仍是调试用 IMGUI。设置界面已按 #71 落地。 |
 | [#26](https://github.com/sfher/hui/issues/26) | 像素美术资源 | 资源清单和规格已明确，当前仍是程序生成占位显示；音效已按 #60 入库。 |
 | 主线关卡 | 组合关卡和最终流程 | 机制大多具备，完整主线尚未制作。 |
 
@@ -134,13 +138,14 @@ Unity 打开工程可能重写 `ProjectSettings/`。提交前检查 `git status`
 | P1 / A | A / D | W / S | 空格 | 左 Shift | `Q` |
 | P2 / B | ← / → | ↑ / ↓ | `/` | `.` | 右 `Shift` |
 
-调试台常用：`R` 重置，`P` 像素网格，`Tab` 格线。召回需要先在关卡里拾取召回道具。关卡编辑器工具和验证方式见 [编辑器手册](docs/tuning-lab-level-editor.md)。
+调试台常用：`R` 重置，`P` 像素网格，`Tab` 格线，`Esc` 打开/关闭设置界面（打开时全部玩法暂停，再按 `Esc` 或点关闭图标恢复）。传送门选择阶段 `Esc` 仍然只取消选择。召回需要先在关卡里拾取召回道具。关卡编辑器工具和验证方式见 [编辑器手册](docs/tuning-lab-level-editor.md)。
 
 ## 目录速查
 
 - 规则、玩家、相机、机关和表现层：`Project/nameless/Assets/TuningLab/`
 - 关卡数据与生成：`Project/nameless/Assets/TuningLab/Level/`
 - 音效素材：`Project/nameless/Assets/Sounds/Resources/`
+- 设置图标：`Project/nameless/Assets/TuningLab/Resources/SettingsIcons/`
 - 基准场景：`Project/nameless/Assets/Scenes/TuningLab.unity`
 - 正式关卡：`Project/nameless/Assets/Scenes/Levels/`
 - 设计草稿：`docs/策划案/`
