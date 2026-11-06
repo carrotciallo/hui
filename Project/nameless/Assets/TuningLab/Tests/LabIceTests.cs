@@ -258,7 +258,7 @@ public sealed class LabIceTests
             "刚超过门槛速度就是 v2");
         Assert.AreEqual(1, lab.TierOfSpeed(lab.IceBreakSpeed - 0.01f),
             "低于门槛仍是 v1");
-        Assert.Greater(lab.IceMaxSpeed, lab.IceBreakSpeed, "冰面加速上限高于破坏门槛");
+        Assert.Greater(lab.TopTierSpeed, lab.IceBreakSpeed, "冰面加速上限高于破坏门槛");
     }
 
     // 滑行 ---------------------------------------------------------------

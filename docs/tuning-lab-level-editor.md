@@ -33,7 +33,7 @@
 | `Assets/TuningLab/TuningLab.cs` | 参数、内置房间描述 `DescribeRoom`、`CaptureBaseline`、相机 `GetCameraFrame`、HUD/网格、音效/表现层挂载和死亡闪红 |
 | `Assets/TuningLab/LabPlayer.cs` | 方块玩家：移动、跳、四向冲刺、撞击、驮带、形态、召回输入与幻影膛 |
 | `Assets/TuningLab/LabVisual.cs` | 玩家分层视觉（外圈等级 / 边框 / 眼睛） |
-| `Assets/TuningLab/LabSpeedFeedback.cs` | 速度反馈：V3/V4 残影与拖尾，对象池回收 |
+| `Assets/TuningLab/LabSpeedFeedback.cs` | 速度反馈：V3 起、顶档 V6 的残影与拖尾，对象池回收 |
 | `Assets/TuningLab/LabAudio.cs` | 运行时音效播放器：12 个 Cue，`Resources.LoadAll` 取素材，无场景引用 |
 | `Assets/TuningLab/LabCamera.cs` | 跟随 A/B 中点；按 B 查当前分区的 bounds/min-max，并做混合 |
 | `Assets/TuningLab/LabVerticalRope.cs` | 竖绳；零/一级挡住、二级沿接触法线穿过、三级以上沿法线反弹并提升一级；`ApplyShape` 同时服务预览和 Play |
@@ -286,7 +286,7 @@
 - 岩浆块的 1×1 碰撞、组号、首次接触强制红热、持续接触不重复触发、热二边再接触死亡、v2+ 撞击死亡、v3 碎整组和地图重置恢复正常；
 - 隐藏方块的 1×1 视觉、组号、嵌套组、玩家完全进入后整组永久半透明、地图重置不恢复、场景重载恢复；
 - 召回道具的 1×1 触发区、拾取后全队解锁、地图重置不刷新；幻影的格心吸附、形态复制、仅对方可碰撞、FIFO 3 个和幻影炮/L 幻影；
-- V3/V4 残影与拖尾、死亡边框闪红、12 个音效 Cue 正常；
+- V3 起、顶档 V6 的残影与拖尾、死亡边框闪红、12 个音效 Cue 正常；
 - 传送点的 3×3 触发区、双人进入标记、两个标记点门槛、A/D 切换终点、Enter 确认、Escape 取消、地图重置和吞钥匙正常；
 - B 在分区内和分区外时，相机范围正确；
 - 没有新字段或分区的旧关卡仍能打开。
@@ -307,7 +307,7 @@
 - 隐藏方块按 `{ cell, groupId }` 保存；无实体、外形与墙一致。同一格允许多个组；任一玩家的整个身体完全落入某一组的格子并集时，整组永久变半透明。`MapReset` 不恢复已揭示的组，只有场景重载才恢复。
 - 召回道具按 `{ cell }` 保存；1×1 触发区。任一玩家拾取后全队永久解锁召回，A 按 `Q`、B 按右 `Shift`：施法者头顶有 1 格空位时，把另一名玩家传送到头顶，并在其旧位置留下一个吸附格心的幻影。幻影复制被召回者当时的形态，只和另一名玩家交互，最多同时 3 个（FIFO）。A 的 u 炮 / L 转向器幻影允许 B 从底面进入；其他形态（含“2048/矛”）是普通方块。地图重置清空幻影，但保留能力、不刷新已拾取的道具。
 - 传送点按 `{ position }` 保存；3×3 触发区，双人进入后运行时标记；至少两个已标记点才可进入选择，选择时 `A/D` 选终点、`Enter` 确认、`Escape` 取消；传送会重置地图并吞掉钥匙（临时钥匙同样被清掉）。处于灵体态的玩家不算“人在里面”，按一人死亡处理，凑不齐两人就不标记、不开选择。
-- 表现层不是关卡数据：V3/V4 残影和拖尾、死亡边框闪红、12 个运行时音效 Cue 都由 `LabSpeedFeedback` / `LabVisual` / `TuningLab` / `LabAudio` 负责，不需要在关卡里摆放，也不写进 `LabLevelData`。
+- 表现层不是关卡数据：V3 起、顶档 V6 的残影和拖尾、死亡边框闪红、12 个运行时音效 Cue 都由 `LabSpeedFeedback` / `LabVisual` / `TuningLab` / `LabAudio` 负责，不需要在关卡里摆放，也不写进 `LabLevelData`。
 - 预览生成物不保存到场景；运行时重新从数据生成。
 
 ### 场景用途
@@ -404,7 +404,7 @@
 | `Assets/TuningLab/TuningLab.cs` | 规则参数、基准房间、HUD、网格、相机范围、音效/表现层挂载和死亡闪红 |
 | `Assets/TuningLab/LabPlayer.cs` | 玩家移动、跳、冲刺、撞击、形态、死亡、召回输入和幻影膛 |
 | `Assets/TuningLab/LabVisual.cs` | 玩家分层视觉和边框状态 |
-| `Assets/TuningLab/LabSpeedFeedback.cs` | V3/V4 残影和拖尾 |
+| `Assets/TuningLab/LabSpeedFeedback.cs` | V3 起、顶档 V6 的残影和拖尾 |
 | `Assets/TuningLab/LabAudio.cs` | 12 个 Cue 的运行时音效播放器 |
 | `Assets/TuningLab/LabCamera.cs` | A/B 中点跟随和分区相机范围 |
 | `Assets/TuningLab/LabVerticalRope.cs` | 竖绳及其形状应用 |

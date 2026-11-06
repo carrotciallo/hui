@@ -175,7 +175,7 @@ MonoBehaviour:
   tierFirstCells: 4
   tierSpacingCells: 4
   tierCount: 6
-  maxFallSpeed: 42
+  capOverTopCells: 4
   showPixelGrid: 0
   showGrid: 1
   autoBuild: 1

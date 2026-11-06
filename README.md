@@ -42,7 +42,7 @@ Project/nameless/
 │     ├─ TuningLab.cs             # 参数、基准房间、HUD、音效/表现层挂载、死亡闪红
 │     ├─ LabPlayer.cs             # 玩家、形态、撞击、召回输入
 │     ├─ LabVisual.cs             # 边框/眼睛
-│     ├─ LabSpeedFeedback.cs      # V3/V4 残影与拖尾
+│     ├─ LabSpeedFeedback.cs      # V3 起 / 顶档 V6 残影与拖尾
 │     ├─ LabAudio.cs              # 运行时音效
 │     ├─ Lab*.cs                  # 相机、绳、钥匙/门、刺、冰、岩浆、隐藏方块、召回/幻影等
 │     ├─ Level/

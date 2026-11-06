@@ -54,8 +54,8 @@ MonoBehaviour:
   verticalHitEnabled: 1
   tierFirstCells: 4
   tierSpacingCells: 4
-  tierCount: 4
-  maxFallSpeed: 42
+  tierCount: 6
+  capOverTopCells: 4
   showPixelGrid: 0
   showGrid: 1
   autoBuild: 1

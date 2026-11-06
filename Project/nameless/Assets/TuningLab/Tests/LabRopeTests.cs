@@ -15,7 +15,7 @@ using UnityEngine.TestTools;
 public sealed class LabRopeTests
 {
     [Test]
-    public void RopeBouncePreservesMaxFallSpeedAndAddsOneTier()
+    public void RopeBouncePreservesIncomingSpeedAndAddsOneTier()
     {
         var go = new GameObject("RopeBounceLab");
         go.SetActive(false);
@@ -24,10 +24,10 @@ public sealed class LabRopeTests
         go.SetActive(true);
         lab.gravity = 50f;
         lab.tierSpacingCells = 4f;
-        lab.maxFallSpeed = 42f;
 
-        float incomingCells = lab.CellsForSpeed(lab.maxFallSpeed);
-        float bounceCells = lab.CellsForSpeed(lab.RopeBounceSpeed(lab.maxFallSpeed));
+        const float incoming = 42f;
+        float incomingCells = lab.CellsForSpeed(incoming);
+        float bounceCells = lab.CellsForSpeed(lab.RopeBounceSpeed(incoming));
 
         Assert.That(bounceCells, Is.EqualTo(incomingCells + lab.tierSpacingCells).Within(0.001f));
         Assert.That(bounceCells, Is.GreaterThan(incomingCells));
@@ -50,8 +50,7 @@ public sealed class LabRopeTests
         lab.gravity = 50f;
         lab.tierFirstCells = 4f;
         lab.tierSpacingCells = 4f;
-        lab.tierCount = 4;
-        lab.maxFallSpeed = 80f;
+        lab.tierCount = 6;
         labGo.SetActive(true);
     }
 
@@ -135,7 +134,7 @@ public sealed class LabRopeTests
         BuildLevel(new LabRopeSpec(new Vector2(0f, 3f), 6,
             0, LabRopeOrientation.Horizontal));
 
-        // 从 22 格以上自由落体：入射已经是四级速度，旧规则会把人打回 40 的固定值（比进绳还慢）
+        // 从 22 格以上自由落体：入射已经在三级以上，旧规则会把人打回 40 的固定值（比进绳还慢）
         var player = MakePlayer(new Vector2(0f, 26f));
 
         float lastDown = 0f;

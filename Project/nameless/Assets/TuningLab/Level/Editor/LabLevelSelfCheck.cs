@@ -781,6 +781,13 @@ public static class LabLevelSelfCheck
             "岩浆块门槛刚过就是 v3");
         Expect(sb, ref failures, tierProbe.TierOfSpeed(tierProbe.MagmaBreakSpeed - 0.01f) == 2,
             "低于岩浆块门槛还是 v2");
+        Expect(sb, ref failures, tierProbe.MaxTier == 6, "默认 6 级（不含零级）");
+        Expect(sb, ref failures,
+            tierProbe.CellsForSpeed(tierProbe.TopTierSpeed) > tierProbe.Boundary(tierProbe.MaxTier - 1),
+            "速度上限高于顶档门槛，下落能进顶档");
+        Expect(sb, ref failures,
+            tierProbe.TierOfSpeed(tierProbe.TopTierSpeed * 2f) == tierProbe.MaxTier,
+            "超过顶档门槛仍读顶档，碰撞按顶档结算");
         Object.DestroyImmediate(tierProbeGo);
 
         sb.AppendLine();

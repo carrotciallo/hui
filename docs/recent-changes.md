@@ -8,7 +8,8 @@
 
 - 隐藏方块（#59）：`LabHiddenBlock` + `LabLevelData.hiddenBlocks` + 关卡编辑器工具 + 演示关；无实体、按组永久半透明、`MapReset` 不恢复。
 - 音效（#60）：`LabAudio` 运行时挂载，12 个 Cue；素材在 `Assets/Sounds/Resources/`，不依赖场景引用。
-- 速度/死亡反馈（#62）：`LabSpeedFeedback` 的 V3/V4 残影与拖尾，`TuningLab` 的死亡边框闪红。
+- 速度/死亡反馈（#62）：`LabSpeedFeedback` 的 V3 起、顶档 V6 残影与拖尾，`TuningLab` 的死亡边框闪红。
+- 速度等级扩到 6 级；下落和冰面加速共用一个由等级表派生的顶档上限（`TopTierSpeed` / `capOverTopCells`）。超过顶档门槛的速度（大炮 / 绳子 / 互换）仍按 v6 结算，碰撞不再升级。
 - 召回与幻影（#69）：`LabRecallPickup` / `LabPhantom`；A 按 `Q`、B 按右 `Shift`，头顶 1 格有空间时把另一名玩家拉到头顶并在旧位置留下幻影；最多 3 个 FIFO。
 - 判据修复：双人撞击补齐锻造门槛（#65）；A 碎边后仍可拾取钥匙（#67）。
 - 传送门进出场动画收尾；相机 `SnapFocus` 与阶段机接入。
@@ -17,7 +18,7 @@
 ### 验证与文档
 
 - SelfCheck 新增隐藏方块和召回道具数据段；PlayCheck 覆盖召回道具、幻影和 `MapReset`。
-- PlayMode 规格覆盖 Forge 23、Cannon 14、Ice 22、Magma 18、Rope 15、Respawn 14、Teleport 11、Spike 9、Recall 9、Phantom 8、KeyDoor 4。
+- PlayMode 规格覆盖 Forge 24、Cannon 14、Ice 22、Magma 18、Rope 16、Respawn 15、Teleport 11、Spike 9、Recall 9、Phantom 8、KeyDoor 5、Tier 4。
 - 文档按当前架构重写：README、基准入口、编辑器文档、现行规则、术语表、ADR 注记和历史复盘。
 
 ## 2026-11-02

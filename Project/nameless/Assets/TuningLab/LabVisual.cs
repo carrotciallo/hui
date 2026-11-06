@@ -174,7 +174,7 @@ public class LabVisual : MonoBehaviour
         ring[3].color = TierColor(right);
     }
 
-    /// <summary>零级不亮，一级黄 → 四级白。</summary>
+    /// <summary>零级不亮，一级黄 → 四级白 → 六级品红。</summary>
     public static Color TierColor(int tier)
     {
         switch (tier)
@@ -183,6 +183,8 @@ public class LabVisual : MonoBehaviour
             case 2: return new Color(1f, 0.55f, 0.15f);   // 橙
             case 3: return new Color(0.35f, 0.85f, 1f);   // 青
             case 4: return Color.white;
+            case 5: return new Color(0.72f, 0.42f, 1f);   // 紫
+            case 6: return new Color(1f, 0.28f, 0.68f);   // 品红
             default: return new Color(1f, 1f, 1f, 0.06f); // 零级：几乎不可见
         }
     }

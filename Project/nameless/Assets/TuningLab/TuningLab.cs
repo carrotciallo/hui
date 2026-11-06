@@ -102,12 +102,12 @@ public class TuningLab : MonoBehaviour
     public float tierFirstCells = 4f;
     [Tooltip("每级之间的落差（格）。4 = 4/8/12/16 格。")]
     public float tierSpacingCells = 4f;
-    [Tooltip("等级数（不含零级）。4 → 零级..四级。")]
-    [Range(1, 6)] public int tierCount = 4;
+    [Tooltip("等级数（不含零级）。6 → 零级..六级。碰撞只读到顶档：更快的速度仍按顶档算。")]
+    [Range(1, 6)] public int tierCount = 6;
 
-    [Header("上限")]
-    [Tooltip("要能掉出最高一级：maxFall ≥ √(2·g·最高门槛)。g=50、门槛 16 格时需要 40。")]
-    public float maxFallSpeed = 42f;
+    [Header("速度上限")]
+    [Tooltip("顶档上限 = 顶档门槛 + 这个格数。下落和冰面加速共用同一个值；必须 > 0，否则速度永远差一点进不了顶档。默认 4 = 一个等级间距。")]
+    [Min(0.01f)] public float capOverTopCells = 4f;
 
     // 1 格 = 16 px，原生 384×216 = 24 × 13.5 格。改这个等于重做所有关卡尺寸，别乱动。
     public const int CellPixels = 16;
@@ -155,7 +155,7 @@ public class TuningLab : MonoBehaviour
     [Range(0f, 1f)] public float ghostAlphaTier3 = 0.5f;
     [Tooltip("起始档残影存活（秒）。")]
     public float ghostLifeTier3 = 0.6f;
-    [Tooltip("顶档同时存在的残影数（tierCount=4 时即 V4）。")]
+    [Tooltip("顶档同时存在的残影数（tierCount=6 时即 V6）。")]
     [Range(0, 12)] public int ghostCountTopTier = 5;
     [Tooltip("顶档残影初始不透明度。")]
     [Range(0f, 1f)] public float ghostAlphaTopTier = 0.7f;
@@ -169,7 +169,7 @@ public class TuningLab : MonoBehaviour
     [Range(1, 6)] public int trailEverySteps = 2;
     [Tooltip("拖尾亮点 V3 初始不透明度。")]
     [Range(0f, 1f)] public float trailAlphaTier3 = 0.85f;
-    [Tooltip("拖尾亮点 V4 初始不透明度。")]
+    [Tooltip("拖尾亮点顶档（V6）初始不透明度。")]
     [Range(0f, 1f)] public float trailAlphaTopTier = 1f;
 
     public LabPlayer PlayerA { get; private set; }
@@ -257,8 +257,11 @@ public class TuningLab : MonoBehaviour
     public float IceBreakSpeed => SpeedForCells(Boundary(Mathf.Max(0, IceBreakTier - 1)));
     /// <summary>岩浆块整组破坏的碰撞门槛：固定三级（该等级的下边界速度）。</summary>
     public float MagmaBreakSpeed => SpeedForCells(Boundary(Mathf.Max(0, LabMagma.BreakTier - 1)));
-    /// <summary>冰面加速的上限：最高等级的名义顶端（默认 v4 ≈ 44.72）。</summary>
-    public float IceMaxSpeed => SpeedForCells(Boundary(MaxTier - 1) + Mathf.Max(0.01f, tierSpacingCells));
+    /// <summary>
+    /// 顶档上限：下落速度和冰面加速都封在这里（默认 6 级 → 24 + 4 = 28 格 ≈ 52.92）。
+    /// 大炮、绳子反弹、双人互换是冲量，可以超过它；超过后等级读数仍是顶档。
+    /// </summary>
+    public float TopTierSpeed => SpeedForCells(Boundary(MaxTier - 1) + Mathf.Max(0.01f, capOverTopCells));
     /// <summary>大炮发射的增量 = 一个等级间距的 v²（= 2·g·间距格数）。v' = √(Vb² + 这个数)。</summary>
     public float CannonBoostV2 => 2f * gravity * Mathf.Max(0.01f, tierSpacingCells);
 
@@ -296,6 +299,7 @@ public class TuningLab : MonoBehaviour
         }
     }
 
+    /// <summary>等级读数上限：碰撞只认到这一级，更快的速度不会解锁更强的效果。</summary>
     public int MaxTier => Bounds.Length;
     public float Boundary(int index) => index >= 0 && index < Bounds.Length ? Bounds[index] : 0f;
 
