@@ -266,6 +266,7 @@ public sealed class LabLevel : MonoBehaviour
         var ice = go.AddComponent<LabIce>();
         ice.cell = spec.cell;
         ice.groupId = spec.groupId;
+        ice.useGroupColor = true;
 
         var body = go.GetComponent<BoxCollider2D>();
         if (body != null && material != null) body.sharedMaterial = material;

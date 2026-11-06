@@ -2,7 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 一格冰块：1×1 的蓝色实体方块，可以站立和滑行。
+/// 一格冰块：1×1 的实体方块，可以站立和滑行。
+/// 视觉是按 groupId 推导的组色边框 + 半透明填充，编辑器手柄和运行时共用同一套颜色。
 ///
 /// 破坏有两条路，都由玩家侧结算：
 ///   组内任意一块沿接触法线被 v2 撞击 → 整组一起碎（优先于红热）；
@@ -20,12 +21,19 @@ public sealed class LabIce : MonoBehaviour
 {
     public static readonly Color DefaultColor = new Color(0.42f, 0.75f, 1f);
 
+    /// <summary>组色序列的长度：前 1024 个 groupId 的颜色互不重复（测试覆盖）。</summary>
+    public const int GroupColorCount = 1024;
+
     /// <summary>Play 时生成的所有冰块，按 groupId 编组查询。</summary>
     public static readonly List<LabIce> All = new List<LabIce>();
 
     public Vector2Int cell;
     public int groupId;
+    [Tooltip("勾选后按 groupId 自动取组色；取消后使用下面的 color 自定义。")]
+    public bool useGroupColor = true;
     public Color color = DefaultColor;
+
+    static Sprite cachedSprite;
 
     public bool Broken { get; private set; }
 
@@ -41,6 +49,21 @@ public sealed class LabIce : MonoBehaviour
     }
 
     void OnDisable() => All.Remove(this);
+
+    /// <summary>
+    /// 由一个 groupId 推导稳定的组色。0 号组保留默认冰蓝；其余组用黄金角散列，
+    /// 再叠加饱和度和明度的低频变化，前 <see cref="GroupColorCount"/> 组互不重复。
+    /// 编辑器手柄和运行时边框都调用这一个函数，保证两边颜色一致。
+    /// </summary>
+    public static Color GroupColor(int groupId)
+    {
+        if (groupId == 0) return DefaultColor;
+
+        float hue = Mathf.Repeat(0.58f + groupId * 0.61803398875f, 1f);
+        float saturation = 0.50f + 0.25f * Mathf.Repeat(groupId * 0.41421356237f, 1f);
+        float value = 0.85f + 0.15f * Mathf.Repeat(groupId * 0.73205080757f, 1f);
+        return Color.HSVToRGB(hue, saturation, value);
+    }
 
     /// <summary>
     /// 把格子和组号应用到碰撞箱和视觉。编辑器预览也直接调它，不依赖 Awake。
@@ -65,8 +88,8 @@ public sealed class LabIce : MonoBehaviour
         if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
         if (spriteRenderer != null)
         {
-            spriteRenderer.sprite = TuningLab.WhiteSprite;
-            spriteRenderer.color = color;
+            spriteRenderer.sprite = IceSprite();
+            spriteRenderer.color = useGroupColor ? GroupColor(groupId) : color;
             spriteRenderer.sortingOrder = 1;
             spriteRenderer.enabled = !Broken;
         }
@@ -113,6 +136,39 @@ public sealed class LabIce : MonoBehaviour
     void RebuildComposite()
     {
         if (composite != null) composite.GenerateGeometry();
+    }
+
+    /// <summary>
+    /// 运行时冰块的贴图：2 像素透明边框 + 半透明填充。颜色由 SpriteRenderer.color 统一染色，
+    /// 所以同一张贴图能显示任意组色，不需要每组生成一张贴图。
+    /// </summary>
+    static Sprite IceSprite()
+    {
+        if (cachedSprite != null) return cachedSprite;
+
+        const int size = TuningLab.CellPixels;
+        const int border = 2;
+        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Point,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        var pixels = new Color32[size * size];
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                bool edge = x < border || y < border || x >= size - border || y >= size - border;
+                pixels[y * size + x] = edge
+                    ? new Color32(255, 255, 255, 255)
+                    : new Color32(255, 255, 255, 64);
+            }
+        }
+        texture.SetPixels32(pixels);
+        texture.Apply();
+        cachedSprite = Sprite.Create(texture, new Rect(0f, 0f, size, size),
+            new Vector2(0.5f, 0.5f), TuningLab.CellPixels);
+        return cachedSprite;
     }
 
     /// <summary>这个点落在哪一块未破坏的冰上；合并地形需要靠接触点找回是哪一格。</summary>

@@ -3409,11 +3409,7 @@ public sealed class LabLevelEditorWindow : EditorWindow
         }
     }
 
-    static Color IceGroupColor(int groupId)
-    {
-        float hue = Mathf.Repeat(groupId * 0.37f, 1f);
-        return Color.HSVToRGB(hue, 0.55f, 1f);
-    }
+    static Color IceGroupColor(int groupId) => LabIce.GroupColor(groupId);
 
     /// <summary>岩浆块用暖色区分组号，和冰块的冷色调分开。</summary>
     static Color MagmaGroupColor(int groupId)
@@ -3683,7 +3679,11 @@ public sealed class LabLevelEditorWindow : EditorWindow
             case Tool.Recall: return new Color(0.2f, 0.9f, 0.8f, 0.95f);
             case Tool.Door: return new Color(newDoorColor.r, newDoorColor.g, newDoorColor.b, 0.95f);
             case Tool.Spike: return new Color(0.75f, 0.82f, 0.92f, 0.95f);
-            case Tool.Ice: return new Color(0.42f, 0.75f, 1f, 0.95f);
+            case Tool.Ice:
+            {
+                Color c = LabIce.GroupColor(iceGroupId);
+                return new Color(c.r, c.g, c.b, 0.95f);
+            }
             case Tool.Magma: return new Color(1f, 0.34f, 0.12f, 0.95f);
             case Tool.HiddenBlock: return new Color(0.45f, 0.9f, 0.55f, 0.95f);
             case Tool.RespawnPoint: return new Color(0.35f, 1f, 0.65f, 0.95f);
