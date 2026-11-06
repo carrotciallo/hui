@@ -7,6 +7,7 @@
 - Unity **6000.6.4f1**，工程位于 `Project/nameless/`。
 - 唯一规则基准：`Project/nameless/Assets/TuningLab/`。
 - 关卡数据与生成：`Assets/TuningLab/Level/`。
+- 音效素材：`Assets/Sounds/Resources/`（运行时 `LabAudio` 挂载）。
 - 基准场景：`Assets/Scenes/TuningLab.unity`；正式关卡：`Assets/Scenes/Levels/`。
 - 预览与 Play 必须共用 `LabLevel.Build`，不要恢复旧 World、旧测试房或第二套玩家规则。
 - 当前文档入口：[docs/current-baseline.md](docs/current-baseline.md)。

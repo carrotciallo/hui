@@ -7,6 +7,7 @@
 - Unity 工程：`Project/nameless/`
 - 唯一规则基准：`Project/nameless/Assets/TuningLab/`
 - 关卡数据/生成：`Assets/TuningLab/Level/`（`LabLevelData` + `LabLevel`）
+- 音效素材：`Assets/Sounds/Resources/`（`LabAudio` 运行时挂载）
 - 基准场景：`Assets/Scenes/TuningLab.unity`
 - 正式关卡：`Assets/Scenes/Levels/`
 - 当前文档入口：[docs/current-baseline.md](docs/current-baseline.md)
@@ -35,6 +36,7 @@ git diff Project/nameless/ProjectSettings/EditorBuildSettings.asset
 | GameJam → New Level From Tuning Lab | 创建正式关卡 |
 | GameJam → Convert Current Scene To Level | 转换 Tuning Lab 副本 |
 | GameJam → Tuning Lab Level Editor | 编辑关卡数据 |
+| GameJam → Build HiddenBlock Demo Level | 生成隐藏方块演示关 |
 | GameJam → Run Level Baseline Self Check | 纯数据自检 |
 | GameJam → Run Level Play Check | 真实物理自检 |
 
@@ -42,7 +44,7 @@ git diff Project/nameless/ProjectSettings/EditorBuildSettings.asset
 
 ## 验证
 
-当前验证主线是 Tuning Lab 的 self-check / PlayCheck，不要声称已运行不存在的旧测试套件。Unity CLI 示例见 [docs/tuning-lab-level-editor.md](docs/tuning-lab-level-editor.md)。跑不了就直说跑不了，不要编造结果。
+当前验证主线是 Tuning Lab 的 self-check / PlayCheck 和 `Assets/TuningLab/Tests/` 的 PlayMode 规格，不要声称已运行不存在的旧测试套件。Unity CLI 示例见 [docs/tuning-lab-level-editor.md](docs/tuning-lab-level-editor.md)。跑不了就直说跑不了，不要编造结果。
 
 ## 代码约定
 
