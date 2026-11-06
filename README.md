@@ -2,7 +2,7 @@
 
 Unity 双人协作平台解谜原型。当前仓库的**唯一开发基准是 Tuning Lab**，正式关卡从它派生，旧 `World` 架构、旧编辑器和旧测试房不再作为开发依据。
 
-> **当前进度（2026-11-04）**：核心玩家、速度/冲刺、红热锻造、A 形态、大炮、L 形转向器、钥匙与门、重生点和传送点的基础版本已经进入 Tuning Lab；关卡编辑器和验证链路已建立。冰块、绳子、地刺、美术资源以及重生点/传送点的补全仍在进行，完整主线关卡尚未完成。
+> **当前进度（2026-11-06）**：核心玩家、速度/冲刺、红热锻造、A 形态、大炮、L 形转向器、钥匙与门、重生点、传送点、冰块、绳子、地刺、隐藏方块、召回/幻影、音效和速度/死亡反馈已经进入 Tuning Lab；关卡编辑器、SelfCheck/PlayCheck 和 PlayMode 规格已建立。美术资源和完整主线关卡仍在进行。
 
 ## 先看这里：参考索引
 
@@ -10,8 +10,9 @@ Unity 双人协作平台解谜原型。当前仓库的**唯一开发基准是 Tu
 
 1. [当前项目基准](docs/current-baseline.md)：唯一架构、场景边界、菜单入口、验证层级。
 2. [Tuning Lab 关卡编辑器](docs/tuning-lab-level-editor.md)：关卡数据模型、代码地图、扩展和验证方式。
-3. [冲刺与对撞：现行规则](docs/冲刺与对撞-现行规则.md)：按当前代码整理的冲刺、对撞、锻造、形态和大炮规则。
+3. [冲刺与对撞：现行规则](docs/冲刺与对撞-现行规则.md)：按当前代码整理的冲刺、对撞、锻造、形态、大炮、冰块、岩浆、召回/幻影和隐藏方块规则。
 4. [Tuning Lab 使用手册](docs/tuning-lab.md)：调试台操作与常用快捷键。
+5. [领域术语](GLOSSARY.md)：隐藏方块、死亡反馈、残影、拖尾等跨关卡术语。
 
 ### 设计参考（用于规划，不得直接覆盖当前代码基准）
 
@@ -36,13 +37,20 @@ Project/nameless/
 │  ├─ Scenes/
 │  │  ├─ TuningLab.unity          # 规则基准场景，禁止手改生成物
 │  │  └─ Levels/                  # 正式关卡和调试房
+│  ├─ Sounds/Resources/           # 12 类运行时音效（LabAudio 按目录加载）
 │  └─ TuningLab/
-│     ├─ *.cs                     # 玩家、相机、规则、机关和显示
+│     ├─ TuningLab.cs             # 参数、基准房间、HUD、音效/表现层挂载、死亡闪红
+│     ├─ LabPlayer.cs             # 玩家、形态、撞击、召回输入
+│     ├─ LabVisual.cs             # 边框/眼睛
+│     ├─ LabSpeedFeedback.cs      # V3/V4 残影与拖尾
+│     ├─ LabAudio.cs              # 运行时音效
+│     ├─ Lab*.cs                  # 相机、绳、钥匙/门、刺、冰、岩浆、隐藏方块、召回/幻影等
 │     ├─ Level/
-│     │  ├─ LabLevelData.cs       # 格子、绳、出生点、相机和分区数据
+│     │  ├─ LabLevelData.cs       # 格子、绳、机关、出生点、相机和分区数据
 │     │  └─ LabLevel.cs           # 数据 → 场景生成
 │     ├─ Editor/                  # Tuning Lab 菜单和自检
-│     └─ Tests/                   # PlayMode 验证
+│     ├─ Level/Editor/            # 派生、关卡编辑器、SelfCheck、PlayCheck、演示关
+│     └─ Tests/                   # PlayMode 规格
 └─ ProjectSettings/               # Unity 项目配置
 ```
 
@@ -63,21 +71,24 @@ Project/nameless/
 | Tuning Lab 单一基准、场景派生和关卡编辑器 | 已完成 | [Issue #16](https://github.com/sfher/hui/issues/16)、[Issue #3](https://github.com/sfher/hui/issues/3) |
 | 玩家移动、跳跃、冲刺、五档速度和相机 | 已完成基础版本 | [机制策划案](docs/策划案/回-机制.md) |
 | 红热锻造、A 形态、L 形转向器和大炮 | 已完成基础版本 | [Issue #14](https://github.com/sfher/hui/issues/14)、[#15](https://github.com/sfher/hui/issues/15)、[#21](https://github.com/sfher/hui/issues/21) |
-| 钥匙、门、重生点、传送点 | 基础功能已完成 | [Issue #18](https://github.com/sfher/hui/issues/18)、[#19](https://github.com/sfher/hui/issues/19)、[#20](https://github.com/sfher/hui/issues/20) |
+| 钥匙、门、重生点、传送点（含进出场动画） | 已完成基础版本 | [Issue #18](https://github.com/sfher/hui/issues/18)、[#19](https://github.com/sfher/hui/issues/19)、[#20](https://github.com/sfher/hui/issues/20) |
+| 冰块（#29，含运行时组色边框）、竖绳/横绳（#27）、地刺（#34） | 已进入基准 | 现行规则 §3.8 / §3.9 与编辑器文档 |
+| 隐藏方块（#59） | 已进入基准 | `LabHiddenBlock` + 关卡数据 + 编辑器工具 |
+| 召回与幻影（#69） | 已进入基准 | `LabRecallPickup` / `LabPhantom` + 编辑器工具 + 契约测试 |
+| 音效（#60）、速度/死亡反馈（#62） | 已进入基准 | `LabAudio` / `LabSpeedFeedback` / 死亡闪红 |
+| 判据修复：双人锻造门槛（#65）、形态不拦拾取（#67） | 已修 | 规则文档 §3.4 / §3.5 |
 | 纯数据 Self Check、真实物理 Play Check、PlayMode 测试 | 已建立 | [当前项目基准](docs/current-baseline.md) |
 
 ### 当前进行中或待处理
 
 | Issue | 主题 | 当前判断 |
 | --- | --- | --- |
-| [#29](https://github.com/sfher/hui/issues/29) | 冰块 | 尚未进入当前基准；包含破坏、编组和冰面加速。对应主线 L3/L4。 |
-| [#27](https://github.com/sfher/hui/issues/27) | 绳子 | 已有 `LabVerticalRope` 基础实现，但策划中的完整交互、反馈和关卡用途仍待补齐。 |
-| [#34](https://github.com/sfher/hui/issues/34) | 地刺 | 待加入并接入关卡编辑器；对应主线绳子进阶与 L9。 |
-| [#32](https://github.com/sfher/hui/issues/32) | 重生点 | 已补齐基础功能；任一玩家从区域外进入触发区即让双人固定 A 左 B 右重生并刷新地图；激活时记录两人边框形态，两人都死亡后按记录复活，一死一活时死者以全新状态复活。 |
-| [#33](https://github.com/sfher/hui/issues/33) | 传送点 | 已补齐关卡编辑器摆放；所有传送点互为终点，进入后 `A/D` 选终点、`Enter` 确认，传送会重置地图并吞钥匙。靠近点亮/收集门槛未实现。 |
-| [#35](https://github.com/sfher/hui/issues/35) | 大炮方向 bug | 已知小 bug：B 从开口朝上的 A 进入时，射出方向可能与冲刺方向相反。 |
-| [#26](https://github.com/sfher/hui/issues/26) | 像素美术资源 | 资源清单和规格已明确，当前仍是程序生成占位显示。 |
-| [#36](https://github.com/sfher/hui/issues/36) | 项目目录命名 | 已决定保留 `Project/nameless/`；只同步文档描述，不改 Unity 工程目录。 |
+| [#63](https://github.com/sfher/hui/issues/63) | 冠军拼图 / 修复方块 | 未实现；A 的红热边/灵体边接触后回普通边。 |
+| [#64](https://github.com/sfher/hui/issues/64) | 幽魂态 | 未实现；全碎边的限时无实体状态。 |
+| [#66](https://github.com/sfher/hui/issues/66) | 传送门相对位置保留 | 未实现；传送后相对站位保持。 |
+| [#70](https://github.com/sfher/hui/issues/70) / [#71](https://github.com/sfher/hui/issues/71) / [#72](https://github.com/sfher/hui/issues/72) | 主页 / 设置 / 图标 UI | 未开始；当前 HUD 仍是调试用 IMGUI。 |
+| [#26](https://github.com/sfher/hui/issues/26) | 像素美术资源 | 资源清单和规格已明确，当前仍是程序生成占位显示；音效已按 #60 入库。 |
+| 主线关卡 | 组合关卡和最终流程 | 机制大多具备，完整主线尚未制作。 |
 
 ### 按策划案的主线覆盖情况
 
@@ -86,14 +97,14 @@ Project/nameless/
 | 区段 | 设计目标 | 当前状态 |
 | --- | --- | --- |
 | L0 | 移动、跳跃、冲刺入门 | 基础能力已具备 |
-| L1 | 横碰、上冲、重生点 | 机制具备；重生点仍需修复多点状态 |
-| L2 | 钥匙、门、伤害物、绳子初见 | 钥匙/门具备；伤害物和绳子内容未齐 |
-| L3 | 冰块破坏与滑行 | 待 #29 |
-| L4 / L4+ | L 转向、传送点、冰面组合 | L 转向和传送点基础具备；冰面与完整关卡待补 |
+| L1 | 横碰、上冲、重生点 | 机制具备 |
+| L2 | 钥匙、门、伤害物、绳子初见 | 钥匙/门、地刺、绳子均已具备；关卡内容待补 |
+| L3 | 冰块破坏与滑行 | 机制具备（#29），关卡内容待补 |
+| L4 / L4+ | L 转向、传送点、冰面组合 | L 转向、传送点、冰面组合机制具备；完整关卡待补 |
 | L5 / L6 | 滑道、绳子、转换器组合 | 部分机制具备，组合关卡未完成 |
-| L7 | 大炮 | 基础功能具备，仍有 #35 |
-| L8 | 竖绳与 `|` 形态 | 绳子基础存在，完整交互待 #27 |
-| L9 | 地刺交互 | 待 #34 |
+| L7 | 大炮 | 基础功能具备 |
+| L8 | 竖绳与 `\|` 形态 | 绳子基础存在；`\|` 形态的完整关卡用途待补 |
+| L9 | 地刺交互 | 机制具备（#34） |
 | L10 | 全部传送门、最终门、最大速度、结局/Boss | 仍属策划阶段，未形成完整关卡 |
 
 ## 打开和验证工程
@@ -103,6 +114,7 @@ Project/nameless/
 3. 菜单执行 **GameJam → Build Tuning Lab**，生成或更新基准场景。
 4. 按 Play 验证调试台；正式关卡从 Tuning Lab 派生，不要手改基准场景生成物。
 5. 使用 **GameJam → Run Level Baseline Self Check** 做纯数据验证，使用 **GameJam → Run Level Play Check** 做真实物理验证。
+6. PlayMode 规格在 `Assets/TuningLab/Tests/`，用 Unity Test Runner 的 PlayMode 运行。
 
 Unity 打开工程可能重写 `ProjectSettings/`。提交前检查 `git status`：只丢弃纯序列化噪音，真实的图层、输入和构建场景改动必须保留。
 
@@ -110,23 +122,25 @@ Unity 打开工程可能重写 `ProjectSettings/`。提交前检查 `git status`
 
 - **GameJam → New Level From Tuning Lab**：创建正式关卡。
 - **GameJam → Convert Current Scene To Level**：把 Tuning Lab 副本转为关卡。
-- **GameJam → Tuning Lab Level Editor**：编辑地形、绳、出生点、相机和连续关卡分区。
+- **GameJam → Tuning Lab Level Editor**：编辑地形、绳、机关、隐藏方块、召回道具、出生点、相机和连续关卡分区。
+- **GameJam → Build HiddenBlock Demo Level**：生成隐藏方块演示关，快速验证整组揭示。
 - **GameJam → Run Level Baseline Self Check**：验证数据归一化、矩形合并、分区和相机规则。
 - **GameJam → Run Level Play Check**：创建临时关卡并用真实物理验证。
 
 ## 操作
 
-| 玩家 | 移动 | 上 / 下 | 跳跃 | 冲刺 |
-| --- | --- | --- | --- | --- |
-| P1 / A | A / D | W / S | 空格 | 左 Shift |
-| P2 / B | ← / → | ↑ / ↓ | `/` | `.` |
+| 玩家 | 移动 | 上 / 下 | 跳跃 | 冲刺 | 召回 |
+| --- | --- | --- | --- | --- | --- |
+| P1 / A | A / D | W / S | 空格 | 左 Shift | `Q` |
+| P2 / B | ← / → | ↑ / ↓ | `/` | `.` | 右 `Shift` |
 
-调试台常用：`R` 重置，`P` 像素网格，`Tab` 格线。关卡编辑器工具和验证方式见 [编辑器手册](docs/tuning-lab-level-editor.md)。
+调试台常用：`R` 重置，`P` 像素网格，`Tab` 格线。召回需要先在关卡里拾取召回道具。关卡编辑器工具和验证方式见 [编辑器手册](docs/tuning-lab-level-editor.md)。
 
 ## 目录速查
 
-- 规则、玩家、相机和机关：`Project/nameless/Assets/TuningLab/`
+- 规则、玩家、相机、机关和表现层：`Project/nameless/Assets/TuningLab/`
 - 关卡数据与生成：`Project/nameless/Assets/TuningLab/Level/`
+- 音效素材：`Project/nameless/Assets/Sounds/Resources/`
 - 基准场景：`Project/nameless/Assets/Scenes/TuningLab.unity`
 - 正式关卡：`Project/nameless/Assets/Scenes/Levels/`
 - 设计草稿：`docs/策划案/`
