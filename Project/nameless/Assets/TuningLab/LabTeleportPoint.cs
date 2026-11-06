@@ -74,8 +74,9 @@ public sealed class LabTeleportPoint : MonoBehaviour
             lab.EnterTeleportSelection(this);
     }
 
+    /// <summary>灵体不算"人在里面"：一条边全碎 = 按一人死亡处理，凑不齐两人就不标记、不开选择。</summary>
     bool IsInside(LabPlayer player)
-        => player != null && player.IsAlive && !player.Suspended
+        => player != null && player.IsAlive && !player.Suspended && !player.IsIntangible
            && trigger != null && player.BodyBounds.Intersects(trigger.bounds);
 
     /// <summary>选择界面里当前选中的终点会亮起来；离开选择界面时由 TuningLab 熄灭。</summary>

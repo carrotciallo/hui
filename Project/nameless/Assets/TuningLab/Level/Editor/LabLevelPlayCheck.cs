@@ -403,6 +403,53 @@ public static class LabLevelPlayCheck
         Check(sb, ref fails, lab.PlayerA != null && lab.PlayerB != null,
             "离刺很远的两名玩家没有被误杀");
 
+        // ---- 灵体态（Issue #64）：四条边全碎 = 限时穿透态 ----
+        if (lab.PlayerA != null)
+        {
+            LabPlayer a = lab.PlayerA;
+            var aBody = a.GetComponent<BoxCollider2D>();
+            a.Teleport(new Vector2(-9.5f, 5.5f));      // 基准场景里确认过的空位
+
+            Check(sb, ref fails, !a.IsIntangible && aBody != null && !aBody.isTrigger,
+                "常态：不是灵体，碰撞箱是实心");
+
+            for (int i = 0; i < 4; i++)
+                a.SetEdge((LabPlayer.Edge)i, LabPlayer.EdgeState.Spirit);
+
+            Check(sb, ref fails, a.Form == LabForm.Spirit && a.IsIntangible,
+                "四条边全碎 = 灵体态");
+            Check(sb, ref fails, aBody != null && aBody.isTrigger,
+                "灵体把碰撞箱改成触发器：穿实体，刺/门/双人对撞一起失效");
+            Check(sb, ref fails, Mathf.Abs(a.SpiritTimeLeft - lab.spiritDuration) < 0.05f,
+                "存在时间 = Inspector 的 spiritDuration，实际 " + a.SpiritTimeLeft);
+
+            a.ResetEdges();
+            Check(sb, ref fails, !a.IsIntangible && aBody != null && !aBody.isTrigger
+                    && a.SpiritTimeLeft <= 0f,
+                "形态回到常态后交还实心碰撞箱、计时器清零");
+
+            // 持钥上限：身上已经有一把时，第二把捡不起，钥匙留在原处。
+            LabKey first = MakeProbeKey(new Vector2(-9.5f, 3.5f));
+            LabKey second = MakeProbeKey(new Vector2(-8.5f, 3.5f));
+            Check(sb, ref fails, first.TryCollect(a), "捡起第一把钥匙");
+            Check(sb, ref fails, !second.TryCollect(a) && !second.Collected,
+                "持钥上限 = 1：第二把捡不起，钥匙本体还在");
+            second.TryCollect(a);
+            Check(sb, ref fails, !second.Collected,
+                "拿着钥匙反复接触仍然无效（Stay 重试不会绕过上限）");
+            a.ClearKeys();
+            Check(sb, ref fails, second.TryCollect(a), "空出手后同一把钥匙能捡起来");
+
+            // 临时钥匙：登记为临时，其余当普通钥匙用。
+            LabKey temp = LabKey.SpawnTemporary(new Vector2(-7.5f, 3.5f));
+            Check(sb, ref fails, temp != null && temp.IsTemporary && !temp.Collected,
+                "灵体吐出的钥匙登记为临时钥匙");
+            Check(sb, ref fails, temp.TryCollect(lab.PlayerB), "临时钥匙和普通钥匙一样能捡");
+            Check(sb, ref fails, temp.Collected && lab.PlayerB.KeyCount == 1,
+                "捡起后计数落到玩家身上");
+            lab.PlayerB.ClearKeys();
+        }
+
         if (lab.Cam != null)
         {
             var follow = lab.Cam.GetComponent<LabCamera>();
@@ -442,6 +489,18 @@ public static class LabLevelPlayCheck
         sb.AppendLine(fails == 0 ? "全部通过。" : ("失败 " + fails + " 项。"));
         text = sb.ToString();
         return fails == 0;
+    }
+
+    /// <summary>摆一把不属于关卡数据的探针钥匙，只用来验拾取规则。</summary>
+    static LabKey MakeProbeKey(Vector2 position)
+    {
+        var go = new GameObject("ProbeKey");
+        go.transform.position = position;
+        go.AddComponent<BoxCollider2D>();
+        go.AddComponent<SpriteRenderer>();
+        LabKey key = go.AddComponent<LabKey>();
+        key.ApplyShape();
+        return key;
     }
 
     static void Check(StringBuilder sb, ref int fails, bool condition, string label)

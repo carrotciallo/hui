@@ -129,6 +129,13 @@ public class LabPlayer : MonoBehaviour
     /// <summary>哪几条边碎成了灵体；形态完全由它算出来。</summary>
     public int SpiritMask => spiritMask;
     public LabForm Form => form;
+    /// <summary>
+    /// 灵体态：四条边全碎，穿透一切实体、不能冲刺，唯一保留的交互是钥匙（ADR-0007）。
+    /// 由 form 派生，不另开一套状态位。
+    /// </summary>
+    public bool IsIntangible => form == LabForm.Spirit;
+    /// <summary>灵体剩余存在时间（秒）；不在灵体态时为 0。</summary>
+    public float SpiritTimeLeft => IsIntangible ? Mathf.Max(0f, spiritTimer) : 0f;
     /// <summary>已装入身体、尚未被门消耗的钥匙数量。</summary>
     public int KeyCount { get; private set; }
     /// <summary>捡钥匙只看人在不在场外：碎边、形态都不拦。A 和 B 一样，
@@ -182,6 +189,7 @@ public class LabPlayer : MonoBehaviour
 
     int spiritMask;
     LabForm form = LabForm.Normal;
+    float spiritTimer;
 
     LabPlayer loaded;               // 膛里的 B（只有 A 有）
     LabPlayer host;                 // 我在谁的膛里（只有 B 有）
@@ -300,8 +308,19 @@ public class LabPlayer : MonoBehaviour
             if (converterLoadTimer <= 0f) FireConverter();
         }
 
+        // 灵体：存在时间不因为贴地、贴墙、在空中而停表；耗尽就是死亡。
+        if (IsIntangible)
+        {
+            TickSpirit(dt);
+            if (IsDead) return;
+            SweepKeys();
+        }
+
         bool wasGrounded = grounded;
         grounded = ProbeGround();
+
+        // 灵体的碰撞箱是触发器，物理引擎不再托人：只保留"踩住实心顶面"这一条豁免（ADR-0007）。
+        if (IsIntangible && grounded && v.y < 0f) v.y = 0f;
 
         if (grounded && !wasGrounded) OnLand();
         if (!grounded && wasGrounded) BeginAir();
@@ -325,7 +344,7 @@ public class LabPlayer : MonoBehaviour
         // 向下冲刺只允许在空中；站在地上按下去= 什么都不发生，也不消耗充能。
         bool downDashBlocked = vertInput < -0.01f && grounded;
         if (dashQueued && Charge >= 1f && dashPhase != DashPhase.Dash && !downDashBlocked
-            && (!lab.groundOnlyDash || grounded))
+            && !IsIntangible && (!lab.groundOnlyDash || grounded))
         {
             // 冲刺方向优先级：竖直输入 > 水平输入 > 空中的竖直速度方向 > 面朝方向
             // 方向由 Aim 统一决定（和眼睛显示的是同一个东西）
@@ -968,7 +987,13 @@ public class LabPlayer : MonoBehaviour
     {
         LabForm next = LabForms.Of(spiritMask);
         if (next == form) return;
+        bool wasSpirit = form == LabForm.Spirit;
         form = next;
+        if (form == LabForm.Spirit)
+        {
+            if (!wasSpirit) EnterSpirit();
+        }
+        else if (wasSpirit) ExitSpirit();
         if (loaded != null && (!loadedConverter || form != LabForm.Converter)) Eject();
         if (FormChanged != null) FormChanged(this, form);
     }
@@ -1000,6 +1025,81 @@ public class LabPlayer : MonoBehaviour
                     SetEdge(e, EdgeState.Spirit);
                 }
                 break;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 灵体态（Issue #64 / ADR-0007）：限时的穿透态，只认钥匙，时间耗尽即死
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// 进入灵体：把碰撞箱改成触发器。这一步一次关掉所有交互 —— 碰撞回调不再触发
+    /// （锻造、岩浆、冰、双人动量、大炮装填全停），触发器对触发器也不发回调（地刺、门都不算）。
+    /// 代价是钥匙也一起没了回调，所以唯一保留的交互要在 FixedUpdate 里自己扫。
+    /// </summary>
+    void EnterSpirit()
+    {
+        if (col != null) col.isTrigger = true;
+        spiritTimer = lab != null ? lab.spiritDuration : 6f;
+    }
+
+    /// <summary>离开灵体（复活、传送、形态被改写）：交还实心碰撞箱。</summary>
+    void ExitSpirit()
+    {
+        if (col != null) col.isTrigger = false;
+        spiritTimer = 0f;
+    }
+
+    /// <summary>灵体的存在时间：从进入那一刻开始计，中途不暂停；耗尽就是死亡。</summary>
+    void TickSpirit(float dt)
+    {
+        spiritTimer -= dt;
+        if (spiritTimer > 0f) return;
+        DropTempKey();
+        Kill();
+    }
+
+    /// <summary>
+    /// 消散时把身上那把钥匙吐回世界：只在持有钥匙时生成，且方块中心所在格子没被实体占住。
+    /// 另一名玩家（B）占用不算，各类触发器物件也不算。位置取格心，和关卡里的钥匙对齐。
+    /// </summary>
+    void DropTempKey()
+    {
+        if (KeyCount <= 0) return;
+        ConsumeKey();
+
+        Vector2 here = rb != null ? rb.position : (Vector2)transform.position;
+        Vector2 cellCenter = new Vector2(
+            Mathf.FloorToInt(here.x) + 0.5f,
+            Mathf.FloorToInt(here.y) + 0.5f);
+        if (!IsCellFreeOfSolids(cellCenter)) return;
+        LabKey.SpawnTemporary(cellCenter);
+    }
+
+    /// <summary>这个格子中心是不是被实体挡住：只认实心碰撞体，玩家和触发器都让开。</summary>
+    bool IsCellFreeOfSolids(Vector2 point)
+    {
+        var hits = Physics2D.OverlapPointAll(point);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider2D hit = hits[i];
+            if (hit == null || hit == col || hit.isTrigger) continue;
+            if (hit.GetComponentInParent<LabPlayer>() != null) continue;
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>灵体捡钥匙：碰撞箱是触发器，钥匙自己的 OnTriggerEnter 不会响，只能按包围盒扫。</summary>
+    void SweepKeys()
+    {
+        if (col == null || KeyCount >= MaxHeldKeys) return;
+        Bounds b = col.bounds;
+        var hits = Physics2D.OverlapBoxAll(b.center, b.size, 0f);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            LabKey key = hits[i] != null ? hits[i].GetComponent<LabKey>() : null;
+            if (key != null && key.TryCollect(this)) return;
         }
     }
 
@@ -1084,9 +1184,13 @@ public class LabPlayer : MonoBehaviour
 
     public void SetHitCooldown(float until) => nextHitTime = until;
 
+    /// <summary>持钥上限：一名玩家身上同时只能带一把，带着再捡无效，钥匙留在原处。</summary>
+    public const int MaxHeldKeys = 1;
+
     public bool TryCollectKey(LabKey key)
     {
         if (key == null || !CanCollectKey) return false;
+        if (KeyCount >= MaxHeldKeys) return false;
         KeyCount++;
         return true;
     }

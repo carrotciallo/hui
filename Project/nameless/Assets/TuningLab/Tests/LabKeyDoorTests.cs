@@ -52,9 +52,27 @@ public sealed class LabKeyDoorTests
                 a.SetEdge(broken[i], LabPlayer.EdgeState.Spirit);
         Assert.AreEqual(expected, a.Form, $"用例前提没成立：这组碎边应该是 {expected}");
 
-        int before = a.KeyCount;
+        // 持钥上限 1：上一档形态捡的那把要先清掉，否则这一档必然捡不动。
+        a.ClearKeys();
         Assert.IsTrue(MakeKey().TryCollect(a), $"{expected} 形态下 A 应该捡得起钥匙");
-        Assert.AreEqual(before + 1, a.KeyCount, $"{expected} 形态下钥匙数量要真的加上去");
+        Assert.AreEqual(1, a.KeyCount, $"{expected} 形态下钥匙数量要真的加上去");
+    }
+
+    [Test]
+    public void HeldKeyCapIsOneAndSecondPickupIsRefused()
+    {
+        var a = MakePlayer("A", true);
+        var first = MakeKey();
+        var second = MakeKey();
+
+        Assert.IsTrue(first.TryCollect(a), "空手时第一把捡得起");
+        Assert.IsFalse(second.TryCollect(a), "身上已经有一把，第二把应当拒绝");
+        Assert.IsFalse(second.Collected, "捡不动的第二把不能被标记成已拾取");
+        Assert.AreEqual(1, a.KeyCount, "被拒绝的拾取不加数量");
+
+        Assert.IsTrue(a.ConsumeKey(), "开门消耗掉一把");
+        Assert.IsTrue(second.TryCollect(a), "空手后同一把还能再捡");
+        Assert.AreEqual(1, a.KeyCount);
     }
 
     [Test]
@@ -67,12 +85,11 @@ public sealed class LabKeyDoorTests
         var doorTwo = MakeDoor();
 
         Assert.IsTrue(keyOne.TryCollect(b));
-        Assert.IsTrue(keyTwo.TryCollect(b));
-        Assert.AreEqual(2, b.KeyCount);
-        Assert.IsTrue(doorOne.TryOpen(b));
-        Assert.IsTrue(doorTwo.TryOpen(b));
-        Assert.IsTrue(doorOne.IsOpen);
-        Assert.IsTrue(doorTwo.IsOpen);
+        Assert.IsTrue(doorOne.TryOpen(b), "第一把钥匙开第一扇门");
+        Assert.AreEqual(0, b.KeyCount, "门只消耗一把");
+
+        Assert.IsTrue(keyTwo.TryCollect(b), "空手后捡第二把");
+        Assert.IsTrue(doorTwo.TryOpen(b), "第二把钥匙开第二扇门：钥匙不认门");
         Assert.AreEqual(0, b.KeyCount);
         Assert.IsFalse(doorOne.TryOpen(b));
     }
