@@ -12,11 +12,12 @@
 - 召回与幻影（#69）：`LabRecallPickup` / `LabPhantom`；A 按 `Q`、B 按右 `Shift`，头顶 1 格有空间时把另一名玩家拉到头顶并在旧位置留下幻影；最多 3 个 FIFO。
 - 判据修复：双人撞击补齐锻造门槛（#65）；A 碎边后仍可拾取钥匙（#67）。
 - 传送门进出场动画收尾；相机 `SnapFocus` 与阶段机接入。
+- 冰块运行时按 `groupId` 显示组色边框 + 半透明填充，和编辑器手柄共用 `LabIce.GroupColor`；前 1024 个组号不重复。
 
 ### 验证与文档
 
 - SelfCheck 新增隐藏方块和召回道具数据段；PlayCheck 覆盖召回道具、幻影和 `MapReset`。
-- PlayMode 规格覆盖 Forge 23、Cannon 14、Ice 20、Magma 18、Rope 15、Respawn 14、Teleport 11、Spike 9、Recall 9、Phantom 8、KeyDoor 4。
+- PlayMode 规格覆盖 Forge 23、Cannon 14、Ice 22、Magma 18、Rope 15、Respawn 14、Teleport 11、Spike 9、Recall 9、Phantom 8、KeyDoor 4。
 - 文档按当前架构重写：README、基准入口、编辑器文档、现行规则、术语表、ADR 注记和历史复盘。
 
 ## 2026-11-02
