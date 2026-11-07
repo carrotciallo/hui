@@ -61,7 +61,23 @@ public sealed class LabSpike : MonoBehaviour
     {
         if (other == null) return;
         var player = other.GetComponentInParent<LabPlayer>();
-        if (player != null) player.Kill();
+        if (player == null || !HasPositiveOverlap(body, other)) return;
+        player.Kill();
+    }
+
+    /// <summary>
+    /// 触发器会在接触偏移范围内提前回调；零面积接触不算刺中，必须实际重叠。
+    /// 玩家和刺都不旋转，因此两个 world bounds 的严格交集就是有效接触面积。
+    /// </summary>
+    static bool HasPositiveOverlap(Collider2D spike, Collider2D other)
+    {
+        if (spike == null || other == null) return false;
+        Bounds a = spike.bounds;
+        Bounds b = other.bounds;
+        const float epsilon = 0.0001f;
+        float overlapX = Mathf.Min(a.max.x, b.max.x) - Mathf.Max(a.min.x, b.min.x);
+        float overlapY = Mathf.Min(a.max.y, b.max.y) - Mathf.Max(a.min.y, b.min.y);
+        return overlapX > epsilon && overlapY > epsilon;
     }
 
     static Sprite MakeHorizontal()
