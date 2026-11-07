@@ -555,12 +555,12 @@ public static class HomeScreenSpec
 
     public const int ArtBatchCountMin = 1;
     public const int ArtBatchCountMax = 7;
-    public const float ArtBatchDelayMin = 0.5f;
-    public const float ArtBatchDelayMax = 2f;
+    public const float ArtBatchDelayMin = 0.625f;
+    public const float ArtBatchDelayMax = 2.5f;
     public const float ArtScaleMin = 2f;
     public const float ArtScaleMax = 2.5f;
-    public const float ArtMoveSpeedMin = 20f;
-    public const float ArtMoveSpeedMax = 55f;
+    public const float ArtMoveSpeedMin = 80f;
+    public const float ArtMoveSpeedMax = 220f;
     public const float ArtRotationSpeedMin = 12f;
     public const float ArtRotationSpeedMax = 45f;
     public const float ArtStaggerMin = 0f;

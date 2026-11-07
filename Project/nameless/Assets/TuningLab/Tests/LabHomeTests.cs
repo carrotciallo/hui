@@ -20,6 +20,15 @@ public sealed class LabHomeTests
     }
 
     [Test]
+    public void SecondPlaytestMotionFeedbackIsPinned()
+    {
+        Assert.AreEqual(80f, HomeScreenSpec.ArtMoveSpeedMin, 1e-5f);
+        Assert.AreEqual(220f, HomeScreenSpec.ArtMoveSpeedMax, 1e-5f);
+        Assert.AreEqual(0.625f, HomeScreenSpec.ArtBatchDelayMin, 1e-5f);
+        Assert.AreEqual(2.5f, HomeScreenSpec.ArtBatchDelayMax, 1e-5f);
+    }
+
+    [Test]
     public void RandomRangesStayInsideHomeSpec()
     {
         var random = new System.Random(70);
