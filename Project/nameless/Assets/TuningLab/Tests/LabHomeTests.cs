@@ -6,6 +6,20 @@ using UnityEngine;
 public sealed class LabHomeTests
 {
     [Test]
+    public void FirstPlaytestScaleFeedbackIsPinned()
+    {
+        Assert.AreEqual(64f, HomeScreenSpec.BackgroundSquareSize, 1e-5f);
+        Assert.AreEqual(8f, HomeScreenSpec.BackgroundSquareStroke, 1e-5f);
+        Assert.AreEqual(6, HomeScreenSpec.BackgroundSquareCountMin);
+        Assert.AreEqual(13, HomeScreenSpec.BackgroundSquareCountMax);
+        Assert.AreEqual(144f, HomeScreenSpec.ButtonSize, 1e-5f);
+        Assert.AreEqual(60f, HomeScreenSpec.IconSize, 1e-5f);
+        Assert.AreEqual(54f, HomeScreenSpec.ButtonGap, 1e-5f);
+        Assert.AreEqual(2f, HomeScreenSpec.ArtScaleMin, 1e-5f);
+        Assert.AreEqual(2.5f, HomeScreenSpec.ArtScaleMax, 1e-5f);
+    }
+
+    [Test]
     public void RandomRangesStayInsideHomeSpec()
     {
         var random = new System.Random(70);

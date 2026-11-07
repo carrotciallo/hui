@@ -332,14 +332,18 @@ public sealed class HomeScreen : MonoBehaviour
         for (int i = 0; i < count; i++)
         {
             Texture2D texture = artPool[random.Next(artPool.Count)];
+            float scale = HomeScreenSpec.NextArtScale(random);
+            float halfHeight = texture.height * scale * 0.5f;
+            float minHeight = Mathf.Min(Screen.height * 0.5f, halfHeight + 12f);
+            float maxHeight = Mathf.Max(minHeight, Screen.height - halfHeight - 12f);
             pendingArt.Add(new PendingArt
             {
                 texture = texture,
-                scale = HomeScreenSpec.NextArtScale(random),
+                scale = scale,
                 moveSpeed = HomeScreenSpec.NextArtMoveSpeed(random),
                 rotationSpeed = HomeScreenSpec.NextArtRotationSpeed(random) *
                     (random.Next(2) == 0 ? -1f : 1f),
-                height = RandomRange(24f, Mathf.Max(25f, Screen.height - 24f)),
+                height = RandomRange(minHeight, maxHeight),
                 dueAt = visualClock + HomeScreenSpec.NextArtStagger(random)
             });
         }
@@ -413,9 +417,13 @@ public sealed class HomeScreen : MonoBehaviour
             Rect candidate = Rect.zero;
             for (int attempt = 0; attempt < 100; attempt++)
             {
+                float maxX = Mathf.Max(12f,
+                    lastScreenWidth - HomeScreenSpec.BackgroundSquareSize - 12f);
+                float maxY = Mathf.Max(12f,
+                    lastScreenHeight - HomeScreenSpec.BackgroundSquareSize - 12f);
                 candidate = new Rect(
-                    Mathf.Round(RandomRange(12f, Mathf.Max(13f, lastScreenWidth - 28f))),
-                    Mathf.Round(RandomRange(12f, Mathf.Max(13f, lastScreenHeight - 28f))),
+                    Mathf.Round(RandomRange(12f, maxX)),
+                    Mathf.Round(RandomRange(12f, maxY)),
                     HomeScreenSpec.BackgroundSquareSize,
                     HomeScreenSpec.BackgroundSquareSize);
                 if (!candidate.Overlaps(buttonRegion)) break;
@@ -532,14 +540,14 @@ public sealed class HomeScreen : MonoBehaviour
 /// <summary>主页随机范围与动画曲线的单一事实来源，便于测试和后续调参。</summary>
 public static class HomeScreenSpec
 {
-    public const int BackgroundSquareCountMin = 3;
-    public const int BackgroundSquareCountMax = 6;
-    public const float BackgroundSquareSize = 16f;
-    public const float BackgroundSquareStroke = 2f;
+    public const int BackgroundSquareCountMin = 6;
+    public const int BackgroundSquareCountMax = 13;
+    public const float BackgroundSquareSize = 64f;
+    public const float BackgroundSquareStroke = 8f;
 
-    public const float ButtonSize = 96f;
-    public const float IconSize = 40f;
-    public const float ButtonGap = 36f;
+    public const float ButtonSize = 144f;
+    public const float IconSize = 60f;
+    public const float ButtonGap = 54f;
     public const float ButtonBreathDuration = 1.2f;
     public const float ButtonBreathMaxScale = 1.08f;
     public const float IconFlipDuration = 0.75f;
@@ -549,8 +557,8 @@ public static class HomeScreenSpec
     public const int ArtBatchCountMax = 7;
     public const float ArtBatchDelayMin = 0.5f;
     public const float ArtBatchDelayMax = 2f;
-    public const float ArtScaleMin = 0.35f;
-    public const float ArtScaleMax = 0.5f;
+    public const float ArtScaleMin = 2f;
+    public const float ArtScaleMax = 2.5f;
     public const float ArtMoveSpeedMin = 20f;
     public const float ArtMoveSpeedMax = 55f;
     public const float ArtRotationSpeedMin = 12f;
