@@ -171,6 +171,13 @@ MonoBehaviour:
   forgeTierIndex: 0
   verticalHitEnabled: 1
   iceBreakTierIndex: 2
+  teleportHighlightSeconds: 0.35
+  teleportBeamSpeed: 48
+  teleportArrivalFadeSeconds: 0.15
+  teleportArrivalHoldSeconds: 0.2
+  teleportBurstSeconds: 0.15
+  hiddenRevealedAlpha: 0.5
+  spiritDuration: 6
   deathWhenNoCheckpoint: 0
   tierFirstCells: 4
   tierSpacingCells: 4
@@ -178,6 +185,23 @@ MonoBehaviour:
   capOverTopCells: 4
   showPixelGrid: 0
   showGrid: 1
+  deathFlashEnabled: 1
+  deathFlashDuration: 0.55
+  deathFlashPulses: 3
+  deathFlashEdgeDepth: 0.18
+  deathFlashColor: {r: 1, g: 0.25, b: 0.25, a: 0.9}
+  speedFxStartTier: 3
+  ghostCountTier3: 3
+  ghostAlphaTier3: 0.5
+  ghostLifeTier3: 0.6
+  ghostCountTopTier: 5
+  ghostAlphaTopTier: 0.7
+  ghostLifeTopTier: 0.8
+  trailCap: 64
+  trailLife: 2
+  trailEverySteps: 2
+  trailAlphaTier3: 0.85
+  trailAlphaTopTier: 1
   autoBuild: 1
   level: {fileID: 129094125}
   defaultCameraMinSize: 6.75
@@ -227,18 +251,33 @@ MonoBehaviour:
     cameraMinSize: 6.75
     cameraMaxSize: 27
     solids:
+    - {x: -1, y: -11}
     - {x: -12, y: -5}
     - {x: -11, y: -5}
     - {x: -10, y: -5}
+    - {x: 0, y: -5}
+    - {x: 1, y: -5}
     - {x: -14, y: -4}
     - {x: -13, y: -4}
     - {x: -12, y: -4}
     - {x: -11, y: -4}
     - {x: -10, y: -4}
+    - {x: 0, y: -4}
+    - {x: 1, y: -4}
+    - {x: 2, y: -4}
+    - {x: 3, y: -4}
+    - {x: 4, y: -4}
     - {x: -14, y: -3}
     - {x: -10, y: -3}
+    - {x: 0, y: -3}
+    - {x: 1, y: -3}
+    - {x: 2, y: -3}
+    - {x: 3, y: -3}
+    - {x: 4, y: -3}
+    - {x: 5, y: -3}
     - {x: -14, y: -2}
     - {x: -10, y: -2}
+    - {x: 1, y: -2}
     - {x: -17, y: -1}
     - {x: -16, y: -1}
     - {x: -15, y: -1}
@@ -288,6 +327,8 @@ MonoBehaviour:
     ropes: []
     keys:
     - position: {x: 8.5, y: 0.5}
+    recalls:
+    - cell: {x: 2, y: 6}
     doors:
     - position: {x: 12.5, y: 1.5}
       color: {r: 0.25, g: 0.75, b: 1, a: 1}
@@ -300,6 +341,7 @@ MonoBehaviour:
       groupId: 1
     - cell: {x: 6, y: 5}
       groupId: 1
+    hiddenBlocks: []
     respawnPoints:
     - position: {x: 17.5, y: 1.5}
     teleports:

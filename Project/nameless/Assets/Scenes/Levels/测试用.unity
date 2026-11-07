@@ -8068,7 +8068,7 @@ Sprite:
       height: 16
     textureRectOffset: {x: 0, y: 0}
     atlasRectOffset: {x: -1, y: -1}
-    settingsRaw: 64
+    settingsRaw: 3136
     uvTransform: {x: 16, y: 8, z: 16, w: 8}
     downscaleMultiplier: 1
   m_AtlasRD:
@@ -23059,12 +23059,12 @@ MonoBehaviour:
   teleportArrivalHoldSeconds: 0.2
   teleportBurstSeconds: 0.15
   hiddenRevealedAlpha: 0.5
-  spiritDuration: 6
+  spiritDuration: 3
   deathWhenNoCheckpoint: 0
   tierFirstCells: 4
   tierSpacingCells: 4
   tierCount: 6
-  capOverTopCells: 4
+  capOverTopCells: 20
   showPixelGrid: 0
   showGrid: 1
   deathFlashEnabled: 1
@@ -23128,11 +23128,41 @@ MonoBehaviour:
       y: -1
       width: 103
       height: 109
-    spawnA: {x: 50.5, y: 13}
+    spawnA: {x: 13.5, y: 2}
     spawnB: {x: 50.5, y: 14}
     cameraMinSize: 11.1
     cameraMaxSize: 27
     solids:
+    - {x: 15, y: -5}
+    - {x: 16, y: -5}
+    - {x: 17, y: -5}
+    - {x: 18, y: -5}
+    - {x: 19, y: -5}
+    - {x: 20, y: -5}
+    - {x: 21, y: -5}
+    - {x: 22, y: -5}
+    - {x: 23, y: -5}
+    - {x: 24, y: -5}
+    - {x: 25, y: -5}
+    - {x: 26, y: -5}
+    - {x: 27, y: -5}
+    - {x: 28, y: -5}
+    - {x: 29, y: -5}
+    - {x: 30, y: -5}
+    - {x: 31, y: -5}
+    - {x: 32, y: -5}
+    - {x: 33, y: -4}
+    - {x: 34, y: -4}
+    - {x: 35, y: -4}
+    - {x: 36, y: -4}
+    - {x: 37, y: -4}
+    - {x: 38, y: -4}
+    - {x: 39, y: -4}
+    - {x: 40, y: -4}
+    - {x: 41, y: -4}
+    - {x: 73, y: 11}
+    - {x: 72, y: 12}
+    - {x: 73, y: 12}
     - {x: 13, y: 26}
     - {x: 14, y: 26}
     - {x: 15, y: 26}
@@ -23147,7 +23177,111 @@ MonoBehaviour:
     recalls: []
     doors: []
     spikes: []
-    ices: []
+    ices:
+    - cell: {x: 21, y: 0}
+      groupId: 1
+    - cell: {x: 22, y: 0}
+      groupId: 1
+    - cell: {x: 23, y: 0}
+      groupId: 1
+    - cell: {x: 24, y: 0}
+      groupId: 1
+    - cell: {x: 25, y: 0}
+      groupId: 1
+    - cell: {x: 26, y: 0}
+      groupId: 1
+    - cell: {x: 27, y: 0}
+      groupId: 1
+    - cell: {x: 28, y: 0}
+      groupId: 1
+    - cell: {x: 29, y: 0}
+      groupId: 1
+    - cell: {x: 30, y: 0}
+      groupId: 1
+    - cell: {x: 31, y: 0}
+      groupId: 1
+    - cell: {x: 32, y: 0}
+      groupId: 1
+    - cell: {x: 33, y: 0}
+      groupId: 1
+    - cell: {x: 34, y: 0}
+      groupId: 1
+    - cell: {x: 35, y: 0}
+      groupId: 1
+    - cell: {x: 13, y: 1}
+      groupId: 1
+    - cell: {x: 14, y: 1}
+      groupId: 1
+    - cell: {x: 15, y: 1}
+      groupId: 1
+    - cell: {x: 16, y: 1}
+      groupId: 1
+    - cell: {x: 17, y: 1}
+      groupId: 1
+    - cell: {x: 18, y: 1}
+      groupId: 1
+    - cell: {x: 19, y: 1}
+      groupId: 1
+    - cell: {x: 20, y: 1}
+      groupId: 1
+    - cell: {x: 21, y: 1}
+      groupId: 1
+    - cell: {x: 22, y: 1}
+      groupId: 1
+    - cell: {x: 23, y: 1}
+      groupId: 1
+    - cell: {x: 24, y: 1}
+      groupId: 1
+    - cell: {x: 25, y: 1}
+      groupId: 1
+    - cell: {x: 26, y: 1}
+      groupId: 1
+    - cell: {x: 27, y: 1}
+      groupId: 1
+    - cell: {x: 28, y: 1}
+      groupId: 1
+    - cell: {x: 29, y: 1}
+      groupId: 1
+    - cell: {x: 30, y: 1}
+      groupId: 1
+    - cell: {x: 31, y: 1}
+      groupId: 1
+    - cell: {x: 32, y: 1}
+      groupId: 1
+    - cell: {x: 33, y: 1}
+      groupId: 1
+    - cell: {x: 34, y: 1}
+      groupId: 1
+    - cell: {x: 35, y: 1}
+      groupId: 1
+    - cell: {x: 36, y: 1}
+      groupId: 1
+    - cell: {x: 37, y: 1}
+      groupId: 1
+    - cell: {x: 38, y: 1}
+      groupId: 1
+    - cell: {x: 39, y: 1}
+      groupId: 1
+    - cell: {x: 40, y: 1}
+      groupId: 1
+    - cell: {x: 41, y: 1}
+      groupId: 1
+    - cell: {x: 42, y: 1}
+      groupId: 1
+    - cell: {x: 43, y: 1}
+      groupId: 1
+    - cell: {x: 44, y: 1}
+      groupId: 1
+    - cell: {x: 45, y: 1}
+      groupId: 1
+    - cell: {x: 46, y: 1}
+      groupId: 1
+    - cell: {x: 47, y: 1}
+      groupId: 1
+    - cell: {x: 48, y: 1}
+      groupId: 1
+    - cell: {x: 49, y: 1}
+      groupId: 1
     magmas: []
     hiddenBlocks: []
     respawnPoints: []
@@ -23987,7 +24121,7 @@ Sprite:
       height: 48
     textureRectOffset: {x: 0, y: 0}
     atlasRectOffset: {x: -1, y: -1}
-    settingsRaw: 64
+    settingsRaw: 3136
     uvTransform: {x: 16, y: 24, z: 16, w: 24}
     downscaleMultiplier: 1
   m_AtlasRD:
@@ -38968,7 +39102,7 @@ Sprite:
       height: 48
     textureRectOffset: {x: 0, y: 0}
     atlasRectOffset: {x: -1, y: -1}
-    settingsRaw: 64
+    settingsRaw: 3136
     uvTransform: {x: 16, y: 8, z: 16, w: 24}
     downscaleMultiplier: 1
   m_AtlasRD:
