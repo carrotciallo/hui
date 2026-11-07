@@ -48,6 +48,8 @@ public sealed class LabCannonTests
     {
         if (synthKb != null) UnityEngine.InputSystem.InputSystem.RemoveDevice(synthKb);
         if (labGo != null) Object.Destroy(labGo);
+        // 全局状态复位（#92 隔离）：不把上一条用例的时间倍率留给下一条
+        Time.timeScale = 1f;
         yield return null;
         yield return null;
     }
@@ -193,16 +195,23 @@ public sealed class LabCannonTests
         Assert.IsFalse(b.Touching, "膛内不算处于地面，所以不回复充能");
         Assert.AreEqual(a, b.Host);
 
-        // A 带着膛里的 B 走
+        // A 带着膛里的 B 走：先只验「B 确实跟着动了」。
+        // 膛内跟随是在 B 自己的 FixedUpdate 里抄宿主位置，两边 FixedUpdate 的
+        // 先后和协程恢复时机都会让瞬时读数差出一步以上（#92：全量跑时实测
+        // 偏移卡在容差外），所以不在运动中途比瞬时位置。
+        float startX = b.GetComponent<Rigidbody2D>().position.x;
         lab.groundBrake = 0f;
         a.SetVelocity(new Vector2(6f, 0f));
         yield return StepFixed(3);
+        Assert.Greater(b.GetComponent<Rigidbody2D>().position.x, startX + 0.1f,
+                       "膛内的 B 要跟着 A 一起动");
 
-        // 膛内跟随是在自己的 FixedUpdate 里抄宿主的位置，宿主这一步之后还会继续走：
-        // 天生差一个物理步，不是漂移。
-        float oneStep = 6f * Time.fixedDeltaTime;
+        // 让宿主停下再比位置：停稳后多走几步，跟随必然落位，
+        // 这时比的才是「跟没跟上」这个契约本身，与步数时序无关。
+        a.SetVelocity(Vector2.zero);
+        yield return StepFixed(3);
         Assert.AreEqual(a.GetComponent<Rigidbody2D>().position.x,
-                        b.GetComponent<Rigidbody2D>().position.x, oneStep + 0.01f);
+                        b.GetComponent<Rigidbody2D>().position.x, 0.02f);
         Assert.AreEqual(a.GetComponent<Rigidbody2D>().position.y,
                         b.GetComponent<Rigidbody2D>().position.y, 0.05f);
     }
