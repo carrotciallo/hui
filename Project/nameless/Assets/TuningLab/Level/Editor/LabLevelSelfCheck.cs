@@ -632,14 +632,15 @@ public static class LabLevelSelfCheck
         captureLevel.ices.Add(new LabIceSpec(new Vector2Int(3, 3), 1));
         captureLevel.magmas.Add(new LabMagmaSpec(new Vector2Int(3, 3), 1));
         captureLevel.hiddenBlocks.Add(new LabHiddenBlockSpec(new Vector2Int(3, 3), 1));
+        captureLevel.repairBlocks.Add(new LabRepairBlockSpec(new Vector2Int(3, 3)));
         captureLevel.respawnPoints.Add(new LabRespawnPointSpec(new Vector2(3.5f, 3.5f)));
         captureLevel.teleports.Add(new LabTeleportSpec(new Vector2(3.5f, 3.5f)));
         var captureArea = new List<RectInt> { new RectInt(3, 3, 1, 1) };
         var allCapture = captureLevel.CaptureContents(captureArea);
-        Expect(sb, ref failures, allCapture.Count == 11,
-            "选区锁定地形 + 10 种摆放物件，实际 " + allCapture.Count);
-        Expect(sb, ref failures, captureLevel.MoveCapturedContents(allCapture, new Vector2Int(1, 0)) == 11,
-            "锁定内容一次平移到 11 条");
+        Expect(sb, ref failures, allCapture.Count == 12,
+            "选区锁定地形 + 11 种摆放物件，实际 " + allCapture.Count);
+        Expect(sb, ref failures, captureLevel.MoveCapturedContents(allCapture, new Vector2Int(1, 0)) == 12,
+            "锁定内容一次平移到 12 条");
         Expect(sb, ref failures,
             captureLevel.HasCell(new Vector2Int(4, 3)) &&
             SamePoint(captureLevel.ropes[0].center, new Vector2(4.5f, 3.5f)) &&
@@ -650,9 +651,10 @@ public static class LabLevelSelfCheck
             captureLevel.ices[0].cell == new Vector2Int(4, 3) &&
             captureLevel.magmas[0].cell == new Vector2Int(4, 3) &&
             captureLevel.hiddenBlocks[0].cell == new Vector2Int(4, 3) &&
+            captureLevel.repairBlocks[0].cell == new Vector2Int(4, 3) &&
             SamePoint(captureLevel.respawnPoints[0].position, new Vector2(4.5f, 3.5f)) &&
             SamePoint(captureLevel.teleports[0].position, new Vector2(4.5f, 3.5f)),
-            "地形 + 10 种摆放物件都跟着选区框平移");
+            "地形 + 11 种摆放物件都跟着选区框平移");
 
         sb.AppendLine();
         sb.AppendLine("=== 13. 传送点：全互联数据 / 去重 / 随分区移动与删除 ===");
@@ -903,6 +905,67 @@ public static class LabLevelSelfCheck
         recallProbe.ResetMap();
         Expect(sb, ref failures, recallProbe.RecallUnlocked, "地图重置不清空召回能力");
         Object.DestroyImmediate(recallProbeGo);
+
+        sb.AppendLine();
+        sb.AppendLine("=== 17. 修复方块：几何 / 去重 / 深拷贝 / 随分区移动与删除 ===");
+        Expect(sb, ref failures, data.repairBlocks.Count == 0,
+            "基准房间没有修复方块，实际 " + data.repairBlocks.Count);
+
+        var repairSpec = new LabRepairBlockSpec(new Vector2Int(5, 3));
+        Expect(sb, ref failures,
+            SamePoint(repairSpec.Center, new Vector2(5.5f, 3.5f))
+            && repairSpec.Cells() == new RectInt(5, 3, 1, 1),
+            "修复方块占 1×1 格，落点是格中心");
+
+        var repairLevel = new LabLevelData();
+        repairLevel.partitions.Add(new LabLevelPartition { name = "A", bounds = new RectInt(0, 0, 10, 10) });
+        repairLevel.partitions.Add(new LabLevelPartition { name = "B", bounds = new RectInt(20, 0, 10, 10) });
+        Expect(sb, ref failures, repairLevel.PlaceRepairBlock(new Vector2Int(2, 1)), "A 里放一块修复方块");
+        Expect(sb, ref failures, repairLevel.PlaceRepairBlock(new Vector2Int(22, 1)), "B 里放一块修复方块");
+        Expect(sb, ref failures, !repairLevel.PlaceRepairBlock(new Vector2Int(2, 1)),
+            "同格重复放 = 无变化");
+        Expect(sb, ref failures, repairLevel.repairBlocks.Count == 2,
+            "重复放不会长出第二块，实际 " + repairLevel.repairBlocks.Count);
+        Expect(sb, ref failures, repairLevel.HasRepairBlock(new Vector2Int(2, 1)), "查得到 A 的修复方块");
+        Expect(sb, ref failures, !repairLevel.HasRepairBlock(new Vector2Int(7, 7)),
+            "没放过的格没有修复方块");
+        Expect(sb, ref failures,
+            SamePoint(repairLevel.FindRepairBlock(new Vector2Int(2, 1)).Value.Center, new Vector2(2.5f, 1.5f)),
+            "按格找回的落点是格中心");
+
+        Expect(sb, ref failures, repairLevel.RemoveRepairBlock(new Vector2Int(2, 1)), "删掉 A 的修复方块");
+        Expect(sb, ref failures, !repairLevel.RemoveRepairBlock(new Vector2Int(2, 1)),
+            "再删一次 = 无变化");
+        repairLevel.PlaceRepairBlock(new Vector2Int(2, 1));
+
+        repairLevel.repairBlocks.Add(new LabRepairBlockSpec(new Vector2Int(2, 1)));
+        repairLevel.Normalize();
+        Expect(sb, ref failures, repairLevel.repairBlocks.Count == 2,
+            "Normalize 同格去重，实际 " + repairLevel.repairBlocks.Count);
+
+        var repairClone = repairLevel.Clone();
+        Expect(sb, ref failures, repairClone.repairBlocks.Count == 2, "Clone 带上修复方块");
+        repairClone.repairBlocks[0] = new LabRepairBlockSpec(new Vector2Int(99, 99));
+        Expect(sb, ref failures,
+            repairLevel.HasRepairBlock(new Vector2Int(2, 1)) || repairLevel.HasRepairBlock(new Vector2Int(22, 1)),
+            "Clone 是深拷贝");
+
+        Expect(sb, ref failures, repairLevel.MovePartition(0, new Vector2Int(3, 4), true),
+            "移动分区 A");
+        Expect(sb, ref failures, repairLevel.HasRepairBlock(new Vector2Int(5, 5)),
+            "A 里的修复方块跟着移动");
+        Expect(sb, ref failures, !repairLevel.HasRepairBlock(new Vector2Int(2, 1)),
+            "旧位置的修复方块没有留下");
+        Expect(sb, ref failures, repairLevel.HasRepairBlock(new Vector2Int(22, 1)),
+            "分区 B 的修复方块不动");
+
+        Expect(sb, ref failures, repairLevel.DeletePartition(0, true), "删除分区 A（带内容）");
+        Expect(sb, ref failures,
+            repairLevel.repairBlocks.Count == 1 && repairLevel.HasRepairBlock(new Vector2Int(22, 1)),
+            "A 里的修复方块被删，B 的留下");
+
+        repairLevel.ClearRepairBlocks();
+        Expect(sb, ref failures, repairLevel.repairBlocks.Count == 0, "清空修复方块");
 
         sb.AppendLine();
         fails = failures;
