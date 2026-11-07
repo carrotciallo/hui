@@ -1,0 +1,50 @@
+# PlayMode 规格自动跑测（GameCI）。
+# 前置条件（仓库管理员在 Settings → Secrets 里配置，缺一不可）：
+#   UNITY_LICENSE —— Unity 许可证文件内容（GameCI 文档的激活流程）
+# 许可证没配之前这个 workflow 会在激活一步失败，那是预期行为，不是工程坏了。
+name: PlayMode Tests
+
+on:
+  pull_request:
+    paths:
+      - "Project/nameless/Assets/**"
+      - "Project/nameless/Packages/**"
+      - "Project/nameless/ProjectSettings/**"
+      - ".github/workflows/playmode-tests.yml"
+  workflow_dispatch:
+
+jobs:
+  playmode:
+    name: PlayMode (Unity 6000.6.4f1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Project/nameless/Library
+          key: Library-${{ hashFiles('Project/nameless/Packages/packages-lock.json', 'Project/nameless/ProjectSettings/ProjectVersion.txt') }}
+          restore-keys: Library-
+
+      - name: Run PlayMode tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: Project/nameless
+          unityVersion: 6000.6.4f1
+          testMode: playmode
+          coverageOptions: generateAdditionalMetrics;generateHtmlReport;generateBadgeReport
+          artifactsPath: playmode-results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playmode-results
+          path: playmode-results
