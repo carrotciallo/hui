@@ -113,21 +113,26 @@ public sealed class LabPhantomTests
         var phantom = SpawnPhantom(a, b, LabForms.TopBit);
         yield return null;
 
+        // 幻影会自毁，先在它活着的时候记下判定需要的数据。
+        float phantomY = phantom.transform.position.y;
+
         // 不用冲刺态，直接给一个向上的普通速度。
         b.SetVelocity(Vector2.up * EntrySpeed);
-        yield return WaitUntil(() => !b.Suspended || phantom.Leaving, 2f);
 
-        // 进膛立刻出膛：不会停在膛里等手动开炮。
-        yield return WaitUntil(() => !b.Suspended || phantom.Leaving, 1f);
+        // 进膛立刻出膛：最多等两个物理步，不会停在膛里等手动开炮。
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
+
         Assert.IsFalse(b.Suspended, "玻璃大炮不留在膛里");
         Assert.AreEqual(EntrySpeed, b.Velocity.magnitude, 1.5f,
             "出膛速度取进入速度的大小，不凭空加能量");
         Assert.Greater(b.Velocity.y, 0f, "炮口朝上，向上射出");
-        Assert.Greater(b.transform.position.y, phantom.transform.position.y, "从炮口外侧出膛");
+        Assert.Greater(b.transform.position.y, phantomY, "从炮口外侧出膛");
 
-        yield return null;
-        Assert.IsTrue(phantom.Consumed || phantom == null || phantom.Leaving,
-            "发射后幻影被消耗");
+        // 幻影被这次发射消耗掉：Unity 的销毁是延迟的，读 == null 才算真销毁。
+        Assert.IsTrue(phantom == null, "发射后幻影自毁");
+        Assert.IsFalse(LabPhantom.All.Exists(x => x == phantom),
+            "这条幻影已从静态表移除");
     }
 
     [UnityTest]
