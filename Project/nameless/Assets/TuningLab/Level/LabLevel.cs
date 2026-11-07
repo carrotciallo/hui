@@ -14,6 +14,14 @@ public sealed class LabLevel : MonoBehaviour
 {
     public const string GeneratedRootName = "LabLevel_Generated";
 
+    /// <summary>
+    /// 批量读取场景数据时临时关掉预览生成：合并场景工具会连续打开多个关卡场景读数据，
+    /// 每个都搭一遍预览纯属浪费。读完必须在 finally 里恢复。
+    /// </summary>
+#if UNITY_EDITOR
+    public static bool SuppressPreviewBuild;
+#endif
+
     [SerializeField, HideInInspector] LabLevelData data = new LabLevelData();
 
     public LabLevelData Data
@@ -73,16 +81,24 @@ public sealed class LabLevel : MonoBehaviour
         if (!Application.isPlaying) RebuildPreview();
     }
 
-    public void CopyFrom(LabLevelData source)
+    /// <summary>
+    /// 用另一份数据覆盖当前关卡。<paramref name="rebuildPreview"/> = false 时不重建预览，
+    /// 给合并工具用：它紧接着还要再走一次自己的保存/重建流程，没必要搭两遍。
+    /// </summary>
+    public void CopyFrom(LabLevelData source, bool rebuildPreview = true)
     {
         Data.CopyFrom(source);
-        if (!Application.isPlaying) RebuildPreview();
+        if (rebuildPreview && !Application.isPlaying) RebuildPreview();
     }
 
     /// <summary>编辑器预览。只在非 Play 下跑，生成的物体带 DontSaveInEditor，不会被存进场景。</summary>
     public void RebuildPreview()
     {
         if (Application.isPlaying) return;
+#if UNITY_EDITOR
+        // 合并工具批量读场景时会临时关掉预览：打开的瞬间大关卡不搭物体，读完立刻关。
+        if (SuppressPreviewBuild) return;
+#endif
         ClearGenerated();
         Build(transform, null, true);
     }

@@ -912,6 +912,107 @@ public static class LabLevelSelfCheck
         Object.DestroyImmediate(recallProbeGo);
 
         sb.AppendLine();
+        sb.AppendLine("=== 17. 合并场景：偏移 / 组号与链号重排 / 分区拒绝重叠 ===");
+
+        var mergeTarget = new LabLevelData();
+        mergeTarget.bounds = new RectInt(0, 0, 20, 12);
+        mergeTarget.spawnA = new Vector2(2f, 0f);
+        mergeTarget.partitions.Add(new LabLevelPartition { name = "A", bounds = new RectInt(0, 0, 10, 10) });
+        mergeTarget.AddCell(new Vector2Int(0, 0));
+        mergeTarget.AddCell(new Vector2Int(1, 0));
+        mergeTarget.PlaceIce(new Vector2Int(0, 1), 3);
+        mergeTarget.PlaceMagma(new Vector2Int(1, 1), 2);
+        mergeTarget.ropes.Add(new LabRopeSpec(new Vector2(2.5f, 3f), 4, 1));
+
+        var mergeSource = new LabLevelData();
+        mergeSource.bounds = new RectInt(0, 0, 8, 8);
+        mergeSource.spawnA = new Vector2(99f, 99f);
+        mergeSource.spawnB = new Vector2(98f, 99f);
+        mergeSource.partitions.Add(new LabLevelPartition { name = "B", bounds = new RectInt(0, 0, 8, 8) });
+        mergeSource.AddCell(new Vector2Int(0, 0));
+        mergeSource.AddCell(new Vector2Int(2, 0));
+        mergeSource.PlaceIce(new Vector2Int(3, 1), 7);
+        mergeSource.PlaceMagma(new Vector2Int(3, 2), 7);
+        mergeSource.PlaceHiddenBlock(new Vector2Int(3, 3), 7);
+        mergeSource.ropes.Add(new LabRopeSpec(new Vector2(4.5f, 4f), 3, 1));
+        mergeSource.keys.Add(new LabKeySpec(new Vector2(5.5f, 2.5f)));
+        mergeSource.spikes.Add(new LabSpikeSpec(new Vector2Int(6, 1), LabSpikeDir.Up));
+        mergeSource.teleports.Add(new LabTeleportSpec(new Vector2(4.5f, 6.5f)));
+        mergeSource.respawnPoints.Add(new LabRespawnPointSpec(new Vector2(6.5f, 5.5f)));
+        mergeSource.recalls.Add(new LabRecallSpec(new Vector2Int(6, 6)));
+        mergeSource.doors.Add(new LabDoorSpec(new Vector2(7.5f, 1.5f), LabDoor.DefaultClosedColor));
+
+        LabLevelMergeReport mergeReport = mergeTarget.AppendFrom(mergeSource, new Vector2Int(20, 0), "源 / ");
+
+        Expect(sb, ref failures, mergeReport.solids == 2, "并入 2 格地形，实际 " + mergeReport.solids);
+        Expect(sb, ref failures,
+            mergeTarget.HasCell(new Vector2Int(20, 0)) && mergeTarget.HasCell(new Vector2Int(22, 0)),
+            "地形按偏移平移");
+        Expect(sb, ref failures, mergeReport.partitions == 1 && mergeTarget.partitions.Count == 2,
+            "并入 1 个分区，实际 " + mergeReport.partitions);
+        Expect(sb, ref failures,
+            mergeTarget.partitions.Exists(p => p != null && p.name == "源 / B"
+                && p.bounds == new RectInt(20, 0, 8, 8)),
+            "分区带偏移和场景前缀");
+
+        LabIceSpec? mergedIce = mergeTarget.FindIce(new Vector2Int(23, 1));
+        Expect(sb, ref failures, mergedIce.HasValue && mergedIce.Value.groupId == 4,
+            "冰块组号从现有最大组号 + 1 重排（3 → 4）");
+        LabMagmaSpec? mergedMagma = mergeTarget.FindMagma(new Vector2Int(23, 2));
+        Expect(sb, ref failures, mergedMagma.HasValue && mergedMagma.Value.groupId == 3,
+            "岩浆组号从现有最大组号 + 1 重排（2 → 3）");
+        Expect(sb, ref failures, mergeTarget.HasHiddenBlock(new Vector2Int(23, 3), 1),
+            "隐藏方块组号重新编号");
+
+        LabRopeSpec mergedRope = mergeTarget.ropes[mergeTarget.ropes.Count - 1];
+        Expect(sb, ref failures,
+            SamePoint(mergedRope.center, new Vector2(24.5f, 4f)) && mergedRope.chainId == 3,
+            "绳中心带偏移，链号 1 → 3（避开目标已有的链 1）");
+        Expect(sb, ref failures,
+            mergeTarget.keys.Exists(k => SamePoint(k.position, new Vector2(25.5f, 2.5f))),
+            "钥匙带偏移");
+        Expect(sb, ref failures, mergeTarget.HasSpike(new Vector2Int(26, 1)), "地刺带偏移");
+        Expect(sb, ref failures,
+            mergeTarget.teleports.Exists(t => SamePoint(t.position, new Vector2(24.5f, 6.5f))),
+            "传送点带偏移");
+        Expect(sb, ref failures,
+            mergeTarget.respawnPoints.Exists(p => SamePoint(p.position, new Vector2(26.5f, 5.5f))),
+            "重生点带偏移");
+        Expect(sb, ref failures, mergeTarget.HasRecall(new Vector2Int(26, 6)), "召回道具带偏移");
+        Expect(sb, ref failures,
+            mergeTarget.doors.Exists(d => SamePoint(d.position, new Vector2(27.5f, 1.5f))),
+            "门带偏移");
+        Expect(sb, ref failures, SamePoint(mergeTarget.spawnA, new Vector2(2f, 0f)),
+            "源场景的出生点不会覆盖目标");
+        Expect(sb, ref failures, mergeTarget.bounds == new RectInt(0, 0, 20, 12),
+            "编辑范围由调用方决定，AppendFrom 不改 bounds");
+
+        LabLevelMergeReport duplicateReport = mergeTarget.AppendFrom(mergeSource, new Vector2Int(20, 0), "源 / ");
+        Expect(sb, ref failures, duplicateReport.skippedSolids == 2,
+            "同一位置再并一次，重复地形被去重，实际跳过 " + duplicateReport.skippedSolids);
+        Expect(sb, ref failures, duplicateReport.skippedPartitions == 1,
+            "同一位置再并一次，重叠分区被拒绝，实际跳过 " + duplicateReport.skippedPartitions);
+        Expect(sb, ref failures, duplicateReport.warnings.Count == 1, "拒绝分区会留下一条警告");
+
+        var overlapTarget = new LabLevelData();
+        overlapTarget.partitions.Add(new LabLevelPartition { name = "A", bounds = new RectInt(0, 0, 10, 10) });
+        var overlapSource = new LabLevelData();
+        overlapSource.partitions.Add(new LabLevelPartition { name = "B", bounds = new RectInt(0, 0, 10, 10) });
+        overlapSource.AddCell(new Vector2Int(0, 0));
+        LabLevelMergeReport overlapReport = overlapTarget.AppendFrom(overlapSource, new Vector2Int(5, 0));
+        Expect(sb, ref failures, overlapReport.skippedPartitions == 1 && overlapTarget.partitions.Count == 1,
+            "分区重叠在数据层被拒绝");
+        Expect(sb, ref failures, overlapTarget.HasCell(new Vector2Int(5, 0)),
+            "分区被拒绝时内容仍然并入");
+
+        var cloneSource = mergeSource.Clone();
+        mergeTarget.AppendFrom(cloneSource, new Vector2Int(40, 0), "副本 / ");
+        Expect(sb, ref failures, mergeTarget.HasCell(new Vector2Int(40, 0)),
+            "Clone 出来的数据可以再合并，偏移独立");
+        Expect(sb, ref failures, mergeSource.HasCell(new Vector2Int(0, 0)),
+            "合并不会改源数据（AppendFrom 只读）");
+
+        sb.AppendLine();
         fails = failures;
         sb.AppendLine(failures == 0 ? "全部通过。" : ("失败 " + failures + " 项。"));
         return sb;

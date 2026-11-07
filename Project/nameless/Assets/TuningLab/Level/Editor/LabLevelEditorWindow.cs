@@ -1355,6 +1355,9 @@ public sealed class LabLevelEditorWindow : EditorWindow
     {
         EditorGUILayout.LabelField("关卡", EditorStyles.boldLabel);
 
+        if (GUILayout.Button("合并场景（把其它关卡拼进来）", GUILayout.Height(26f)))
+            LabLevelMergeWindow.OpenForCurrentScene();
+
         if (GUILayout.Button("从 Tuning Lab 重置（地形 + 绳 + 出生点 + 相机 + 分区）", GUILayout.Height(28f)))
         {
             if (!EditorUtility.DisplayDialog(

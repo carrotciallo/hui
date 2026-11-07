@@ -39,7 +39,7 @@
 | `Assets/TuningLab/LabSettingsStore.cs` | 设置 JSON：版本、临时文件、备份和坏档恢复 |
 | `Assets/TuningLab/LabCamera.cs` | 跟随 A/B 中点；按 B 查当前分区的 bounds/min-max，并做混合 |
 | `Assets/TuningLab/LabVerticalRope.cs` | 竖绳；零/一级挡住、二级沿接触法线穿过、三级以上沿法线反弹并提升一级；`ApplyShape` 同时服务预览和 Play |
-| `Assets/TuningLab/LabHorizontalRope.cs` | 横绳平台；零/一级挡住、二级向下穿过、三级以上反弹并提升一级 |
+| `Assets/TuningLab/LabHorizontalRope.cs` | 横绳平台；零/一级挡住、二级向下穿过并保留入射速度、三级以上反弹并提升一级 |
 | `Assets/TuningLab/LabIce.cs` | 冰块：`groupId` 编组、组色边框、单块融化、整组破坏和地图重置恢复；冰面并入地形合并碰撞，滑行不碎不卡脚 |
 | `Assets/TuningLab/LabMagma.cs` | 岩浆块：每个接触面首次接触强制红热、热二边再接触死亡、v2+ 撞击死亡、v3 整组破坏和地图重置恢复 |
 | `Assets/TuningLab/LabHiddenBlock.cs` | 隐藏方块：无实体、外形与墙一致，按组盖住物件；玩家完全进入整组后永久半透明，地图重置不恢复 |
@@ -52,7 +52,8 @@
 | `Assets/TuningLab/Level/Editor/LabLevelScene.cs` | 从 `TuningLab.unity` 派生关卡场景；默认 `Level 1` 分区 |
 | `Assets/TuningLab/Level/Editor/HiddenBlockDemoLevel.cs` | 生成隐藏方块演示关（`GameJam → Build HiddenBlock Demo Level`） |
 | `Assets/TuningLab/Level/Editor/LabLevelEditorWindow.cs` | 关卡编辑器：地形/绳/出生点/分区/相机/机关/隐藏方块/召回道具面板 |
-| `Assets/TuningLab/Level/Editor/LabLevelSelfCheck.cs` | 纯数据自检（基准 73 格 ↔ 8 块、分区移动/删除、相机分区内外、隐藏方块、召回道具） |
+| `Assets/TuningLab/Level/Editor/LabLevelMergeWindow.cs` | 合并场景：读多个关卡场景的 `LabLevelData`，用 Scene 视图移动工具摆放，选择 TuningLab 参数来源后合并 |
+| `Assets/TuningLab/Level/Editor/LabLevelSelfCheck.cs` | 纯数据自检（基准 73 格 ↔ 8 块、分区移动/删除、相机分区内外、隐藏方块、召回道具、合并偏移/组号/分区拒绝重叠） |
 | `Assets/TuningLab/Level/Editor/LabLevelPlayCheck.cs` | 临时派关卡 → 进 Play → 真实物理检查 → 退出/删场景 |
 
 ## 3. 数据与生成
@@ -66,6 +67,7 @@
 - `partitions`：关卡分区列表。
 - `Normalize()`：排序/去重、旧字段回落、相机尺寸 clamp、分区正尺寸。
 - `CopyFrom()`：深拷贝，撤销/重置/派生都靠它。
+- `AppendFrom()`：合并场景用，按格偏移并入另一份数据（见 §4.5）。
 
 ### 3.2 `LabLevel.Build`
 
@@ -127,8 +129,29 @@
 | 没有 `LabLevel`（基准场景） | `defaultCameraBounds` | TuningLab 默认 |
 
 - 相机跟随 A/B 中点；只有"当前在哪个关卡"看 B。
+- 进入 Play 时 `LabCamera` 先在 `Configure`（运行时构建）或 `Start`（烘焙场景）调 `SnapToPlayers`，把位置和正交尺寸一次对齐到 A/B 中点（独活时对准存活者），不从场景里的固定点插值过来。
 - `LabCamera` 对 bounds/size 做 `cameraFrameBlend` 混合；出界时用超大矩形代替 `Rect.zero`，避免 rect 插值把镜头拽向原点。
 - 没有分区时仍按单关相机设置；新关卡默认有分区，所以旧行为不变。
+
+### 4.5 合并场景
+
+多个大关卡同时开在一个 scene 里编辑会卡。把每关放在自己的场景里做，最后用 **合并场景** 拼成一个：
+
+- 入口：`GameJam → Merge Level Scenes`，或关卡编辑器底部的 **合并场景（把其它关卡拼进来）** 按钮。
+- 源场景只读不驻留：窗口打开时把源场景 additively 读一份 `LabLevelData` 就关掉（读的时候临时关掉 `LabLevel` 的预览生成），不会把几个大关卡同时搭进场景。已经在编辑器里打开的场景直接读实例，不重复打开。
+- **移动工具**：Scene 视图里给每个源场景画一个 `bounds` 方块（以及分区框），左键按住拖动即可摆放，按 1 格吸附；面板里也能直接改 X/Y。「自动排列」按列表顺序从左到右排开，间距 8 格。分区和别的场景重叠时方块变红，合并会被拒绝（分区不能重叠这条规则不变）。
+- **TuningLab 参数听谁的**：合并后只有一个 TuningLab，所以合并前必须在面板里选参数来源，合并确认框会再写一遍这次的选择。
+  - **合并成新场景**（默认）：复制“参数基准场景”的整个场景文件，TuningLab 参数、引用、渲染设置原样保留，再把数据换成合并结果；出生点 A/B 和相机尺寸也取这个场景的。其它场景只贡献内容。
+  - **合并进当前场景**：保留当前场景的参数；也可以在参数来源里选一个源场景，把它的规则参数复制过来。只复制规则参数，不动 `level` 引用、`autoBuild` 和 `roomScale`。
+- **合并规则**（`LabLevelData.AppendFrom`）：
+  - 地形、绳、机关、召回道具、重生点、传送点和分区全部按格偏移平移；
+  - 冰块 / 岩浆块 / 隐藏方块的组号重新编号，绳的非 0 `chainId` 整体平移，避免两个场景撞号；
+  - 分区名字加 `<场景名> / ` 前缀；没有分区的源场景按它的 `bounds` 补一个分区；
+  - 分区和已有分区重叠时拒绝并入，内容仍然保留，报告里会列出来；
+  - `bounds` 取所有源场景范围的并集；出生点和相机尺寸按上面选的来源，不会被其它场景覆盖；
+  - 同一格重复的地形只留一份，报告里会写去重了多少格。
+- **输出**：新场景直接复制基准场景文件再覆盖内容，`.meta` / GUID 保持不变，不会弄丢 Build Settings 里的引用。输出路径不能是任何源场景，也不能是已经打开的场景；要写回某个场景就先打开它，用「合并进当前场景」。合并成新场景会先保存当前打开的场景，然后打开新场景。
+- 源场景文件不会被修改；合并完成后源场景仍留在列表里，方便改完某一关再合一次。
 
 ## 5. 加一个新组件
 
@@ -291,6 +314,7 @@
 - V3 起、顶档 V6 的残影与拖尾、死亡边框闪红、12 个音效 Cue 正常；
 - 传送点的 3×3 触发区、双人进入标记、两个标记点门槛、A/D 切换终点、Enter 确认、Escape 取消、地图重置和吞钥匙正常；
 - B 在分区内和分区外时，相机范围正确；
+- 合并场景：两个小关卡分别做「合并成新场景」和「合并进当前场景」，检查偏移、组号、分区前缀、出生点、TuningLab 参数和输出场景的 `.meta`；
 - 没有新字段或分区的旧关卡仍能打开。
 
 ## 关卡规则速查
@@ -302,7 +326,7 @@
 - 相机跟随 A/B 中点，但只用 **B 的中心**判断当前分区。
 - 分区不能重叠，贴边相邻允许。
 - 钥匙和门是共享的：任意钥匙可以打开任意门，门的颜色只用于区分。**持钥上限 1 把**：身上已有一把时再捡无效，钥匙留在原处，花掉后脚下那把可以立刻补捡。灵体时间耗尽时若持有一把，会在方块中心所在格（没被场景实体占住）掉出一把**临时钥匙**，除"地图重置会清掉"外与普通钥匙完全相同。
-- 绳按 `{ center, cells, chainId, orientation }` 保存；`orientation = Vertical/Horizontal`，旧数据缺省为竖绳。横绳是平台：零/一级挡住、二级向下穿过、三级以上反弹并提升一级。竖绳的挡位按碰撞前沿接触法线撞进去的分量算：零/一级和普通墙一样挡死，二级沿法线穿过（只判一次，保留入射速度，忽略碰撞直到离开绳体），三级以上沿法线弹回，弹回速度 = 入射速度 + 一个等级间距（和横绳同一条公式）。绳不参与地形锻造：接触 / 下落 / 穿过都不改边态，只有三级以上的弹回会把接触边点到热二；热二的边再被弹回不会塌框或碎边。
+- 绳按 `{ center, cells, chainId, orientation }` 保存；`orientation = Vertical/Horizontal`，旧数据缺省为竖绳。横绳是平台：零/一级挡住、二级向下穿过并保留入射速度、三级以上反弹并提升一级。竖绳的挡位按碰撞前沿接触法线撞进去的分量算：零/一级和普通墙一样挡死，二级沿法线穿过（只判一次，保留入射速度，忽略碰撞直到离开绳体），三级以上沿法线弹回，弹回速度 = 入射速度 + 一个等级间距（和横绳同一条公式）。绳不参与地形锻造：接触 / 下落 / 穿过都不改边态，只有三级以上的弹回会把接触边点到热二；热二的边再被弹回不会塌框或碎边。
 - 地刺按 `{ cell, dir }` 保存；每格最多一根，碰到即死。
 - 冰块按 `{ cell, groupId }` 保存；1×1 实体，可站立/滑行。运行时保持默认冰蓝填充，外圈显示 2 像素的组色边框，颜色由 `LabIce.GroupColor` 统一生成（编辑器和 Play 同色）。冰和地形共用合并碰撞，冰面滑行只产生顶面接触，不会卡脚；在冰面上加速到 v2/v3 不算撞击，不会碎冰。只有侧面/非承重接触才按 v2 整组碎；红热边只在非承重接触时融一块并把边回普通，冰格落在玩家脚下 footprint 内（含不同分组交界处的侧向接触）不会融掉脚下。冰面按住方向按 `a = g` 加速，4 格升一级，封顶 v4；松手保留滑行。
 - 岩浆块按 `{ cell, groupId }` 保存；1×1 实体，可站立，走动按普通地面（不是冰面）。每条边只在第一次接触某个岩浆面时强制热二，持续贴着不重复触发；离开表面再接触才重新按第一次接触算。强制红热走 `StrikeEdge` 的死亡状态机：热二边接触岩浆直接死亡；灵体边不可复锻，不会被岩浆重新加热。以 v2 及以上沿法线撞上岩浆时，撞击红热和强制红热叠加，同样死亡；v3 撞击仍整组破坏。地图重置时恢复。
@@ -393,6 +417,8 @@
 
 触发分两种：活着走进触发区时，活着的人保留当前形态、已经死亡的队友以普通状态复活；两人都死亡时由 `TuningLab` 强制触发，两人一律清回普通状态（四条边全普通），不重放死亡前的碎边 / 红热边。
 
+两人都死亡后的结算统一推迟到本帧 `Update`，也就是所有 `FixedUpdate` 和物理接触回调都结束之后。死亡发生在碰撞 / 触发回调里，如果在回调中间立刻复活，同一物理步剩下的接触回调会再次打到刚复活的人（表现为“两人都死，只有一个人回到重生点，另一个死在重生点位置”）。不要为了省一帧把 `NotifyPlayerDied` 改回同步 `ForceRespawn`；重生规格 `LabRespawnPointTests.BothDeathsFromOverlappingSpikesInOneStepReviveTogether` 覆盖这条。
+
 关卡编辑器的“重生点”工具会把点写入 `LabLevelData`，预览和 Play 都由 `LabLevel.Build` 生成 3×3 触发器。点击同一格可删除，编辑器面板也支持逐个删除和清空；分区移动、删除和撤销会同步处理这些点。
 
 “传送点”工具同样把点写进 `LabLevelData`，`LabLevel.Build` 生成 3×3 触发器，`TuningLab` 在 Play 时注册所有传送点。数据不保存配对：进入任意一个传送点后，其余传送点都是可选终点，`A/D` 切换、`Enter` 确认，确认后两人落在终点两侧并重置地图、清掉钥匙。分区移动、删除和撤销会同步处理这些点。
@@ -428,6 +454,7 @@
 | `Assets/TuningLab/Level/Editor/LabLevelScene.cs` | 从 Tuning Lab 派生关卡 scene |
 | `Assets/TuningLab/Level/Editor/HiddenBlockDemoLevel.cs` | 隐藏方块演示关生成 |
 | `Assets/TuningLab/Level/Editor/LabLevelEditorWindow.cs` | 编辑器工具、面板和 Scene 预览 |
+| `Assets/TuningLab/Level/Editor/LabLevelMergeWindow.cs` | 合并场景：读源场景数据、Scene 视图移动工具、参数来源选择和合并执行 |
 | `Assets/TuningLab/Level/Editor/LabLevelSelfCheck.cs` | 纯数据自检 |
 | `Assets/TuningLab/Level/Editor/LabLevelPlayCheck.cs` | 临时关卡的真实物理检查 |
 
@@ -457,4 +484,7 @@
 - 召回幻影最多 3 个（FIFO）；炮/L 幻影的出口按被召回者原形态决定，不按进入方向反向。
 - 音效是运行时 `Resources.LoadAll` 挂载，没有场景引用；音量在 `LabSettingsUI` 里调，静音入口仍是静态 `LabAudio.Muted`。音乐音量当前只存值，还没有音乐轨。
 - 残影/拖尾和死亡闪红的参数在 `TuningLab` Inspector 上，不写进关卡数据。
+- 合并场景按 `bounds` 摆放方块：内容跑到 `bounds` 外的源场景仍会并入，但方块轮廓、自动排列和重叠提示都按 `bounds` 算。
+- 合并成新场景不可撤销（源场景不动，输出是新建/覆盖的文件）；合并进当前场景可撤销。合并中途取消不会留下半个场景。
+- 合并进当前场景时如果从别的源场景复制 TuningLab 参数，会临时打开一次那个场景（读完就关），大场景会停一下。
 - `docs/策划案` 仍可能包含清理前的旧游戏描述；关卡编辑以本文和 `Assets/TuningLab` 代码为准。

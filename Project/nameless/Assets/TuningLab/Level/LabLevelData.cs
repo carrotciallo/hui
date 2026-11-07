@@ -419,8 +419,7 @@ public sealed class LabLevelData
             && point.y >= bounds.y && point.y < bounds.y + bounds.height;
     }
 
-    /// <summary>排序 + 去重。编辑器每次改完都调一次，保证存盘顺序稳定、序列化 diff 干净。</summary>
-    public void Normalize()
+    void EnsureLists()
     {
         if (solids == null) solids = new List<Vector2Int>();
         if (ropes == null) ropes = new List<LabRopeSpec>();
@@ -434,6 +433,12 @@ public sealed class LabLevelData
         if (respawnPoints == null) respawnPoints = new List<LabRespawnPointSpec>();
         if (teleports == null) teleports = new List<LabTeleportSpec>();
         if (partitions == null) partitions = new List<LabLevelPartition>();
+    }
+
+    /// <summary>排序 + 去重。编辑器每次改完都调一次，保证存盘顺序稳定、序列化 diff 干净。</summary>
+    public void Normalize()
+    {
+        EnsureLists();
 
         // 门色漏写/手填成透明时回落到默认色，否则门在场景里完全看不见。
         for (int i = 0; i < doors.Count; i++)
@@ -1420,11 +1425,255 @@ public sealed class LabLevelData
         return any ? new RectInt(x0, y0, x1 - x0, y1 - y0) : bounds;
     }
 
+    // ------------------------------------------------------------------
+    // 场景合并
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// 把另一份关卡数据按格偏移并入本数据（合并场景用）。
+    ///
+    /// 地形、绳、机关、触发点和分区都按 <paramref name="cellOffset"/> 平移；冰块 / 岩浆块 /
+    /// 隐藏方块的组号和绳链号重新编号，避免两个场景的组撞在一起。分区不能重叠这条规则不变：
+    /// 平移后和已有分区重叠的分区会被拒绝，记在返回的报告里，里面的内容仍然并入。
+    ///
+    /// 出生点、相机尺寸和编辑范围不属于“内容”，不会被 <paramref name="source"/> 覆盖，
+    /// 由调用方决定听谁的。合并完成后会跑一次 <see cref="Normalize"/>。
+    /// </summary>
+    public LabLevelMergeReport AppendFrom(
+        LabLevelData source, Vector2Int cellOffset, string partitionNamePrefix = null)
+    {
+        var report = new LabLevelMergeReport();
+        if (source == null) return report;
+        EnsureLists();
+
+        var shift = new Vector2(cellOffset.x, cellOffset.y);
+
+        if (source.solids != null && source.solids.Count > 0)
+        {
+            // 用 HashSet 查重：合并大关卡时逐格 Contains 是 O(n²)。
+            var occupied = new HashSet<Vector2Int>(solids);
+            for (int i = 0; i < source.solids.Count; i++)
+            {
+                var cell = source.solids[i] + cellOffset;
+                if (occupied.Add(cell))
+                {
+                    solids.Add(cell);
+                    report.solids++;
+                }
+                else
+                {
+                    report.skippedSolids++;
+                }
+            }
+        }
+
+        if (source.ropes != null)
+        {
+            // 0 是默认链号；非 0 链号整体平移，避免两个场景的长绳被并成一条。
+            int chainBase = NextRopeChainId();
+            for (int i = 0; i < source.ropes.Count; i++)
+            {
+                var rope = source.ropes[i];
+                rope.center += shift;
+                if (rope.chainId != 0) rope.chainId += chainBase;
+                ropes.Add(rope);
+                report.ropes++;
+            }
+        }
+
+        if (source.keys != null)
+        {
+            for (int i = 0; i < source.keys.Count; i++)
+            {
+                var key = source.keys[i];
+                keys.Add(new LabKeySpec(key.position + shift));
+                report.keys++;
+            }
+        }
+
+        if (source.recalls != null)
+        {
+            for (int i = 0; i < source.recalls.Count; i++)
+            {
+                recalls.Add(new LabRecallSpec(source.recalls[i].cell + cellOffset));
+                report.recalls++;
+            }
+        }
+
+        if (source.doors != null)
+        {
+            for (int i = 0; i < source.doors.Count; i++)
+            {
+                var door = source.doors[i];
+                doors.Add(new LabDoorSpec(door.position + shift, door.color));
+                report.doors++;
+            }
+        }
+
+        if (source.spikes != null)
+        {
+            for (int i = 0; i < source.spikes.Count; i++)
+            {
+                var spike = source.spikes[i];
+                spikes.Add(new LabSpikeSpec(spike.cell + cellOffset, spike.dir));
+                report.spikes++;
+            }
+        }
+
+        if (source.ices != null && source.ices.Count > 0)
+        {
+            int nextGroup = NextIceGroupId();
+            var groups = new Dictionary<int, int>();
+            for (int i = 0; i < source.ices.Count; i++)
+            {
+                var ice = source.ices[i];
+                if (!groups.TryGetValue(ice.groupId, out int groupId))
+                {
+                    groupId = nextGroup++;
+                    groups[ice.groupId] = groupId;
+                }
+                ices.Add(new LabIceSpec(ice.cell + cellOffset, groupId));
+                report.ices++;
+            }
+        }
+
+        if (source.magmas != null && source.magmas.Count > 0)
+        {
+            int nextGroup = NextMagmaGroupId();
+            var groups = new Dictionary<int, int>();
+            for (int i = 0; i < source.magmas.Count; i++)
+            {
+                var magma = source.magmas[i];
+                if (!groups.TryGetValue(magma.groupId, out int groupId))
+                {
+                    groupId = nextGroup++;
+                    groups[magma.groupId] = groupId;
+                }
+                magmas.Add(new LabMagmaSpec(magma.cell + cellOffset, groupId));
+                report.magmas++;
+            }
+        }
+
+        if (source.hiddenBlocks != null && source.hiddenBlocks.Count > 0)
+        {
+            int nextGroup = NextHiddenGroupId();
+            var groups = new Dictionary<int, int>();
+            for (int i = 0; i < source.hiddenBlocks.Count; i++)
+            {
+                var block = source.hiddenBlocks[i];
+                if (!groups.TryGetValue(block.groupId, out int groupId))
+                {
+                    groupId = nextGroup++;
+                    groups[block.groupId] = groupId;
+                }
+                hiddenBlocks.Add(new LabHiddenBlockSpec(block.cell + cellOffset, groupId));
+                report.hiddenBlocks++;
+            }
+        }
+
+        if (source.respawnPoints != null)
+        {
+            for (int i = 0; i < source.respawnPoints.Count; i++)
+            {
+                var point = source.respawnPoints[i];
+                respawnPoints.Add(new LabRespawnPointSpec(point.position + shift));
+                report.respawnPoints++;
+            }
+        }
+
+        if (source.teleports != null)
+        {
+            for (int i = 0; i < source.teleports.Count; i++)
+            {
+                var point = source.teleports[i];
+                teleports.Add(new LabTeleportSpec(point.position + shift));
+                report.teleports++;
+            }
+        }
+
+        if (source.partitions != null)
+        {
+            for (int i = 0; i < source.partitions.Count; i++)
+            {
+                var partition = source.partitions[i];
+                if (partition == null) continue;
+
+                var bounds = new RectInt(
+                    partition.bounds.x + cellOffset.x,
+                    partition.bounds.y + cellOffset.y,
+                    partition.bounds.width,
+                    partition.bounds.height);
+
+                if (OverlapsAny(bounds))
+                {
+                    report.skippedPartitions++;
+                    report.warnings.Add(
+                        "分区「" + ComposePartitionName(partitionNamePrefix, partition.name)
+                        + "」在合并位置和已有分区重叠，没有并入。");
+                    continue;
+                }
+
+                partitions.Add(new LabLevelPartition
+                {
+                    name = ComposePartitionName(partitionNamePrefix, partition.name),
+                    bounds = bounds
+                });
+                report.partitions++;
+            }
+        }
+
+        Normalize();
+        return report;
+    }
+
+    /// <summary>当前最大非 0 链号 + 1；没有链时从 1 开始。合并时用来重排绳链号。</summary>
+    int NextRopeChainId()
+    {
+        int max = 0;
+        if (ropes != null)
+            for (int i = 0; i < ropes.Count; i++)
+                if (ropes[i].chainId > max) max = ropes[i].chainId;
+        return max + 1;
+    }
+
+    static string ComposePartitionName(string prefix, string name)
+    {
+        if (string.IsNullOrEmpty(prefix)) return name;
+        if (string.IsNullOrEmpty(name)) return prefix.TrimEnd(' ', '/');
+        return prefix + name;
+    }
+
     static int CompareCells(Vector2Int a, Vector2Int b)
     {
         int y = a.y.CompareTo(b.y);
         return y != 0 ? y : a.x.CompareTo(b.x);
     }
+}
+
+/// <summary>场景合并报告：每类内容实际并入多少，以及哪些分区因重叠被拒绝。</summary>
+public sealed class LabLevelMergeReport
+{
+    public int solids;
+    public int skippedSolids;
+    public int ropes;
+    public int keys;
+    public int recalls;
+    public int doors;
+    public int spikes;
+    public int ices;
+    public int magmas;
+    public int hiddenBlocks;
+    public int respawnPoints;
+    public int teleports;
+    public int partitions;
+    public int skippedPartitions;
+
+    /// <summary>被拒绝的分区等警告；内容仍然并入，调用方要原样展示。</summary>
+    public readonly List<string> warnings = new List<string>();
+
+    public int ContentCount =>
+        solids + ropes + keys + recalls + doors + spikes + ices + magmas
+        + hiddenBlocks + respawnPoints + teleports;
 }
 
 [System.Serializable]
