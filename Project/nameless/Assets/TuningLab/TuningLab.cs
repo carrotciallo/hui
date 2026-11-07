@@ -56,6 +56,16 @@ public class TuningLab : MonoBehaviour
     public float dashCooldown = 0.8f;
     public bool groundOnlyDash = false;
 
+    [Header("冲刺就绪反馈")]
+    public bool chargeReadyFeedbackEnabled = true;
+    [Tooltip("角色轮廓高亮一次的持续时间（秒）。")]
+    [Min(0.04f)] public float chargeReadyFlashDuration = 0.16f;
+    [Range(0.1f, 1f)] public float chargeReadyFlashAlpha = 0.85f;
+    [Tooltip("充能完成时头顶喷出的粒子数量。")]
+    [Range(1, 10)] public int chargeReadyParticleCount = 5;
+    [Tooltip("头顶粒子的存活时间（秒）。")]
+    [Min(0.1f)] public float chargeReadyParticleLife = 0.45f;
+
     [Header("撞击")]
     [Tooltip("红热判定的门槛取哪一级的边界（1 = v1/v2 边界）。Vp ≥ 该边界的 v² 就红热。")]
     [Range(0, 4)] public int redHotTierIndex = 1;
@@ -1370,6 +1380,10 @@ public class TuningLab : MonoBehaviour
         var fxGo = new GameObject("SpeedFx");
         fxGo.transform.SetParent(go.transform, false);
         fxGo.AddComponent<LabSpeedFeedback>().Bind(this, p);
+
+        var chargeFxGo = new GameObject("ChargeFx");
+        chargeFxGo.transform.SetParent(go.transform, false);
+        chargeFxGo.AddComponent<LabChargeFeedback>().Bind(this, p);
         return p;
     }
 
