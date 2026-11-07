@@ -9,7 +9,7 @@
 - 隐藏方块（#59）：`LabHiddenBlock` + `LabLevelData.hiddenBlocks` + 关卡编辑器工具 + 演示关；无实体、按组永久半透明、`MapReset` 不恢复。
 - 音效（#60）：`LabAudio` 运行时挂载，12 个 Cue；素材在 `Assets/Sounds/Resources/`，不依赖场景引用。
 - 速度/死亡反馈（#62）：`LabSpeedFeedback` 的 V3/V4 残影与拖尾，`TuningLab` 的死亡边框闪红。
-- 召回与幻影（#69）：`LabRecallPickup` / `LabPhantom`；A 按 `Q`、B 按右 `Shift`，头顶 1 格有空间时把另一名玩家拉到头顶并在旧位置留下幻影；最多 3 个 FIFO。
+- 召回与幻影（#69）：`LabRecallPickup` / `LabPhantom`；A 按 `Q`、B 按右 `Shift`，头顶 1 格有空间时把另一名玩家拉到头顶并在旧位置留下幻影；最多 2 个 FIFO；电梯形幻影铺光桥。
 - 判据修复：双人撞击补齐锻造门槛（#65）；A 碎边后仍可拾取钥匙（#67）。
 - 传送门进出场动画收尾；相机 `SnapFocus` 与阶段机接入。
 - 冰块运行时保持默认冰蓝填充，外圈显示 2 像素组色边框，和编辑器手柄共用 `LabIce.GroupColor`；前 1024 个组号不重复。
