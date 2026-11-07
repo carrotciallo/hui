@@ -8,10 +8,8 @@ public sealed class LabHomeTests
     [Test]
     public void FirstPlaytestScaleFeedbackIsPinned()
     {
-        Assert.AreEqual(64f, HomeScreenSpec.BackgroundSquareSize, 1e-5f);
-        Assert.AreEqual(8f, HomeScreenSpec.BackgroundSquareStroke, 1e-5f);
-        Assert.AreEqual(6, HomeScreenSpec.BackgroundSquareCountMin);
-        Assert.AreEqual(13, HomeScreenSpec.BackgroundSquareCountMax);
+        Assert.AreEqual(64f, HomeScreenSpec.BorderSnakeCellSize, 1e-5f);
+        Assert.AreEqual(8f, HomeScreenSpec.BorderSnakeCellStroke, 1e-5f);
         Assert.AreEqual(144f, HomeScreenSpec.ButtonSize, 1e-5f);
         Assert.AreEqual(60f, HomeScreenSpec.IconSize, 1e-5f);
         Assert.AreEqual(54f, HomeScreenSpec.ButtonGap, 1e-5f);
@@ -24,8 +22,21 @@ public sealed class LabHomeTests
     {
         Assert.AreEqual(80f, HomeScreenSpec.ArtMoveSpeedMin, 1e-5f);
         Assert.AreEqual(220f, HomeScreenSpec.ArtMoveSpeedMax, 1e-5f);
-        Assert.AreEqual(0.625f, HomeScreenSpec.ArtBatchDelayMin, 1e-5f);
-        Assert.AreEqual(2.5f, HomeScreenSpec.ArtBatchDelayMax, 1e-5f);
+        Assert.AreEqual(0.9f, HomeScreenSpec.ArtBatchDelayMin, 1e-5f);
+        Assert.AreEqual(3.6f, HomeScreenSpec.ArtBatchDelayMax, 1e-5f);
+    }
+
+    [Test]
+    public void ThirdPlaytestBorderSnakeSpecIsPinned()
+    {
+        Assert.AreEqual(2, HomeScreenSpec.BorderSnakeCount);
+        Assert.AreEqual(3, HomeScreenSpec.BorderSnakeLengthMin);
+        Assert.AreEqual(11, HomeScreenSpec.BorderSnakeLengthMax);
+        Assert.AreEqual(0.15f, HomeScreenSpec.BorderSnakeStepSeconds, 1e-5f);
+        Assert.AreEqual(0.10f, HomeScreenSpec.BorderSnakeFadeSeconds, 1e-5f);
+        Assert.AreEqual(1f / 30f, HomeScreenSpec.BorderSnakeTurnChance, 1e-6f);
+        Assert.AreEqual(15f, HomeScreenSpec.BorderSnakeLifetimeMin, 1e-5f);
+        Assert.AreEqual(25f, HomeScreenSpec.BorderSnakeLifetimeMax, 1e-5f);
     }
 
     [Test]
@@ -34,9 +45,12 @@ public sealed class LabHomeTests
         var random = new System.Random(70);
         for (int i = 0; i < 2000; i++)
         {
-            Assert.That(HomeScreenSpec.NextBackgroundSquareCount(random),
-                Is.InRange(HomeScreenSpec.BackgroundSquareCountMin,
-                    HomeScreenSpec.BackgroundSquareCountMax));
+            Assert.That(HomeScreenSpec.NextBorderSnakeLength(random),
+                Is.InRange(HomeScreenSpec.BorderSnakeLengthMin,
+                    HomeScreenSpec.BorderSnakeLengthMax));
+            Assert.That(HomeScreenSpec.NextBorderSnakeLifetime(random),
+                Is.InRange(HomeScreenSpec.BorderSnakeLifetimeMin,
+                    HomeScreenSpec.BorderSnakeLifetimeMax));
             Assert.That(HomeScreenSpec.NextBatchCount(random),
                 Is.InRange(HomeScreenSpec.ArtBatchCountMin, HomeScreenSpec.ArtBatchCountMax));
             Assert.That(HomeScreenSpec.NextBatchDelay(random),
@@ -51,6 +65,56 @@ public sealed class LabHomeTests
             Assert.That(HomeScreenSpec.NextArtStagger(random),
                 Is.InRange(HomeScreenSpec.ArtStaggerMin, HomeScreenSpec.ArtStaggerMax));
         }
+    }
+
+    [Test]
+    public void BorderSnakesStartOnEveryEdgeAndMoveInward()
+    {
+        var random = new System.Random(70);
+        const int columns = 10;
+        const int rows = 8;
+
+        foreach (HomeSnakeEdge edge in Enum.GetValues(typeof(HomeSnakeEdge)))
+        {
+            Vector2Int start = HomeScreenSpec.SnakeStartCell(edge, columns, rows, random);
+            HomeSnakeDirection direction = HomeScreenSpec.SnakeStartDirection(edge);
+            Vector2Int next = start + HomeScreenSpec.SnakeDirectionDelta(direction);
+            Assert.IsTrue(next.x >= 0 && next.x < columns, edge.ToString());
+            Assert.IsTrue(next.y >= 0 && next.y < rows, edge.ToString());
+            Assert.AreNotEqual(start, next, edge.ToString());
+        }
+    }
+
+    [Test]
+    public void BorderSnakeTurnsOnlyNinetyDegreesAtLowFrequency()
+    {
+        var random = new System.Random(70);
+        HomeSnakeDirection direction = HomeSnakeDirection.Right;
+        int turns = 0;
+        const int steps = 30000;
+
+        for (int i = 0; i < steps; i++)
+        {
+            HomeSnakeDirection previous = direction;
+            direction = HomeScreenSpec.NextSnakeDirection(direction, random);
+            if (direction == previous) continue;
+            int delta = ((int)direction - (int)previous + 4) % 4;
+            Assert.IsTrue(delta == 1 || delta == 3);
+            turns++;
+        }
+
+        Assert.That(turns, Is.InRange(850, 1150));
+    }
+
+    [Test]
+    public void BorderSnakeCellsFadeInAndOutInOneHundredMilliseconds()
+    {
+        const float fade = HomeScreenSpec.BorderSnakeFadeSeconds;
+        Assert.AreEqual(0f, HomeScreenSpec.ActiveSnakeAlpha(0f), 1e-5f);
+        Assert.AreEqual(0.5f, HomeScreenSpec.ActiveSnakeAlpha(fade * 0.5f), 1e-5f);
+        Assert.AreEqual(1f, HomeScreenSpec.ActiveSnakeAlpha(fade), 1e-5f);
+        Assert.AreEqual(1f, HomeScreenSpec.FadingSnakeAlpha(0f, 1f), 1e-5f);
+        Assert.AreEqual(0f, HomeScreenSpec.FadingSnakeAlpha(fade, 1f), 1e-5f);
     }
 
     [Test]

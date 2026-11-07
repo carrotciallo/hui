@@ -5,6 +5,22 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
+public enum HomeSnakeDirection
+{
+    Right,
+    Down,
+    Left,
+    Up
+}
+
+public enum HomeSnakeEdge
+{
+    Left,
+    Top,
+    Right,
+    Bottom
+}
+
 /// <summary>
 /// 游戏主页：纯黑背景、三个纯图标入口，以及不参与玩法的装饰动画。
 /// 主页只负责进入正式关卡和打开现有设置界面，不复制关卡或玩法规则。
@@ -22,9 +38,22 @@ public sealed class HomeScreen : MonoBehaviour
         Settings
     }
 
-    sealed class BackgroundSquare
+    sealed class SnakeSegment
     {
-        public Vector2 position;
+        public Vector2Int cell;
+        public float age;
+        public float startAlpha;
+    }
+
+    sealed class BorderSnake
+    {
+        public readonly List<SnakeSegment> body = new List<SnakeSegment>();
+        public readonly List<SnakeSegment> fading = new List<SnakeSegment>();
+        public Vector2Int headCell;
+        public HomeSnakeDirection direction;
+        public float moveAccumulator;
+        public float lifeRemaining;
+        public bool despawning;
     }
 
     sealed class FloatingArt
@@ -54,14 +83,14 @@ public sealed class HomeScreen : MonoBehaviour
         "Settings"
     };
 
-    static readonly Color GridColor = new Color(0.36f, 0.89f, 1f, 0.58f);
+    static readonly Color SnakeColor = new Color(0.36f, 0.89f, 1f, 1f);
     static readonly Color ButtonFill = new Color(0.015f, 0.025f, 0.035f, 0.88f);
     static readonly Color ButtonBorder = new Color(0.36f, 0.89f, 1f, 0.82f);
     static readonly Color HoverBorder = new Color(0.93f, 0.98f, 1f, 1f);
     static readonly Color ArtTint = new Color(1f, 1f, 1f, 0.72f);
 
     readonly List<Texture2D> artPool = new List<Texture2D>();
-    readonly List<BackgroundSquare> backgroundSquares = new List<BackgroundSquare>();
+    readonly List<BorderSnake> borderSnakes = new List<BorderSnake>();
     readonly List<FloatingArt> floatingArt = new List<FloatingArt>();
     readonly List<PendingArt> pendingArt = new List<PendingArt>();
     readonly Texture2D[] buttonIcons = new Texture2D[3];
@@ -77,6 +106,7 @@ public sealed class HomeScreen : MonoBehaviour
     int lastScreenHeight;
     float visualClock;
     float nextBatchAt;
+    float nextSnakePairAt;
     float transitionElapsed;
 
     bool SettingsOpen => settingsUI != null && settingsUI.IsOpen;
@@ -88,7 +118,7 @@ public sealed class HomeScreen : MonoBehaviour
         EnsureSettingsUI();
         LoadIcons();
         random = new System.Random(Environment.TickCount ^ Guid.NewGuid().GetHashCode());
-        RebuildBackground();
+        RebuildBorderSnakes();
         ready = true;
     }
 
@@ -105,7 +135,7 @@ public sealed class HomeScreen : MonoBehaviour
 
         if (Screen.width != lastScreenWidth || Screen.height != lastScreenHeight)
         {
-            RebuildBackground();
+            RebuildBorderSnakes();
         }
 
         bool blocked = MotionPaused;
@@ -122,6 +152,7 @@ public sealed class HomeScreen : MonoBehaviour
         visualClock += dt;
         if (hoveredButton >= 0) hoverTimes[hoveredButton] += dt;
 
+        UpdateBorderSnakes(dt);
         UpdatePendingArt();
         UpdateFloatingArt(dt);
 
@@ -142,13 +173,7 @@ public sealed class HomeScreen : MonoBehaviour
         if (!ready) return;
 
         DrawSolid(new Rect(0f, 0f, Screen.width, Screen.height), Color.black);
-        for (int i = 0; i < backgroundSquares.Count; i++)
-        {
-            var square = backgroundSquares[i];
-            DrawOutline(new Rect(square.position.x, square.position.y,
-                HomeScreenSpec.BackgroundSquareSize, HomeScreenSpec.BackgroundSquareSize),
-                HomeScreenSpec.BackgroundSquareStroke, GridColor);
-        }
+        for (int i = 0; i < borderSnakes.Count; i++) DrawBorderSnake(borderSnakes[i]);
 
         for (int i = 0; i < floatingArt.Count; i++) DrawFloatingArt(floatingArt[i]);
 
@@ -159,6 +184,33 @@ public sealed class HomeScreen : MonoBehaviour
         }
 
         if (navigating) DrawCloseTransition();
+    }
+
+    void DrawBorderSnake(BorderSnake snake)
+    {
+        for (int i = 0; i < snake.fading.Count; i++)
+        {
+            SnakeSegment segment = snake.fading[i];
+            if (!IsSnakeCellVisible(segment.cell)) continue;
+            DrawSnakeSegment(segment.cell,
+                HomeScreenSpec.FadingSnakeAlpha(segment.age, segment.startAlpha));
+        }
+
+        for (int i = 0; i < snake.body.Count; i++)
+        {
+            SnakeSegment segment = snake.body[i];
+            if (!IsSnakeCellVisible(segment.cell)) continue;
+            DrawSnakeSegment(segment.cell, HomeScreenSpec.ActiveSnakeAlpha(segment.age));
+        }
+    }
+
+    static void DrawSnakeSegment(Vector2Int cell, float alpha)
+    {
+        if (alpha <= 0f) return;
+        Color color = SnakeColor;
+        color.a *= Mathf.Clamp01(alpha);
+        Rect rect = SnakeCellRect(cell);
+        DrawOutline(rect, HomeScreenSpec.BorderSnakeCellStroke, color);
     }
 
     void DrawButton(HomeAction action, Rect baseRect)
@@ -288,6 +340,153 @@ public sealed class HomeScreen : MonoBehaviour
         GUI.matrix = oldMatrix;
     }
 
+    void UpdateBorderSnakes(float dt)
+    {
+        for (int i = borderSnakes.Count - 1; i >= 0; i--)
+        {
+            BorderSnake snake = borderSnakes[i];
+            UpdateSnakeFades(snake, dt);
+
+            if (!snake.despawning)
+            {
+                snake.lifeRemaining -= dt;
+                if (snake.lifeRemaining <= 0f)
+                {
+                    BeginSnakeDespawn(snake);
+                }
+                else
+                {
+                    snake.moveAccumulator += dt;
+                    while (snake.moveAccumulator >= HomeScreenSpec.BorderSnakeStepSeconds &&
+                           !snake.despawning)
+                    {
+                        snake.moveAccumulator -= HomeScreenSpec.BorderSnakeStepSeconds;
+                        StepBorderSnake(snake);
+                    }
+                }
+            }
+
+            if (snake.despawning && snake.fading.Count == 0)
+            {
+                borderSnakes.RemoveAt(i);
+            }
+        }
+
+        if (borderSnakes.Count == 0 && visualClock >= nextSnakePairAt)
+            SpawnSnakePair();
+    }
+
+    void StepBorderSnake(BorderSnake snake)
+    {
+        HomeSnakeDirection nextDirection =
+            HomeScreenSpec.NextSnakeDirection(snake.direction, random);
+        Vector2Int nextCell = snake.headCell + HomeScreenSpec.SnakeDirectionDelta(nextDirection);
+        if (!IsSnakeCellInGrid(nextCell))
+        {
+            BeginSnakeDespawn(snake);
+            return;
+        }
+
+        snake.direction = nextDirection;
+        snake.headCell = nextCell;
+
+        SnakeSegment tail = snake.body[snake.body.Count - 1];
+        snake.body.RemoveAt(snake.body.Count - 1);
+        if (IsSnakeCellVisible(tail.cell))
+        {
+            snake.fading.Add(new SnakeSegment
+            {
+                cell = tail.cell,
+                age = 0f,
+                startAlpha = HomeScreenSpec.ActiveSnakeAlpha(tail.age)
+            });
+        }
+
+        snake.body.Insert(0, new SnakeSegment
+        {
+            cell = nextCell,
+            age = IsSnakeCellVisible(nextCell) ? 0f : -1f
+        });
+    }
+
+    static void UpdateSnakeFades(BorderSnake snake, float dt)
+    {
+        for (int i = 0; i < snake.body.Count; i++)
+        {
+            SnakeSegment segment = snake.body[i];
+            if (segment.age < 0f)
+            {
+                if (IsSnakeCellVisible(segment.cell)) segment.age = 0f;
+            }
+            else
+            {
+                segment.age = Mathf.Min(
+                    HomeScreenSpec.BorderSnakeFadeSeconds,
+                    segment.age + dt);
+            }
+        }
+
+        for (int i = snake.fading.Count - 1; i >= 0; i--)
+        {
+            SnakeSegment segment = snake.fading[i];
+            segment.age += dt;
+            if (segment.age >= HomeScreenSpec.BorderSnakeFadeSeconds)
+                snake.fading.RemoveAt(i);
+        }
+    }
+
+    static void BeginSnakeDespawn(BorderSnake snake)
+    {
+        if (snake.despawning) return;
+        snake.despawning = true;
+        for (int i = 0; i < snake.body.Count; i++)
+        {
+            SnakeSegment segment = snake.body[i];
+            if (!IsSnakeCellVisible(segment.cell)) continue;
+            snake.fading.Add(new SnakeSegment
+            {
+                cell = segment.cell,
+                age = 0f,
+                startAlpha = HomeScreenSpec.ActiveSnakeAlpha(segment.age)
+            });
+        }
+        snake.body.Clear();
+    }
+
+    void SpawnSnakePair()
+    {
+        int columns = Mathf.Max(1,
+            Mathf.CeilToInt(Screen.width / HomeScreenSpec.BorderSnakeCellSize));
+        int rows = Mathf.Max(1,
+            Mathf.CeilToInt(Screen.height / HomeScreenSpec.BorderSnakeCellSize));
+
+        for (int i = 0; i < HomeScreenSpec.BorderSnakeCount; i++)
+        {
+            var edge = (HomeSnakeEdge)random.Next(4);
+            Vector2Int head = HomeScreenSpec.SnakeStartCell(edge, columns, rows, random);
+            HomeSnakeDirection direction = HomeScreenSpec.SnakeStartDirection(edge);
+            Vector2Int backward = HomeScreenSpec.SnakeDirectionDelta(direction) * -1;
+            int length = HomeScreenSpec.NextBorderSnakeLength(random);
+            var snake = new BorderSnake
+            {
+                headCell = head,
+                direction = direction,
+                lifeRemaining = HomeScreenSpec.NextBorderSnakeLifetime(random)
+            };
+
+            for (int segmentIndex = 0; segmentIndex < length; segmentIndex++)
+            {
+                Vector2Int cell = head + backward * segmentIndex;
+                snake.body.Add(new SnakeSegment
+                {
+                    cell = cell,
+                    age = IsSnakeCellVisible(cell) ? 0f : -1f
+                });
+            }
+            borderSnakes.Add(snake);
+        }
+    }
+
     void UpdatePendingArt()
     {
         for (int i = pendingArt.Count - 1; i >= 0; i--)
@@ -400,37 +599,38 @@ public sealed class HomeScreen : MonoBehaviour
         return texture;
     }
 
-    void RebuildBackground()
+    void RebuildBorderSnakes()
     {
         lastScreenWidth = Mathf.Max(1, Screen.width);
         lastScreenHeight = Mathf.Max(1, Screen.height);
-        backgroundSquares.Clear();
+        borderSnakes.Clear();
+        nextSnakePairAt = visualClock;
+        SpawnSnakePair();
+    }
 
-        Rect[] buttons = ButtonRects();
-        Rect buttonRegion = buttons[0];
-        for (int i = 1; i < buttons.Length; i++) buttonRegion = Union(buttonRegion, buttons[i]);
-        buttonRegion = Expand(buttonRegion, 72f);
+    static Rect SnakeCellRect(Vector2Int cell)
+    {
+        return new Rect(
+            cell.x * HomeScreenSpec.BorderSnakeCellSize,
+            cell.y * HomeScreenSpec.BorderSnakeCellSize,
+            HomeScreenSpec.BorderSnakeCellSize,
+            HomeScreenSpec.BorderSnakeCellSize);
+    }
 
-        int count = HomeScreenSpec.NextBackgroundSquareCount(random);
-        for (int i = 0; i < count; i++)
-        {
-            Rect candidate = Rect.zero;
-            for (int attempt = 0; attempt < 100; attempt++)
-            {
-                float maxX = Mathf.Max(12f,
-                    lastScreenWidth - HomeScreenSpec.BackgroundSquareSize - 12f);
-                float maxY = Mathf.Max(12f,
-                    lastScreenHeight - HomeScreenSpec.BackgroundSquareSize - 12f);
-                candidate = new Rect(
-                    Mathf.Round(RandomRange(12f, maxX)),
-                    Mathf.Round(RandomRange(12f, maxY)),
-                    HomeScreenSpec.BackgroundSquareSize,
-                    HomeScreenSpec.BackgroundSquareSize);
-                if (!candidate.Overlaps(buttonRegion)) break;
-            }
+    static bool IsSnakeCellVisible(Vector2Int cell)
+    {
+        Rect rect = SnakeCellRect(cell);
+        return rect.xMax > 0f && rect.xMin < Screen.width &&
+               rect.yMax > 0f && rect.yMin < Screen.height;
+    }
 
-            backgroundSquares.Add(new BackgroundSquare { position = candidate.position });
-        }
+    static bool IsSnakeCellInGrid(Vector2Int cell)
+    {
+        int columns = Mathf.Max(1,
+            Mathf.CeilToInt(Screen.width / HomeScreenSpec.BorderSnakeCellSize));
+        int rows = Mathf.Max(1,
+            Mathf.CeilToInt(Screen.height / HomeScreenSpec.BorderSnakeCellSize));
+        return cell.x >= 0 && cell.x < columns && cell.y >= 0 && cell.y < rows;
     }
 
     Rect[] ButtonRects()
@@ -501,24 +701,6 @@ public sealed class HomeScreen : MonoBehaviour
         return new Rect(center.x - width * 0.5f, center.y - height * 0.5f, width, height);
     }
 
-    static Rect Expand(Rect rect, float amount)
-    {
-        return new Rect(
-            rect.x - amount,
-            rect.y - amount,
-            rect.width + amount * 2f,
-            rect.height + amount * 2f);
-    }
-
-    static Rect Union(Rect a, Rect b)
-    {
-        float xMin = Mathf.Min(a.xMin, b.xMin);
-        float yMin = Mathf.Min(a.yMin, b.yMin);
-        float xMax = Mathf.Max(a.xMax, b.xMax);
-        float yMax = Mathf.Max(a.yMax, b.yMax);
-        return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
-    }
-
     static void DrawOutline(Rect rect, float stroke, Color color)
     {
         DrawSolid(new Rect(rect.x, rect.y, rect.width, stroke), color);
@@ -540,10 +722,16 @@ public sealed class HomeScreen : MonoBehaviour
 /// <summary>主页随机范围与动画曲线的单一事实来源，便于测试和后续调参。</summary>
 public static class HomeScreenSpec
 {
-    public const int BackgroundSquareCountMin = 6;
-    public const int BackgroundSquareCountMax = 13;
-    public const float BackgroundSquareSize = 64f;
-    public const float BackgroundSquareStroke = 8f;
+    public const int BorderSnakeCount = 2;
+    public const int BorderSnakeLengthMin = 3;
+    public const int BorderSnakeLengthMax = 11;
+    public const float BorderSnakeCellSize = 64f;
+    public const float BorderSnakeCellStroke = 8f;
+    public const float BorderSnakeStepSeconds = 0.15f;
+    public const float BorderSnakeFadeSeconds = 0.10f;
+    public const float BorderSnakeTurnChance = 1f / 30f;
+    public const float BorderSnakeLifetimeMin = 15f;
+    public const float BorderSnakeLifetimeMax = 25f;
 
     public const float ButtonSize = 144f;
     public const float IconSize = 60f;
@@ -555,8 +743,8 @@ public static class HomeScreenSpec
 
     public const int ArtBatchCountMin = 1;
     public const int ArtBatchCountMax = 7;
-    public const float ArtBatchDelayMin = 0.625f;
-    public const float ArtBatchDelayMax = 2.5f;
+    public const float ArtBatchDelayMin = 0.9f;
+    public const float ArtBatchDelayMax = 3.6f;
     public const float ArtScaleMin = 2f;
     public const float ArtScaleMax = 2.5f;
     public const float ArtMoveSpeedMin = 80f;
@@ -579,9 +767,85 @@ public static class HomeScreenSpec
         return !settingsOpen && !navigating;
     }
 
-    public static int NextBackgroundSquareCount(System.Random random)
+    public static int NextBorderSnakeLength(System.Random random)
     {
-        return random.Next(BackgroundSquareCountMin, BackgroundSquareCountMax + 1);
+        return random.Next(BorderSnakeLengthMin, BorderSnakeLengthMax + 1);
+    }
+
+    public static float NextBorderSnakeLifetime(System.Random random)
+    {
+        return Range(random, BorderSnakeLifetimeMin, BorderSnakeLifetimeMax);
+    }
+
+    public static Vector2Int SnakeStartCell(
+        HomeSnakeEdge edge,
+        int columns,
+        int rows,
+        System.Random random)
+    {
+        int column = Mathf.Max(1, columns);
+        int row = Mathf.Max(1, rows);
+        switch (edge)
+        {
+            case HomeSnakeEdge.Top:
+                return new Vector2Int(random.Next(column), 0);
+            case HomeSnakeEdge.Right:
+                return new Vector2Int(column - 1, random.Next(row));
+            case HomeSnakeEdge.Bottom:
+                return new Vector2Int(random.Next(column), row - 1);
+            default:
+                return new Vector2Int(0, random.Next(row));
+        }
+    }
+
+    public static HomeSnakeDirection SnakeStartDirection(HomeSnakeEdge edge)
+    {
+        switch (edge)
+        {
+            case HomeSnakeEdge.Top:
+                return HomeSnakeDirection.Down;
+            case HomeSnakeEdge.Right:
+                return HomeSnakeDirection.Left;
+            case HomeSnakeEdge.Bottom:
+                return HomeSnakeDirection.Up;
+            default:
+                return HomeSnakeDirection.Right;
+        }
+    }
+
+    public static Vector2Int SnakeDirectionDelta(HomeSnakeDirection direction)
+    {
+        switch (direction)
+        {
+            case HomeSnakeDirection.Down:
+                return new Vector2Int(0, 1);
+            case HomeSnakeDirection.Left:
+                return new Vector2Int(-1, 0);
+            case HomeSnakeDirection.Up:
+                return new Vector2Int(0, -1);
+            default:
+                return new Vector2Int(1, 0);
+        }
+    }
+
+    public static HomeSnakeDirection NextSnakeDirection(
+        HomeSnakeDirection current,
+        System.Random random)
+    {
+        if (random.NextDouble() >= BorderSnakeTurnChance) return current;
+        return random.Next(2) == 0 ? TurnRight(current) : TurnLeft(current);
+    }
+
+    public static float ActiveSnakeAlpha(float age)
+    {
+        if (age < 0f) return 0f;
+        return Mathf.Clamp01(age / BorderSnakeFadeSeconds);
+    }
+
+    public static float FadingSnakeAlpha(float age, float startAlpha)
+    {
+        return Mathf.Clamp01(startAlpha) *
+               (1f - Mathf.Clamp01(age / BorderSnakeFadeSeconds));
     }
 
     public static int NextBatchCount(System.Random random)
@@ -669,6 +933,16 @@ public static class HomeScreenSpec
     static float Range(System.Random random, float min, float max)
     {
         return min + (float)random.NextDouble() * (max - min);
+    }
+
+    static HomeSnakeDirection TurnRight(HomeSnakeDirection direction)
+    {
+        return (HomeSnakeDirection)(((int)direction + 1) % 4);
+    }
+
+    static HomeSnakeDirection TurnLeft(HomeSnakeDirection direction)
+    {
+        return (HomeSnakeDirection)(((int)direction + 3) % 4);
     }
 
     static float SmoothStep01(float value)
