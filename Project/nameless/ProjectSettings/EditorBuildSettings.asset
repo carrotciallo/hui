@@ -6,6 +6,12 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Scenes/Home.unity
+    guid: d331ef0acf74541448e1aa151d3f2c92
+  - enabled: 1
+    path: Assets/Scenes/Levels/Final Map.unity
+    guid: b6f8c34b7dac8114b93a9677443ac419
+  - enabled: 1
     path: Assets/Scenes/TuningLab.unity
     guid: ced7ea3baa2750940ba6cfa8a33b79bf
   m_configObjects:
