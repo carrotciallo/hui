@@ -2,7 +2,7 @@
 
 Unity 双人协作平台解谜原型。当前仓库的**唯一开发基准是 Tuning Lab**，正式关卡从它派生，旧 `World` 架构、旧编辑器和旧测试房不再作为开发依据。
 
-> **当前进度（2026-11-06）**：核心玩家、速度/冲刺、红热锻造、A 形态、大炮、L 形转向器、钥匙与门、重生点、传送点、冰块、绳子、地刺、隐藏方块、召回/幻影、音效、速度/死亡反馈和纯图标设置界面已经进入 Tuning Lab；关卡编辑器、SelfCheck/PlayCheck 和 PlayMode 规格已建立。美术资源和完整主线关卡仍在进行。
+> **当前进度（2026-11-07）**：核心玩家、速度/冲刺、红热锻造、A 形态、大炮、L 形转向器、钥匙与门、重生点、传送点、冰块、绳子、地刺、隐藏方块、召回/幻影、修复方块、灵体、主页、音效、速度/死亡反馈和纯图标设置界面已经进入 Tuning Lab；关卡编辑器、SelfCheck/PlayCheck 和 PlayMode 规格已建立。美术资源已开始入库（`LabArt`），完整主线关卡仍在进行。
 
 ## 先看这里：参考索引
 
@@ -80,6 +80,9 @@ Project/nameless/
 | 召回与幻影（#69） | 已进入基准 | `LabRecallPickup` / `LabPhantom` + 编辑器工具 + 契约测试 |
 | 音效（#60）、速度/死亡反馈（#62） | 已进入基准 | `LabAudio` / `LabSpeedFeedback` / 死亡闪红 |
 | 纯图标设置界面（#71） | 已进入基准 | `LabSettingsUI` / `LabSettingsStore`，Esc 打开并暂停；音量、分辨率、全屏、亮度/按键预留位 |
+| 修复方块（#63） | 已进入基准 | `LabRepairBlock` + 关卡数据 + 编辑器工具；热二/灵体边贴面回普通，不消耗 |
+| 灵体（#64，ADR-0007 定名） | 已进入基准 | 全碎边限时穿透、耗尽即死并掉临时钥匙；`LabPlayer.EnterSpirit` 一线 |
+| 主页（#70） | 已完成基础版本 | `Home.unity`（Build Settings 第 0 项）+ `HomeScreen`：纯图标三入口、边框蛇、关闭转场 |
 | 判据修复：双人锻造门槛（#65）、形态不拦拾取（#67） | 已修 | 规则文档 §3.4 / §3.5 |
 | 纯数据 Self Check、真实物理 Play Check、PlayMode 测试 | 已建立 | [当前项目基准](docs/current-baseline.md) |
 
@@ -87,11 +90,9 @@ Project/nameless/
 
 | Issue | 主题 | 当前判断 |
 | --- | --- | --- |
-| [#63](https://github.com/sfher/hui/issues/63) | 冠军拼图 / 修复方块 | 未实现；A 的红热边/灵体边接触后回普通边。 |
-| [#64](https://github.com/sfher/hui/issues/64) | 幽魂态 | 未实现；全碎边的限时无实体状态。 |
 | [#66](https://github.com/sfher/hui/issues/66) | 传送门相对位置保留 | 未实现；传送后相对站位保持。 |
-| [#70](https://github.com/sfher/hui/issues/70) / [#72](https://github.com/sfher/hui/issues/72) | 主页 / 图标 UI | 未开始；当前 HUD 仍是调试用 IMGUI。设置界面已按 #71 落地。 |
-| [#26](https://github.com/sfher/hui/issues/26) | 像素美术资源 | 资源清单和规格已明确，当前仍是程序生成占位显示；音效已按 #60 入库。 |
+| [#72](https://github.com/sfher/hui/issues/72) | 游戏内图标 UI | 未开始；主页已按 #70 落地，游戏内 HUD 仍是调试用 IMGUI。 |
+| [#26](https://github.com/sfher/hui/issues/26) | 像素美术资源 | 首批资源已入库并经 `LabArt` 接入（角色边框、材质、道具）；清单未齐，仍在补。音效已按 #60 入库。 |
 | 主线关卡 | 组合关卡和最终流程 | 机制大多具备，完整主线尚未制作。 |
 
 ### 按策划案的主线覆盖情况
