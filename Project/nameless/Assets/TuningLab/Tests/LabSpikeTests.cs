@@ -170,6 +170,22 @@ public sealed class LabSpikeTests
         yield return WaitUntil(() => a == null, 1f);
     }
 
+    [UnityTest]
+    public IEnumerator ZeroOverlapAtHorizontalSpikeEdgeDoesNotKill()
+    {
+        MakeFloor();
+        var spec = new LabSpikeSpec(new Vector2Int(0, 0), LabSpikeDir.Up);
+        MakeSpike(spec.cell, spec.dir);
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        float playerHalfWidth = TuningLab.A_Pixels / (2f * TuningLab.CellPixels);
+        float spikeLeft = spec.StripCenter.x - spec.StripSize.x * 0.5f;
+        a.Teleport(new Vector2(spikeLeft - playerHalfWidth, 0.5f));
+
+        for (int i = 0; i < 10; i++) yield return null;
+        Assert.IsTrue(a != null, "玩家与横向刺只有零面积接触时不应触发死亡");
+    }
+
     // 死亡的去向 ---------------------------------------------------------
 
     [UnityTest]
