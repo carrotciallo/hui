@@ -340,8 +340,10 @@ public static class LabLevelPlayCheck
             Check(sb, ref fails,
                 ice.GetComponent<SpriteRenderer>().color == LabIce.DefaultColor,
                 "冰块填充保持默认冰蓝");
+            Color expectedBorder = LabIce.GroupColor(IceGroup);
+            expectedBorder.a *= LabIce.BorderAlpha;
             Check(sb, ref fails,
-                ice.GroupBorder != null && ice.GroupBorder.color == LabIce.GroupColor(IceGroup),
+                ice.GroupBorder != null && ice.GroupBorder.color == expectedBorder,
                 "冰块运行时使用组色边框");
 
             var iceBody = ice.GetComponent<BoxCollider2D>();

@@ -23,6 +23,15 @@ public sealed class LabIce : MonoBehaviour
     /// <summary>0 号组的边框色：比填充更深，避免和默认冰蓝混在一起。</summary>
     public static readonly Color DefaultBorderColor = new Color(0.12f, 0.42f, 0.85f);
 
+    /// <summary>
+    /// 组色边框的线宽（像素）。一格是 16 像素，取 1 像素即整格的 1/16：
+    /// 缩放显示后仍能分辨组色，又不像 2 像素那样把冰格压得发闷。
+    /// </summary>
+    public const int BorderPixels = 1;
+
+    /// <summary>边框不透明度。留一点底色透出来，比纯不透明的色带柔和。</summary>
+    public const float BorderAlpha = 0.9f;
+
     /// <summary>组色序列的长度：前 1024 个 groupId 的颜色互不重复（测试覆盖）。</summary>
     public const int GroupColorCount = 1024;
 
@@ -60,6 +69,7 @@ public sealed class LabIce : MonoBehaviour
     /// 由一个 groupId 推导稳定的边框色。0 号组用深蓝；其余组用黄金角散列，
     /// 再叠加饱和度和明度的低频变化，前 <see cref="GroupColorCount"/> 组互不重复。
     /// 编辑器手柄和运行时边框都调用这一个函数，保证两边颜色一致。
+    /// 明度压在 0.72–0.88：上限不到 1，避免在亮冰蓝填充上过于刺眼。
     /// </summary>
     public static Color GroupColor(int groupId)
     {
@@ -67,7 +77,7 @@ public sealed class LabIce : MonoBehaviour
 
         float hue = Mathf.Repeat(0.58f + groupId * 0.61803398875f, 1f);
         float saturation = 0.50f + 0.25f * Mathf.Repeat(groupId * 0.41421356237f, 1f);
-        float value = 0.85f + 0.15f * Mathf.Repeat(groupId * 0.73205080757f, 1f);
+        float value = 0.72f + 0.16f * Mathf.Repeat(groupId * 0.73205080757f, 1f);
         return Color.HSVToRGB(hue, saturation, value);
     }
 
@@ -105,12 +115,14 @@ public sealed class LabIce : MonoBehaviour
         EnsureBorder();
         if (borderRenderer != null)
         {
-            borderRenderer.color = useGroupColor ? GroupColor(groupId) : color;
+            Color borderColor = useGroupColor ? GroupColor(groupId) : color;
+            borderColor.a *= BorderAlpha;
+            borderRenderer.color = borderColor;
             borderRenderer.enabled = !Broken;
         }
     }
 
-    /// <summary>边框是冰块的子物体，只有 2 像素宽的边，中间透明，露出蓝色填充。</summary>
+    /// <summary>边框是冰块的子物体，只有 1 像素宽的边，中间透明，露出蓝色填充。</summary>
     void EnsureBorder()
     {
         if (borderRenderer != null) return;
@@ -167,15 +179,16 @@ public sealed class LabIce : MonoBehaviour
     }
 
     /// <summary>
-    /// 组色边框的贴图：2 像素不透明边框，中间完全透明。颜色由 SpriteRenderer.color 染色，
-    /// 所以同一张贴图能显示任意组色，不需要每组生成一张贴图。
+    /// 组色边框的贴图：<see cref="BorderPixels"/> 像素宽的边，中间完全透明。颜色由
+    /// SpriteRenderer.color 染色，所以同一张贴图能显示任意组色，不需要每组生成一张贴图。
+    /// 边框只取 1 像素（整格的 1/16），够看清是哪一组，又不会喧宾夺主。
     /// </summary>
     static Sprite BorderSprite()
     {
         if (cachedBorderSprite != null) return cachedBorderSprite;
 
         const int size = TuningLab.CellPixels;
-        const int border = 2;
+        const int border = BorderPixels;
         var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
         {
             filterMode = FilterMode.Point,
