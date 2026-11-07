@@ -113,8 +113,14 @@ public sealed class LabIceTests
 
         Assert.IsNotNull(ices[0].GroupBorder, "1 号组有边框");
         Assert.IsNotNull(ices[1].GroupBorder, "2 号组有边框");
-        Assert.AreEqual(LabIce.GroupColor(1), ices[0].GroupBorder.color, "1 号组边框色");
-        Assert.AreEqual(LabIce.GroupColor(2), ices[1].GroupBorder.color, "2 号组边框色");
+
+        // 边框色 = 组色 RGB + BorderAlpha，柔和一点但组别仍然分得清。
+        Color expected1 = LabIce.GroupColor(1);
+        Color expected2 = LabIce.GroupColor(2);
+        expected1.a *= LabIce.BorderAlpha;
+        expected2.a *= LabIce.BorderAlpha;
+        Assert.AreEqual(expected1, ices[0].GroupBorder.color, "1 号组边框色");
+        Assert.AreEqual(expected2, ices[1].GroupBorder.color, "2 号组边框色");
         Assert.AreNotEqual(ices[0].GroupBorder.color, ices[1].GroupBorder.color,
             "不同组的边框颜色不同");
 
@@ -122,6 +128,14 @@ public sealed class LabIceTests
         Assert.AreEqual(1f, texture.GetPixel(0, 0).a, 0.02f, "组色边框不透明");
         Assert.AreEqual(0f, texture.GetPixel(texture.width / 2, texture.height / 2).a,
             0.02f, "边框中间透明，露出蓝色填充");
+
+        // 线宽：#88 —— 可见可分辨，但只占 1 像素（整格的 1/16），不能糊成厚边。
+        // 量 x 方向要取中间那一行：贴边的整行都在边框带上，用 y=0 横着量没有意义。
+        int midRow = texture.height / 2;
+        Assert.AreEqual(1, LabIce.BorderPixels, "边框线宽按 #88 定成 1 像素");
+        Assert.AreEqual(1f, texture.GetPixel(0, midRow).a, 0.02f, "最外沿 1 像素是边框");
+        Assert.AreEqual(0f, texture.GetPixel(LabIce.BorderPixels, midRow).a, 0.02f,
+            "第 2 像素起就是透明填充，说明边框只有 1 像素宽");
         yield return null;
     }
 
