@@ -1,16 +1,11 @@
-# PlayMode 规格自动跑测（GameCI）。
+# PlayMode 规格跑测（GameCI），仅手动触发：不会随 PR / 推送自动运行，
+# 需要时由维护者在 Actions 页点 Run workflow。
 # 前置条件（仓库管理员在 Settings → Secrets 里配置，缺一不可）：
 #   UNITY_LICENSE —— Unity 许可证文件内容（GameCI 文档的激活流程）
 # 许可证没配之前这个 workflow 会在激活一步失败，那是预期行为，不是工程坏了。
 name: PlayMode Tests
 
 on:
-  pull_request:
-    paths:
-      - "Project/nameless/Assets/**"
-      - "Project/nameless/Packages/**"
-      - "Project/nameless/ProjectSettings/**"
-      - ".github/workflows/playmode-tests.yml"
   workflow_dispatch:
 
 jobs:
