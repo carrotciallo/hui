@@ -9,10 +9,12 @@
 - 关卡数据：`Assets/TuningLab/Level/LabLevelData.cs`
 - 关卡生成：`Assets/TuningLab/Level/LabLevel.cs`
 - 音效素材：`Assets/Sounds/Resources/`（运行时 `LabAudio` 挂载，不依赖场景引用）
+- 启动主页：`Assets/Scenes/Home.unity`，Build Settings 第 0 项
 - 设置界面：`Assets/TuningLab/LabSettingsUI.cs`，图标在 `Assets/TuningLab/Resources/SettingsIcons/`
 - 设置存档：`Assets/TuningLab/LabSettingsStore.cs` → `Application.persistentDataPath/settings.json`
 - 基准场景：`Assets/Scenes/TuningLab.unity`
-- 正式关卡：`Assets/Scenes/Levels/`
+- 正式关卡入口：`Assets/Scenes/Levels/Final Map.unity`
+- 正式关卡目录：`Assets/Scenes/Levels/`
 - 1 格 = 1 世界单位 = 16px
 
 ## 开发边界
@@ -28,13 +30,17 @@
 - 玩家：移动、跳跃、四向冲刺、速度等级、双人动量互换、红热锻造、碎边形态、u 大炮、L 转向器、灵体态（限时穿透，耗尽即死并掉临时钥匙）。
 - 关卡物件：竖绳/横绳、钥匙/门、地刺、冰块、岩浆块、隐藏方块、重生点、传送点、召回道具、幻影。
 - 表现层：V3/V4 残影与拖尾、冲刺就绪轮廓闪烁与头顶粒子、死亡边框闪红、运行时音效（12 个 Cue，无场景引用）。
-- 设置：纯图标 IMGUI；Esc 打开/关闭，打开时 `Time.timeScale = 0`，关闭恢复暂停前的值；主音量、音乐/音效音量、分辨率、全屏可用，亮度与按键绑定为预留位。
+- 主页：纯黑背景、三个纯图标入口、随机高亮方格、地图/UI 素材横向漂浮，以及约 0.7 秒的电视关闭式转场。
+- 设置：纯图标 IMGUI；Esc 打开/关闭。玩法场景打开时 `Time.timeScale = 0`，关闭恢复暂停前的值；主页只冻结主页动效。主音量、音乐/音效音量、分辨率、全屏可用，亮度与按键绑定为预留位。
 - 数据/生成：`LabLevelData` → `LabLevel.Build`，编辑器预览与 Play 共用同一条生成路径。
 
 ## 场景与菜单
 
 | 目的 | 入口 |
 | --- | --- |
+| 启动主页 | Build Settings 第 0 项：`Assets/Scenes/Home.unity` |
+| 新游戏 / 临时读取存档 | 主页图标 → `Assets/Scenes/Levels/Final Map.unity` |
+| 重新生成主页 | GameJam → Rebuild Home Scene |
 | 生成基准场景 | GameJam → Build Tuning Lab |
 | 新建关卡 | GameJam → New Level From Tuning Lab |
 | 转换已有副本 | GameJam → Convert Current Scene To Level |
@@ -45,12 +51,13 @@
 
 ## 验证
 
-验证分四层：
+验证分五层：
 
 1. 纯数据与数学：SelfCheck。
 2. 真实物理：PlayCheck。
 3. PlayMode 自动化规格：`Assets/TuningLab/Tests/`（`GameJam.Lab.Tests.PlayMode`）。
 4. 编辑器交互：手测撤销/重做、保存重开、分区移动/调整/删除、预览与 Play 一致。
+5. 主页：`LabHomeTests` 校验随机范围、动画曲线、入口互斥和转场几何；视觉密度与场景跳转需 Play 手测。
 
 CLI 示例和常见问题见 [tuning-lab-level-editor.md](tuning-lab-level-editor.md)。
 
