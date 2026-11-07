@@ -241,6 +241,8 @@ public class TuningLab : MonoBehaviour
     int teleportSelectionIndex;
     const float TeleportCameraMoveSeconds = 0.25f;
     readonly List<LabRespawnPoint> respawnPoints = new List<LabRespawnPoint>();
+    bool teamDeathPending;
+    LabPlayer teamDeathPlayer;
 
     // ---- 派生量：所有"速度"都由格算出来，改重力自动跟着走 ----
     public float FixedDt => Time.fixedDeltaTime;
@@ -496,6 +498,7 @@ public class TuningLab : MonoBehaviour
     void Update()
     {
         if (Paused) return;
+        ResolvePendingTeamDeath();
         if (deathFlashLeft > 0f) deathFlashLeft = Mathf.Max(0f, deathFlashLeft - Time.deltaTime);
 
         var kb = UnityEngine.InputSystem.Keyboard.current;
@@ -565,6 +568,8 @@ public class TuningLab : MonoBehaviour
     /// 单人只是隐藏等待；两人都死亡才结算：强制触发一个重生点（优先最后激活的点，
     /// 没激活过就选离最后一次死亡位置最近的点），两人以普通状态双人重生；
     /// 关卡里没有重生点时才按 <see cref="deathWhenNoCheckpoint"/> 处理。
+    /// 结算本身推迟到下一次 <see cref="Update"/>：死亡来自物理接触回调，在同一物理步里
+    /// 立刻复活会被这个步剩下的接触回调再打一次，出现两人都死却只有一个活下来。
     /// </summary>
     public void NotifyPlayerDied(LabPlayer deadPlayer)
     {
@@ -578,6 +583,22 @@ public class TuningLab : MonoBehaviour
             if (PlayerA != null && PlayerA.IsAlive) return;
             if (PlayerB != null && PlayerB.IsAlive) return;
         }
+
+        teamDeathPending = true;
+        teamDeathPlayer = deadPlayer;
+    }
+
+    /// <summary>物理回调和 FixedUpdate 都跑完之后再结算双人重生，避免在回调里复活。</summary>
+    void ResolvePendingTeamDeath()
+    {
+        if (!teamDeathPending) return;
+        teamDeathPending = false;
+        LabPlayer deadPlayer = teamDeathPlayer;
+        teamDeathPlayer = null;
+
+        // 等待期间有人被别的路径救活（例如队友踩进重生点）就不再强制重生。
+        if (PlayerA != null && PlayerA.IsAlive) return;
+        if (PlayerB != null && PlayerB.IsAlive) return;
 
         ResolveTeamDeath(deadPlayer);
     }
@@ -1448,6 +1469,7 @@ public class TuningLab : MonoBehaviour
         cam.orthographicSize = RefHeight / (2f * CellPixels);   // 216 / 32 = 6.75 → 可见 13.5 格
         cam.clearFlags = CameraClearFlags.SolidColor;
         cam.backgroundColor = new Color(0.07f, 0.08f, 0.11f);
+        // z 固定在 -10（精灵都在 z=0）；自由相机稍后会在 Configure 里立即对齐玩家，不用从这里的固定点飞过去。
         cam.transform.position = new Vector3(0f, 5f, -10f);
         go.AddComponent<AudioListener>();
         cam.GetUniversalAdditionalCameraData(); // URP 项目里必须有，否则相机不渲染

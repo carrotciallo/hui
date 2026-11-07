@@ -39,6 +39,12 @@ public sealed class LabCamera : MonoBehaviour
 
     void Awake() => cam = GetComponent<Camera>();
 
+    void Start()
+    {
+        // 烘焙场景不会重新 Configure 相机；Play 第一帧先对齐玩家，避免从场景里的旧位置滑过来。
+        SnapToPlayers();
+    }
+
     public void Configure(Transform playerA, Transform playerB, Rect worldBounds)
     {
         a = playerA;
@@ -46,6 +52,7 @@ public sealed class LabCamera : MonoBehaviour
         bounds = worldBounds;
         hasBounds = true;
         SnapFrame();
+        SnapToPlayers();
     }
 
     public void Configure(TuningLab owner, Transform playerA, Transform playerB,
@@ -60,6 +67,7 @@ public sealed class LabCamera : MonoBehaviour
         maxSize = Mathf.Max(minSize, max);
         frameBlend = blend;
         SnapFrame();
+        SnapToPlayers();
     }
 
     void SnapFrame()
@@ -135,6 +143,46 @@ public sealed class LabCamera : MonoBehaviour
         focusFrom = new Vector3(worldPosition.x, worldPosition.y, transform.position.z);
         focusTo = focusFrom;
         transform.position = focusFrom;
+    }
+
+    /// <summary>
+    /// 立即把相机对齐到当前跟随目标：A/B 中点（独活时对准存活者），
+    /// 正交尺寸按两人间距取目标值，再按当前分区夹住。Play 第一帧和关卡重建时调用。
+    /// </summary>
+    public void SnapToPlayers()
+    {
+        bool hasA = IsFollowable(a);
+        bool hasB = IsFollowable(b);
+        if (!hasA && !hasB) return;
+
+        bool solo = !hasA || !hasB;
+        Vector3 focus = solo
+            ? (hasA ? a.position : b.position)
+            : (a.position + b.position) * 0.5f;
+        focus.z = transform.position.z;
+
+        // 探针和 LateUpdate 保持一致，开局取景就是稳定状态，不会先跳一次分区。
+        UpdateFrameTarget(focus);
+        SnapFrame();
+
+        float spread = solo
+            ? 0f
+            : Mathf.Max(Mathf.Abs(a.position.x - b.position.x), Mathf.Abs(a.position.y - b.position.y));
+        float size = Mathf.Clamp(activeMinSize + spread * sizePerUnit, activeMinSize, activeMaxSize);
+
+        Vector3 target = focus + offset;
+        target.z = focus.z;
+
+        // 编辑器里烘焙场景时 Awake 还没跑过，直接取组件，保证存进场景的相机也是对的。
+        if (cam == null) cam = GetComponent<Camera>();
+        if (cam == null)
+        {
+            transform.position = target;
+            return;
+        }
+
+        cam.orthographicSize = size;
+        transform.position = Clamp(target, size);
     }
 
     public void ResumeFollowing()

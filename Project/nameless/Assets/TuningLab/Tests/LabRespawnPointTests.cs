@@ -344,6 +344,46 @@ public sealed class LabRespawnPointTests
         Assert.AreEqual(checkpointPosition.x + 1f, lab.PlayerB.transform.position.x, 0.001f);
     }
 
+    /// <summary>
+    /// 两人同时压着相邻的两根刺：一次物理步里会产生四条接触回调。重生如果发生在回调中间，
+    /// 同一物理步剩下的回调会把刚复活的人再杀一次，出现“两人都死、只活一个”。
+    /// 重生必须推迟到回调全部结束之后。
+    /// </summary>
+    [UnityTest]
+    public IEnumerator BothDeathsFromOverlappingSpikesInOneStepReviveTogether()
+    {
+        var checkpointPosition = new Vector2(-8f, 1f);
+        MakeCheckpoint(checkpointPosition);
+        MakeSpike(0);
+        MakeSpike(1);
+        MakeSpike(2);
+        yield return null;
+
+        int resetCount = 0;
+        lab.MapReset += () => resetCount++;
+
+        // 每名玩家的碰撞箱都横跨两根刺，制造同一物理步里的多条致死回调。
+        for (int trial = 0; trial < 4; trial++)
+        {
+            float ax = 0.70f + 0.02f * trial;
+            float bx = 1.70f + 0.02f * trial;
+            lab.PlayerA.Teleport(new Vector2(ax, 0.5f));
+            lab.PlayerB.Teleport(new Vector2(bx, 0.5f));
+            for (int i = 0; i < 6; i++) yield return new WaitForFixedUpdate();
+
+            Assert.IsTrue(lab.PlayerA.IsAlive, $"第 {trial} 次：A 应复活");
+            Assert.IsTrue(lab.PlayerB.IsAlive, $"第 {trial} 次：B 应复活");
+            Assert.AreEqual(checkpointPosition.x - 1f, lab.PlayerA.transform.position.x, 0.001f);
+            Assert.AreEqual(checkpointPosition.x + 1f, lab.PlayerB.transform.position.x, 0.001f);
+            Assert.AreEqual(trial + 1, resetCount, "每次两人都死亡只重置一次地图");
+
+            // 回安全位置，让重生点判定“全员离开”，再开始下一轮。
+            lab.PlayerA.Teleport(new Vector2(-8f, 5f));
+            lab.PlayerB.Teleport(new Vector2(-6f, 5f));
+            for (int i = 0; i < 4; i++) yield return new WaitForFixedUpdate();
+        }
+    }
+
     [UnityTest]
     public IEnumerator BothDeathsWithoutCheckpointRespawnAtSpawn()
     {
@@ -515,6 +555,19 @@ public sealed class LabRespawnPointTests
         var point = go.AddComponent<LabRespawnPoint>();
         point.ApplyShape();
         return point;
+    }
+
+    void MakeSpike(int cellX)
+    {
+        var cell = new Vector2Int(cellX, 0);
+        var spec = new LabSpikeSpec(cell, LabSpikeDir.Up);
+        var go = new GameObject("Spike");
+        go.transform.SetParent(labGo.transform, false);
+        go.transform.position = spec.StripCenter;
+        var spike = go.AddComponent<LabSpike>();
+        spike.cell = cell;
+        spike.dir = LabSpikeDir.Up;
+        spike.ApplyShape();
     }
 
     LabKey MakeKey()

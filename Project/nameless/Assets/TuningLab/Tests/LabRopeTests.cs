@@ -329,6 +329,8 @@ public sealed class LabRopeTests
         public LabPlayer player;
         public LabHorizontalRope rope;
         public readonly List<LabHorizontalRope.RopeContact> contacts = new List<LabHorizontalRope.RopeContact>();
+        public readonly List<Vector2> incoming = new List<Vector2>();
+        public readonly List<Vector2> velocities = new List<Vector2>();
     }
 
     [UnityTest]
@@ -342,6 +344,24 @@ public sealed class LabRopeTests
         Assert.IsTrue(run.contacts[0].passed);
         Assert.AreEqual(LabPlayer.EdgeState.Normal, run.player.GetEdge(LabPlayer.Edge.Bottom),
             "二级下落穿过横绳不该把底边加热");
+    }
+
+    [UnityTest]
+    public IEnumerator HorizontalRopeLetsTierTwoPlayerPassAtIncomingSpeed()
+    {
+        var run = new HorizontalRopeRun();
+        yield return RunIntoHorizontalRope(new Vector2(0f, 4.5f), new Vector2(0f, -31f), 0.35f, run);
+
+        Assert.AreEqual(1, run.contacts.Count, "穿过只应该判一次");
+        Assert.AreEqual(2, run.contacts[0].tier, $"31 的下落应该是二级：实际 {run.contacts[0].tier}");
+        Assert.IsTrue(run.contacts[0].passed, "二级应该穿过横绳");
+
+        // 横绳只有 4px 厚，碰撞那一帧解算掉的竖直速度必须还回去，
+        // 否则玩家会贴着绳面停住，再靠重力从 0 重新加速。
+        Assert.AreEqual(run.incoming[0].y, run.velocities[0].y, 0.5f,
+            $"穿过时要保留入射速度：入射 {run.incoming[0].y:F2} → 穿过 {run.velocities[0].y:F2}");
+        Assert.Less(run.velocities[0].y, -25f, "穿过时不能被绳面刹停");
+        Assert.Less(run.player.transform.position.y, 3f, "二级应该穿到横绳下方");
     }
 
     [UnityTest]
@@ -379,7 +399,12 @@ public sealed class LabRopeTests
         Assert.IsNotNull(run.rope, "关卡数据里的横绳没生成");
 
         run.player = MakePlayer(start, true);
-        run.rope.Contacted += contact => run.contacts.Add(contact);
+        run.rope.Contacted += contact =>
+        {
+            run.contacts.Add(contact);
+            run.incoming.Add(run.player.PreImpactVelocity);
+            run.velocities.Add(run.player.Velocity);
+        };
 
         yield return null;      // 等 LabHorizontalRope.Start 抓到 lab
 

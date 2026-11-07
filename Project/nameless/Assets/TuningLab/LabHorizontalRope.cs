@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 横绳：16×4 像素的平台。零级/一级挡住，二级允许向下通过，
+/// 横绳：16×4 像素的平台。零级/一级挡住，二级允许向下通过并保留入射速度，
 /// 三级及以上向上弹回并提升一个速度等级。
 /// 绳接触不参与地形锻造；只有弹回这一种情况会把接触边点到热二，热二再弹不会塌框。
 /// </summary>
@@ -87,6 +87,10 @@ public sealed class LabHorizontalRope : MonoBehaviour
             Physics2D.IgnoreCollision(playerCollider, body, true);
             passThrough.Add(playerCollider);
             passUntil.Add(Time.time + passWindow);
+
+            // 进入回调时碰撞已经把竖直速度解算掉了；把入射分量还回去，
+            // 玩家才是按原速穿下去，而不是贴着绳面停一帧再重新加速。
+            player.ApplyAxisVelocity(Vector2.up, player.PreImpactVelocity.y);
             Raise(player, tier, true, false);
             return;
         }
