@@ -98,8 +98,12 @@ public sealed class LabPhantomTests
 
     // 幻影炮 / L 幻影 ----------------------------------------------------
 
+    /// <summary>
+    /// 玻璃大炮（#76）：炮底进入，不需要冲刺态，进膛同一步就沿原炮口射出，幻影随即自毁。
+    /// 速度只换方向不加能量。
+    /// </summary>
     [UnityTest]
-    public IEnumerator CannonPhantomLoadsFromBottomAndFiresThroughMouth()
+    public IEnumerator GlassCannonFiresImmediatelyAndSelfDestructs()
     {
         var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
         var b = MakePlayer("B_Chunk", TuningLab.B_Pixels, false);
@@ -109,21 +113,21 @@ public sealed class LabPhantomTests
         var phantom = SpawnPhantom(a, b, LabForms.TopBit);
         yield return null;
 
-        b.ApplyDash(Dash(Vector2.up, EntrySpeed));
-        yield return WaitUntil(() => phantom.Loaded, 2f);
+        // 不用冲刺态，直接给一个向上的普通速度。
+        b.SetVelocity(Vector2.up * EntrySpeed);
+        yield return WaitUntil(() => !b.Suspended || phantom.Leaving, 2f);
 
-        Assert.IsTrue(b.Suspended, "进入后玩家被幻影收进膛里");
-        Assert.AreEqual(phantom, b.PhantomHost, "宿主是幻影");
-
-        phantom.Fire();
-
-        Assert.IsFalse(b.Suspended, "开炮后恢复实体");
-        float expected = Mathf.Sqrt(EntrySpeed * EntrySpeed + lab.CannonBoostV2);
-        Assert.AreEqual(expected, b.Velocity.magnitude, 0.2f,
-            "出膛速度 = √(V前² + 一个等级间距)");
+        // 进膛立刻出膛：不会停在膛里等手动开炮。
+        yield return WaitUntil(() => !b.Suspended || phantom.Leaving, 1f);
+        Assert.IsFalse(b.Suspended, "玻璃大炮不留在膛里");
+        Assert.AreEqual(EntrySpeed, b.Velocity.magnitude, 1.5f,
+            "出膛速度取进入速度的大小，不凭空加能量");
         Assert.Greater(b.Velocity.y, 0f, "炮口朝上，向上射出");
         Assert.Greater(b.transform.position.y, phantom.transform.position.y, "从炮口外侧出膛");
+
         yield return null;
+        Assert.IsTrue(phantom.Consumed || phantom == null || phantom.Leaving,
+            "发射后幻影被消耗");
     }
 
     [UnityTest]
@@ -140,13 +144,14 @@ public sealed class LabPhantomTests
         b.ApplyDash(Dash(Vector2.right, EntrySpeed));
         yield return new WaitForFixedUpdate();
 
-        Assert.IsFalse(phantom.TryAbsorb(b), "只有底面能进，侧面不行");
+        Assert.IsFalse(phantom.TryAbsorb(b), "只有炮底和炮口能进，侧面不行");
         Assert.IsFalse(phantom.Loaded);
         yield return null;
     }
 
+    /// <summary>#76 起大炮不需要冲刺态，普通速度从炮底进去也会被玻璃大炮吃掉。</summary>
     [UnityTest]
-    public IEnumerator CannonPhantomRequiresDashState()
+    public IEnumerator CannonPhantomNoLongerRequiresDashState()
     {
         var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
         var b = MakePlayer("B_Chunk", TuningLab.B_Pixels, false);
@@ -160,7 +165,27 @@ public sealed class LabPhantomTests
         yield return new WaitForFixedUpdate();
 
         Assert.IsFalse(b.InDashState, "普通速度不是冲刺态");
-        Assert.IsFalse(phantom.TryAbsorb(b), "大炮幻影只吃冲刺态");
+        Assert.IsTrue(phantom.TryAbsorb(b), "玻璃大炮不要求冲刺态");
+        yield return null;
+    }
+
+    /// <summary>幻影大炮的炮口也是入口（#76）。</summary>
+    [UnityTest]
+    public IEnumerator CannonPhantomAcceptsMouthEntryToo()
+    {
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        var b = MakePlayer("B_Chunk", TuningLab.B_Pixels, false);
+        Link(a, b);
+        a.Teleport(new Vector2(8f, a.HalfHeight));
+        // 炮口朝上：把 B 摆在幻影正上方，从炮口那一侧接触。
+        b.Teleport(new Vector2(0.5f, 1.55f));
+        var phantom = SpawnPhantom(a, b, LabForms.TopBit);
+        yield return null;
+
+        b.SetVelocity(Vector2.down * EntrySpeed);
+        yield return new WaitForFixedUpdate();
+
+        Assert.IsTrue(phantom.TryAbsorb(b), "炮口也能进");
         yield return null;
     }
 
@@ -177,11 +202,11 @@ public sealed class LabPhantomTests
         yield return null;
 
         b.ApplyDash(Dash(Vector2.up, EntrySpeed));
-        yield return WaitUntil(() => phantom.ConverterLoaded, 2f);
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
 
-        yield return WaitUntil(() => !phantom.Loaded, 2.5f);
-
-        Assert.IsFalse(b.Suspended, "1 秒后自动射出");
+        // #76：L 转向是瞬时的，不再等 1 s。
+        Assert.IsFalse(b.Suspended, "进膛当步就射出，不留在膛里");
         Assert.AreEqual(EntrySpeed, b.Velocity.magnitude, 0.2f, "L 幻影等速转向");
         Assert.Greater(b.Velocity.x, 0f, "从右开口射出");
         Assert.IsTrue(b.InDashState, "进入时的冲刺态被保留");
@@ -212,8 +237,8 @@ public sealed class LabPhantomTests
             yield return null;
 
             b.ApplyDash(Dash(Vector2.up, EntrySpeed));
-            yield return WaitUntil(() => phantom.ConverterLoaded, 2f);
-            yield return WaitUntil(() => !phantom.Loaded, 2.5f);
+            yield return new WaitForFixedUpdate();
+            yield return new WaitForFixedUpdate();
 
             Assert.AreEqual(expectedSign[i], Mathf.Sign(b.Velocity.x), 0.001f,
                 "L 组合 " + i + " 的出口方向");

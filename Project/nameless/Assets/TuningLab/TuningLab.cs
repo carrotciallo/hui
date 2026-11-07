@@ -631,6 +631,10 @@ public class TuningLab : MonoBehaviour
     /// <summary>
     /// 召回：施法者头顶有 1 格空位时，把另一名玩家传送到头顶，并在其旧位置留下幻影。
     /// 能力是全队、永久的；判定集中在这里，输入层只负责读键。
+    ///
+    /// 顺序按 Issue #76 定案：先判断有没有幻影已经被用过（用过就整次召回无效），
+    /// 再生成新幻影，最后才销毁旧幻影 —— 旧幻影的光桥要参与新幻影的生成判定，
+    /// 所以不能先拆桥再铺桥。
     /// </summary>
     public bool TryRecall(LabPlayer caster)
     {
@@ -639,6 +643,9 @@ public class TuningLab : MonoBehaviour
         LabPlayer recalled = caster.other;
         if (recalled == null || !caster.IsAlive || !recalled.IsAlive) return false;
         if (caster.Suspended || recalled.Suspended) return false;
+
+        // 1. 已经有幻影被消耗/使用过（大炮发射或 L 转向）：本次召回无效。
+        if (LabPhantom.AnyUsed) return false;
 
         Bounds body = caster.BodyBounds;
         float headTop = body.max.y;
@@ -667,7 +674,12 @@ public class TuningLab : MonoBehaviour
         var cell = new Vector2Int(
             Mathf.FloorToInt(before.x),
             Mathf.FloorToInt(before.y));
-        LabPhantom.Spawn(this, recalled, caster, cell, spiritMask, pixels, framed);
+
+        // 2. 先生成新幻影——淘汰旧幻影放在它自己的生成逻辑里之后，见 Spawn。
+        LabPhantom.Spawn(this, recalled, caster, cell, spiritMask, pixels, framed, deferEviction: true);
+
+        // 3. 新幻影铺完桥之后再销毁旧的：旧幻影的光桥此时仍参与过生成判定。
+        LabPhantom.EvictOverflow();
         return true;
     }
 
