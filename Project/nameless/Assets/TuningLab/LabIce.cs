@@ -46,6 +46,7 @@ public sealed class LabIce : MonoBehaviour
     SpriteRenderer spriteRenderer;
     SpriteRenderer borderRenderer;
     CompositeCollider2D composite;
+    Collider2D[] solidHits = new Collider2D[8];
 
     void Awake() => ApplyShape();
 
@@ -210,6 +211,31 @@ public sealed class LabIce : MonoBehaviour
         }
         return null;
     }
+
+    /// <summary>
+    /// 这一格的冰块现在挡不挡人。别读 <see cref="BoxCollider2D.enabled"/>：并进地形的
+    /// <see cref="Collider2D.CompositeOperation.Merge"/> 之后，子碰撞体的开关不代表合并几何里
+    /// 还有没有这块——`enabled = true` 也可能正处于"由合并体接管"的状态。这里区分两种来源：
+    /// 没并进合并体时看自己的碰撞箱；并进之后看合并几何在该格中心到底有没有实体。
+    /// </summary>
+    public bool IsSolidAtCell()
+    {
+        if (Broken) return false;
+
+        if (composite == null)
+            return body != null && body.enabled && body.gameObject.activeInHierarchy;
+
+        var center = new Vector2(cell.x + 0.5f, cell.y + 0.5f);
+        int count = Physics2D.OverlapPoint(center, ContactFilter2D.noFilter, solidHits);
+        for (int i = 0; i < count; i++)
+        {
+            var hit = solidHits[i];
+            if (hit != null && hit != body && !hit.isTrigger) return true;
+        }
+        return false;
+    }
+
+    /// <summary>这个点落在哪一块未破坏的冰上；合并地形需要靠接触点找回是哪一格。</summary>
 
     /// <summary>当前 Play 里同一组的冰块；返回新列表，避免遍历时被回调修改。</summary>
     public static List<LabIce> GroupOf(int groupId)

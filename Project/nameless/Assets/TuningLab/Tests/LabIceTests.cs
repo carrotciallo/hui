@@ -176,6 +176,31 @@ public sealed class LabIceTests
         yield return null;
     }
 
+    /// <summary>
+    /// #78：冰并进地形的 CompositeCollider2D 之后，BoxCollider2D.enabled 不再代表
+    /// "这一格挡不挡人"，语义读数必须能区分破坏和恢复。这条就是当初永远为红的那条。
+    /// </summary>
+    [UnityTest]
+    public IEnumerator MergedIceReportsSolidStateThroughSemantics()
+    {
+        MakeIceLevel(1);
+        yield return null;
+        Physics2D.SyncTransforms();
+
+        var ice = LabIce.All[0];
+        Assert.IsTrue(ice.IsSolidAtCell(), "合并地形里的冰初始挡得住人");
+
+        ice.BreakOne();
+        Physics2D.SyncTransforms();
+        Assert.IsTrue(ice.Broken, "破坏态");
+        Assert.IsFalse(ice.IsSolidAtCell(), "破坏后不再挡人");
+
+        ice.ResetIce();
+        Physics2D.SyncTransforms();
+        Assert.IsFalse(ice.Broken, "重置后不再是破坏态");
+        Assert.IsTrue(ice.IsSolidAtCell(), "重置后重新挡得住人");
+    }
+
     // 冰面识别 -----------------------------------------------------------
 
     [UnityTest]

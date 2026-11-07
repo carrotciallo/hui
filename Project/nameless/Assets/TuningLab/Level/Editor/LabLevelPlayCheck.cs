@@ -351,14 +351,27 @@ public static class LabLevelPlayCheck
                 "冰块碰撞 = 实体 1×1");
             Check(sb, ref fails, Physics2D.OverlapPoint(center) != null,
                 "冰块中心查得到碰撞");
+            Check(sb, ref fails, ice.IsSolidAtCell(),
+                "冰块中心挡得住人（并进合并地形后仍读得到实体）");
 
             // 破坏 → 地图重置恢复，验证 MapReset 管路。
+            // 用语义读数，不读 BoxCollider2D.enabled：冰并进 CompositeCollider2D 之后
+            // enabled 不代表合并几何里还有没有这一格（#78）。
             ice.BreakOne();
-            Check(sb, ref fails, ice.Broken && iceBody != null && !iceBody.enabled,
-                "破坏后冰块碰撞关闭");
+            Physics2D.SyncTransforms();
+            bool solidAfterBreak = ice.IsSolidAtCell();
+            bool overlapAfterBreak = Physics2D.OverlapPoint(center) != null;
+            Check(sb, ref fails, ice.Broken && !solidAfterBreak && !overlapAfterBreak,
+                "破坏后冰块不再挡人：Broken=" + ice.Broken
+                + "，IsSolid=" + solidAfterBreak + "，OverlapPoint=" + overlapAfterBreak);
+
             lab.ResetMap();
-            Check(sb, ref fails, !ice.Broken && iceBody != null && iceBody.enabled,
-                "MapReset 后冰块恢复");
+            Physics2D.SyncTransforms();
+            bool solidAfterReset = ice.IsSolidAtCell();
+            bool overlapAfterReset = Physics2D.OverlapPoint(center) != null;
+            Check(sb, ref fails, !ice.Broken && solidAfterReset && overlapAfterReset,
+                "MapReset 后冰块恢复：Broken=" + ice.Broken
+                + "，IsSolid=" + solidAfterReset + "，OverlapPoint=" + overlapAfterReset);
         }
         var pickups = Object.FindObjectsByType<LabRecallPickup>();
         Check(sb, ref fails, pickups.Length == 1, "召回道具组件 = 1，实际 " + pickups.Length);
