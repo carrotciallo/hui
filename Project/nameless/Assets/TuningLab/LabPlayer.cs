@@ -336,7 +336,10 @@ public class LabPlayer : MonoBehaviour
         if (Touching) refillArmed = true;
 
         if (refillArmed && dashLock <= 0f && Charge < 1f)
+        {
             Charge = Mathf.Min(1f, Charge + dt / Mathf.Max(0.01f, lab.dashCooldown));
+            if (Charge >= 1f) ChargeCompleted?.Invoke(this);
+        }
 
         if (Charge >= 1f) refillArmed = false;
 
@@ -998,6 +1001,9 @@ public class LabPlayer : MonoBehaviour
 
     /// <summary>形态变化（碎边组合变了）。膛内的退出逻辑挂这里。</summary>
     public event System.Action<LabPlayer, LabForm> FormChanged;
+
+    /// <summary>冲刺充能从不满补到满；初始满充、传送/复活复位不触发。</summary>
+    public event System.Action<LabPlayer> ChargeCompleted;
 
     public void SetEdge(Edge e, EdgeState next)
     {
