@@ -45,7 +45,7 @@
 | `Assets/TuningLab/LabHiddenBlock.cs` | 隐藏方块：无实体、外形与墙一致，按组盖住物件；玩家完全进入整组后永久半透明，地图重置不恢复 |
 | `Assets/TuningLab/LabRepairBlock.cs` | 修复方块：1×1 实体，热二/灵体边接触其表面把那条边变回普通；不消耗、并入地形合并碰撞、不参与地图重置 |
 | `Assets/TuningLab/LabRecallPickup.cs` | 召回道具：1×1 触发区，任一玩家拾取后全队永久解锁召回，地图重置不刷新 |
-| `Assets/TuningLab/LabPhantom.cs` | 召回留下的幻影：复制被召回者形态、只对另一名玩家生效、最多 3 个 FIFO；A 的 u/L 幻影可让 B 从底面进入 |
+| `Assets/TuningLab/LabPhantom.cs` | 召回留下的幻影：复制被召回者形态、只对另一名玩家生效、最多 2 个 FIFO；A 的 u/L 幻影可让 B 从底面进入（炮口也可进）；电梯形幻影铺光桥（`LabLightBridgeBlock`） |
 | `Assets/TuningLab/LabRespawnPoint.cs` | 重生点：3×3 触发区，任一玩家从区域外进入即记录两人形态并双人固定重生；`ApplyShape` 同时服务预览和 Play |
 | `Assets/TuningLab/LabTeleportPoint.cs` | 传送点：3×3 触发区；两人进入后播放进出场动画并打开全互联终点选择 |
 | `Assets/TuningLab/Level/LabLevelData.cs` | 关卡数据：实心格、绳、钥匙/门、地刺、冰块、岩浆块、隐藏方块、修复方块、召回道具、重生点、传送点、出生点、相机尺寸、**关卡分区** |
@@ -462,7 +462,7 @@
 - 冰面加速按 `a = g` 持续加速，封顶 v4；已超速的玩家在冰面上不会被强制减速。
 - 传送点按双人进入运行时标记；只有已标记点可互为终点，未进入的点不会出现在候选列表。
 - 隐藏方块的揭示是单局内的不可逆过程；`MapReset` 不会恢复，只有场景重载才回到不透明。
-- 召回幻影最多 3 个（FIFO）；炮/L 幻影的出口按被召回者原形态决定，不按进入方向反向。
+- 召回幻影最多 2 个（FIFO）；炮/L 幻影的出口按被召回者原形态决定，不按进入方向反向；玻璃大炮进膛即射出并自毁，L 幻影进膛当步转向。
 - 音效是运行时 `Resources.LoadAll` 挂载，没有场景引用；音量在 `LabSettingsUI` 里调，静音入口仍是静态 `LabAudio.Muted`。音乐音量当前只存值，还没有音乐轨。
 - 残影/拖尾和死亡闪红的参数在 `TuningLab` Inspector 上，不写进关卡数据。
 - `docs/策划案` 仍可能包含清理前的旧游戏描述；关卡编辑以本文和 `Assets/TuningLab` 代码为准。
