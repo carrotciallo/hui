@@ -169,6 +169,11 @@ public class LabPlayer : MonoBehaviour
     Collider2D support;
     public LabVisual visual;
 
+    // NonAlloc 查询缓冲（照 LabIce/LabPhantom 的现行写法）：容量按 1 格范围内的
+    // 叠压上限给 16，远超实际（地形是合并碰撞体、玩家 2、钥匙/机关个位数）。
+    readonly Collider2D[] overlapHits = new Collider2D[16];
+    readonly RaycastHit2D[] groundHits = new RaycastHit2D[16];
+
     bool grounded;
     float dashLock;
     float playerContactTimer;
@@ -1122,10 +1127,10 @@ public class LabPlayer : MonoBehaviour
     /// <summary>这个格子中心是不是被实体挡住：只认实心碰撞体，玩家和触发器都让开。</summary>
     bool IsCellFreeOfSolids(Vector2 point)
     {
-        var hits = Physics2D.OverlapPointAll(point);
-        for (int i = 0; i < hits.Length; i++)
+        int count = Physics2D.OverlapPoint(point, ContactFilter2D.noFilter, overlapHits);
+        for (int i = 0; i < count; i++)
         {
-            Collider2D hit = hits[i];
+            Collider2D hit = overlapHits[i];
             if (hit == null || hit == col || hit.isTrigger) continue;
             if (hit.GetComponentInParent<LabPlayer>() != null) continue;
             return false;
@@ -1138,10 +1143,10 @@ public class LabPlayer : MonoBehaviour
     {
         if (col == null || KeyCount >= MaxHeldKeys) return;
         Bounds b = col.bounds;
-        var hits = Physics2D.OverlapBoxAll(b.center, b.size, 0f);
-        for (int i = 0; i < hits.Length; i++)
+        int count = Physics2D.OverlapBox(b.center, b.size, 0f, ContactFilter2D.noFilter, overlapHits);
+        for (int i = 0; i < count; i++)
         {
-            LabKey key = hits[i] != null ? hits[i].GetComponent<LabKey>() : null;
+            LabKey key = overlapHits[i] != null ? overlapHits[i].GetComponent<LabKey>() : null;
             if (key != null && key.TryCollect(this)) return;
         }
     }
@@ -1537,10 +1542,10 @@ public class LabPlayer : MonoBehaviour
         Bounds b = col.bounds;
         var origin = new Vector2(b.center.x, b.min.y + 0.01f);
         var size = new Vector2(b.size.x * 0.9f, 0.02f);
-        var hits = Physics2D.BoxCastAll(origin, size, 0f, Vector2.down, 0.06f, -1);
-        for (int i = 0; i < hits.Length; i++)
+        int count = Physics2D.BoxCast(origin, size, 0f, Vector2.down, ContactFilter2D.noFilter, groundHits, 0.06f);
+        for (int i = 0; i < count; i++)
         {
-            var hit = hits[i].collider;
+            var hit = groundHits[i].collider;
             if (hit == null || hit == col || hit.isTrigger) continue;
             support = hit;
             return true;
