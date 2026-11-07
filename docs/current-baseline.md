@@ -15,6 +15,7 @@
 - 基准场景：`Assets/Scenes/TuningLab.unity`
 - 正式关卡入口：`Assets/Scenes/Levels/Final Map.unity`
 - 正式关卡目录：`Assets/Scenes/Levels/`
+- 隐藏方块调试房：`Assets/Scenes/Levels/HiddenBlock_Test.unity`（多组隐藏方块，用于验证揭示与分组）
 - 1 格 = 1 世界单位 = 16px
 
 ## 开发边界
