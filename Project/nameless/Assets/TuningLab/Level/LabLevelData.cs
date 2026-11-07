@@ -37,6 +37,8 @@ public sealed class LabLevelData
     public List<LabMagmaSpec> magmas = new List<LabMagmaSpec>();
     /// <summary>隐藏方块（1×1，可编组；无实体，外形与墙一致；任一玩家完全进入后整组永久揭示为半透明）。</summary>
     public List<LabHiddenBlockSpec> hiddenBlocks = new List<LabHiddenBlockSpec>();
+    /// <summary>修复方块（1×1，与 A 同色；A 的红热边/灵体边接触其表面 → 那条边回普通，不限次数）。</summary>
+    public List<LabRepairBlockSpec> repairBlocks = new List<LabRepairBlockSpec>();
     /// <summary>重生点（3×3 触发区，中心坐标）。</summary>
     public List<LabRespawnPointSpec> respawnPoints = new List<LabRespawnPointSpec>();
     /// <summary>传送点（3×3 触发区，中心坐标）。双人进入后运行时标记，已标记点可互为终点。</summary>
@@ -108,6 +110,12 @@ public sealed class LabLevelData
     {
         if (hiddenBlocks == null) hiddenBlocks = new List<LabHiddenBlockSpec>();
         else hiddenBlocks.Clear();
+    }
+
+    public void ClearRepairBlocks()
+    {
+        if (repairBlocks == null) repairBlocks = new List<LabRepairBlockSpec>();
+        else repairBlocks.Clear();
     }
 
     public void ClearTeleports()
@@ -291,6 +299,32 @@ public sealed class LabLevelData
         return hiddenBlocks.RemoveAll(block => block.cell == cell) > 0;
     }
 
+    /// <summary>这一格的修复方块；没有返回 null。</summary>
+    public LabRepairBlockSpec? FindRepairBlock(Vector2Int cell)
+    {
+        if (repairBlocks == null) return null;
+        for (int i = 0; i < repairBlocks.Count; i++)
+            if (repairBlocks[i].cell == cell) return repairBlocks[i];
+        return null;
+    }
+
+    public bool HasRepairBlock(Vector2Int cell) => FindRepairBlock(cell).HasValue;
+
+    /// <summary>放一块修复方块；这一格已经有了则什么都不做（没有组号可改）。</summary>
+    public bool PlaceRepairBlock(Vector2Int cell)
+    {
+        if (repairBlocks == null) repairBlocks = new List<LabRepairBlockSpec>();
+        if (HasRepairBlock(cell)) return false;
+        repairBlocks.Add(new LabRepairBlockSpec(cell));
+        return true;
+    }
+
+    public bool RemoveRepairBlock(Vector2Int cell)
+    {
+        if (repairBlocks == null) return false;
+        return repairBlocks.RemoveAll(block => block.cell == cell) > 0;
+    }
+
     public bool PlaceRespawnPoint(Vector2Int cell)
     {
         if (respawnPoints == null) respawnPoints = new List<LabRespawnPointSpec>();
@@ -430,6 +464,7 @@ public sealed class LabLevelData
         if (ices == null) ices = new List<LabIceSpec>();
         if (magmas == null) magmas = new List<LabMagmaSpec>();
         if (hiddenBlocks == null) hiddenBlocks = new List<LabHiddenBlockSpec>();
+        if (repairBlocks == null) repairBlocks = new List<LabRepairBlockSpec>();
         if (respawnPoints == null) respawnPoints = new List<LabRespawnPointSpec>();
         if (teleports == null) teleports = new List<LabTeleportSpec>();
         if (partitions == null) partitions = new List<LabLevelPartition>();
@@ -571,6 +606,16 @@ public sealed class LabLevelData
             hiddenBlocks[hiddenWrite++] = hiddenBlocks[read];
         }
         if (hiddenWrite < hiddenBlocks.Count) hiddenBlocks.RemoveRange(hiddenWrite, hiddenBlocks.Count - hiddenWrite);
+
+        // 一格只留一块修复方块：规则同冰和岩浆，它没有组号。
+        repairBlocks.Sort((a, b) => CompareCells(a.cell, b.cell));
+        int repairWrite = 0;
+        for (int read = 0; read < repairBlocks.Count; read++)
+        {
+            if (repairWrite > 0 && repairBlocks[read].cell == repairBlocks[repairWrite - 1].cell) continue;
+            repairBlocks[repairWrite++] = repairBlocks[read];
+        }
+        if (repairWrite < repairBlocks.Count) repairBlocks.RemoveRange(repairWrite, repairBlocks.Count - repairWrite);
     }
 
     public void CopyFrom(LabLevelData other)
@@ -591,6 +636,7 @@ public sealed class LabLevelData
             ices = new List<LabIceSpec>();
             magmas = new List<LabMagmaSpec>();
             hiddenBlocks = new List<LabHiddenBlockSpec>();
+            repairBlocks = new List<LabRepairBlockSpec>();
             respawnPoints = new List<LabRespawnPointSpec>();
             teleports = new List<LabTeleportSpec>();
             partitions = new List<LabLevelPartition>();
@@ -612,6 +658,8 @@ public sealed class LabLevelData
         magmas = new List<LabMagmaSpec>(other.magmas ?? new List<LabMagmaSpec>());
         hiddenBlocks = new List<LabHiddenBlockSpec>(
             other.hiddenBlocks ?? new List<LabHiddenBlockSpec>());
+        repairBlocks = new List<LabRepairBlockSpec>(
+            other.repairBlocks ?? new List<LabRepairBlockSpec>());
         respawnPoints = new List<LabRespawnPointSpec>(
             other.respawnPoints ?? new List<LabRespawnPointSpec>());
         teleports = new List<LabTeleportSpec>(
@@ -823,6 +871,17 @@ public sealed class LabLevelData
             }
         }
 
+        if (repairBlocks != null)
+        {
+            for (int i = 0; i < repairBlocks.Count; i++)
+            {
+                var block = repairBlocks[i];
+                if (!oldRect.Contains(block.Center)) continue;
+                block.cell += delta;
+                repairBlocks[i] = block;
+            }
+        }
+
         if (respawnPoints != null)
         {
             for (int i = 0; i < respawnPoints.Count; i++)
@@ -908,6 +967,8 @@ public sealed class LabLevelData
                 magmas.RemoveAll(magma => rect.Contains(new Vector2(magma.cell.x + 0.5f, magma.cell.y + 0.5f)));
             if (hiddenBlocks != null)
                 hiddenBlocks.RemoveAll(block => rect.Contains(new Vector2(block.cell.x + 0.5f, block.cell.y + 0.5f)));
+            if (repairBlocks != null)
+                repairBlocks.RemoveAll(block => rect.Contains(block.Center));
             if (respawnPoints != null)
                 respawnPoints.RemoveAll(point => rect.Contains(point.position));
             if (teleports != null)
@@ -948,12 +1009,13 @@ public sealed class LabLevelData
         internal readonly List<int> ices = new List<int>();
         internal readonly List<int> magmas = new List<int>();
         internal readonly List<int> hiddenBlocks = new List<int>();
+        internal readonly List<int> repairBlocks = new List<int>();
         internal readonly List<int> respawnPoints = new List<int>();
         internal readonly List<int> teleports = new List<int>();
 
         /// <summary>锁定的条目数（地形格也算一条）。</summary>
         public int Count => solids.Count + ropes.Count + keys.Count + recalls.Count + doors.Count
-            + spikes.Count + ices.Count + magmas.Count + hiddenBlocks.Count
+            + spikes.Count + ices.Count + magmas.Count + hiddenBlocks.Count + repairBlocks.Count
             + respawnPoints.Count + teleports.Count;
     }
 
@@ -1000,6 +1062,10 @@ public sealed class LabLevelData
         if (hiddenBlocks != null)
             for (int i = 0; i < hiddenBlocks.Count; i++)
                 if (InAnyArea(areas, CellCenter(hiddenBlocks[i].cell))) capture.hiddenBlocks.Add(i);
+
+        if (repairBlocks != null)
+            for (int i = 0; i < repairBlocks.Count; i++)
+                if (InAnyArea(areas, CellCenter(repairBlocks[i].cell))) capture.repairBlocks.Add(i);
 
         if (respawnPoints != null)
             for (int i = 0; i < respawnPoints.Count; i++)
@@ -1101,6 +1167,15 @@ public sealed class LabLevelData
                 moved++;
             }
 
+        if (repairBlocks != null)
+            foreach (int i in capture.repairBlocks)
+            {
+                var block = repairBlocks[i];
+                block.cell += delta;
+                repairBlocks[i] = block;
+                moved++;
+            }
+
         if (respawnPoints != null)
             foreach (int i in capture.respawnPoints)
             {
@@ -1151,6 +1226,8 @@ public sealed class LabLevelData
         if (magmas != null) removed += magmas.RemoveAll(magma => InAnyArea(areas, CellCenter(magma.cell)));
         if (hiddenBlocks != null)
             removed += hiddenBlocks.RemoveAll(block => InAnyArea(areas, CellCenter(block.cell)));
+        if (repairBlocks != null)
+            removed += repairBlocks.RemoveAll(block => InAnyArea(areas, CellCenter(block.cell)));
         if (respawnPoints != null)
             removed += respawnPoints.RemoveAll(point => InAnyArea(areas, point.position));
         if (teleports != null)
@@ -1193,6 +1270,9 @@ public sealed class LabLevelData
         if (hiddenBlocks != null)
             for (int i = 0; i < hiddenBlocks.Count; i++)
                 if (InAnyArea(areas, CellCenter(hiddenBlocks[i].cell))) count++;
+        if (repairBlocks != null)
+            for (int i = 0; i < repairBlocks.Count; i++)
+                if (InAnyArea(areas, CellCenter(repairBlocks[i].cell))) count++;
         if (respawnPoints != null)
             for (int i = 0; i < respawnPoints.Count; i++)
                 if (InAnyArea(areas, respawnPoints[i].position)) count++;
@@ -1359,6 +1439,22 @@ public sealed class LabLevelData
             for (int i = 0; i < hiddenBlocks.Count; i++)
             {
                 var block = hiddenBlocks[i];
+                int cx0 = block.cell.x, cx1 = block.cell.x + 1;
+                int cy0 = block.cell.y, cy1 = block.cell.y + 1;
+                if (!any) { x0 = cx0; y0 = cy0; x1 = cx1; y1 = cy1; any = true; }
+                else
+                {
+                    x0 = Mathf.Min(x0, cx0); y0 = Mathf.Min(y0, cy0);
+                    x1 = Mathf.Max(x1, cx1); y1 = Mathf.Max(y1, cy1);
+                }
+            }
+        }
+
+        if (repairBlocks != null)
+        {
+            for (int i = 0; i < repairBlocks.Count; i++)
+            {
+                var block = repairBlocks[i];
                 int cx0 = block.cell.x, cx1 = block.cell.x + 1;
                 int cy0 = block.cell.y, cy1 = block.cell.y + 1;
                 if (!any) { x0 = cx0; y0 = cy0; x1 = cx1; y1 = cy1; any = true; }
@@ -1571,6 +1667,15 @@ public sealed class LabLevelData
             }
         }
 
+        if (source.repairBlocks != null)
+        {
+            for (int i = 0; i < source.repairBlocks.Count; i++)
+            {
+                repairBlocks.Add(new LabRepairBlockSpec(source.repairBlocks[i].cell + cellOffset));
+                report.repairBlocks++;
+            }
+        }
+
         if (source.respawnPoints != null)
         {
             for (int i = 0; i < source.respawnPoints.Count; i++)
@@ -1663,6 +1768,7 @@ public sealed class LabLevelMergeReport
     public int ices;
     public int magmas;
     public int hiddenBlocks;
+    public int repairBlocks;
     public int respawnPoints;
     public int teleports;
     public int partitions;
@@ -1673,7 +1779,7 @@ public sealed class LabLevelMergeReport
 
     public int ContentCount =>
         solids + ropes + keys + recalls + doors + spikes + ices + magmas
-        + hiddenBlocks + respawnPoints + teleports;
+        + hiddenBlocks + repairBlocks + respawnPoints + teleports;
 }
 
 [System.Serializable]
@@ -1897,6 +2003,28 @@ public struct LabHiddenBlockSpec
     public Vector2 Center => new Vector2(cell.x + 0.5f, cell.y + 0.5f);
 
     /// <summary>隐藏方块盖住的格子（1×1）。</summary>
+    public RectInt Cells() => new RectInt(cell.x, cell.y, 1, 1);
+}
+
+/// <summary>
+/// 一块修复方块：1×1 格，实体碰撞，可以站立，外形和 A 一样蓝。
+/// A 的红热边（热二）/ 灵体边接触其表面 → 那条边回普通；不限使用次数、不会被消耗。
+/// 没有 groupId：不参与分组破坏，也不参与合并几何分组。
+/// </summary>
+[System.Serializable]
+public struct LabRepairBlockSpec
+{
+    public Vector2Int cell;
+
+    public LabRepairBlockSpec(Vector2Int cell)
+    {
+        this.cell = cell;
+    }
+
+    /// <summary>物件落点（格中心）。</summary>
+    public Vector2 Center => new Vector2(cell.x + 0.5f, cell.y + 0.5f);
+
+    /// <summary>修复方块盖住的格子（1×1）。</summary>
     public RectInt Cells() => new RectInt(cell.x, cell.y, 1, 1);
 }
 

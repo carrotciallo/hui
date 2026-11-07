@@ -1193,7 +1193,8 @@ public sealed class LabLevelMergeWindow : EditorWindow
     string BuildSummary(List<LabLevelMergeReport> reports, List<string> warnings)
     {
         int solids = 0, skipped = 0, ropes = 0, keys = 0, recalls = 0, doors = 0, spikes = 0;
-        int ices = 0, magmas = 0, hidden = 0, respawns = 0, teleports = 0, partitions = 0, skippedPartitions = 0;
+        int ices = 0, magmas = 0, hidden = 0, repairs = 0, respawns = 0, teleports = 0;
+        int partitions = 0, skippedPartitions = 0;
 
         foreach (LabLevelMergeReport report in reports)
         {
@@ -1207,6 +1208,7 @@ public sealed class LabLevelMergeWindow : EditorWindow
             ices += report.ices;
             magmas += report.magmas;
             hidden += report.hiddenBlocks;
+            repairs += report.repairBlocks;
             respawns += report.respawnPoints;
             teleports += report.teleports;
             partitions += report.partitions;
@@ -1217,6 +1219,7 @@ public sealed class LabLevelMergeWindow : EditorWindow
         sb.AppendLine("地形 " + solids + " 格" + (skipped > 0 ? "（位置重复 " + skipped + " 格）" : ""));
         sb.AppendLine("绳 " + ropes + " · 钥匙 " + keys + " · 门 " + doors + " · 刺 " + spikes +
                       " · 冰 " + ices + " · 岩浆 " + magmas + " · 隐藏 " + hidden +
+                      " · 修复 " + repairs +
                       " · 召回 " + recalls + " · 重生点 " + respawns + " · 传送点 " + teleports);
         sb.AppendLine("分区 " + partitions + (skippedPartitions > 0 ? "（跳过 " + skippedPartitions + "）" : ""));
 

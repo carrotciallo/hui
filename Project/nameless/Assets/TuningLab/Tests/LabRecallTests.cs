@@ -207,7 +207,7 @@ public sealed class LabRecallTests
     // FIFO / 重置 -------------------------------------------------------
 
     [UnityTest]
-    public IEnumerator PhantomsAreCappedAtThreeAndEvictOldestFifo()
+    public IEnumerator PhantomsAreCappedAtTwoAndEvictOldestFifo()
     {
         var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
         var b = MakePlayer("B_Chunk", TuningLab.B_Pixels, false);
@@ -224,7 +224,9 @@ public sealed class LabRecallTests
             Assert.IsTrue(lab.TryRecall(a), "第 " + i + " 次召回");
         }
 
-        Assert.AreEqual(LabPhantom.MaxPhantoms, LabPhantom.All.Count, "场上最多 3 个幻影");
+        Assert.AreEqual(2, LabPhantom.MaxPhantoms, "上限按 #76 定案改成 2");
+        Assert.AreEqual(LabPhantom.MaxPhantoms, LabPhantom.All.Count,
+            "场上最多 " + LabPhantom.MaxPhantoms + " 个幻影");
         Assert.IsFalse(AllCells().Contains(new Vector2Int(5, 0)), "最旧的幻影被淘汰");
         yield return null;
     }

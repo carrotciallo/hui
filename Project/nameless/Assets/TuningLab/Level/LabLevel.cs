@@ -46,6 +46,7 @@ public sealed class LabLevel : MonoBehaviour
     public int IceCount => Data.ices != null ? Data.ices.Count : 0;
     public int MagmaCount => Data.magmas != null ? Data.magmas.Count : 0;
     public int HiddenBlockCount => Data.hiddenBlocks != null ? Data.hiddenBlocks.Count : 0;
+    public int RepairBlockCount => Data.repairBlocks != null ? Data.repairBlocks.Count : 0;
     public int RespawnPointCount => Data.respawnPoints != null ? Data.respawnPoints.Count : 0;
     public int TeleportCount => Data.teleports != null ? Data.teleports.Count : 0;
 
@@ -202,6 +203,8 @@ public sealed class LabLevel : MonoBehaviour
         for (int i = 0; i < data.ices.Count; i++) AddIce(terrain, data.ices[i], material, preview);
         for (int i = 0; i < data.magmas.Count; i++) AddMagma(terrain, data.magmas[i], material, preview);
         for (int i = 0; i < data.hiddenBlocks.Count; i++) AddHiddenBlock(root.transform, data.hiddenBlocks[i]);
+        for (int i = 0; i < data.repairBlocks.Count; i++)
+            AddRepairBlock(terrain, data.repairBlocks[i], material);
         for (int i = 0; i < data.respawnPoints.Count; i++)
             AddRespawnPoint(root.transform, data.respawnPoints[i]);
         for (int i = 0; i < data.teleports.Count; i++)
@@ -323,6 +326,25 @@ public sealed class LabLevel : MonoBehaviour
         var block = go.AddComponent<LabHiddenBlock>();
         block.cell = spec.cell;
         block.groupId = spec.groupId;
+        block.ApplyShape();
+    }
+
+    /// <summary>
+    /// 把一格修复方块摆进场景：物件落在格中心，碰撞箱正好 1×1。
+    /// 不会被破坏，所以不进 runtime 列表、也没有地图重置钩子。
+    /// </summary>
+    void AddRepairBlock(Transform parent, LabRepairBlockSpec spec, PhysicsMaterial2D material)
+    {
+        var go = new GameObject("RepairBlock");
+        go.transform.SetParent(parent, false);
+        go.transform.position = spec.Center;
+
+        var block = go.AddComponent<LabRepairBlock>();
+        block.cell = spec.cell;
+
+        var body = go.GetComponent<BoxCollider2D>();
+        if (body != null && material != null) body.sharedMaterial = material;
+
         block.ApplyShape();
     }
 

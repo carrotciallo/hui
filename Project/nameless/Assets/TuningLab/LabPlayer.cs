@@ -342,7 +342,10 @@ public class LabPlayer : MonoBehaviour
         if (Touching) refillArmed = true;
 
         if (refillArmed && dashLock <= 0f && Charge < 1f)
+        {
             Charge = Mathf.Min(1f, Charge + dt / Mathf.Max(0.01f, lab.dashCooldown));
+            if (Charge >= 1f) ChargeCompleted?.Invoke(this);
+        }
 
         if (Charge >= 1f) refillArmed = false;
 
@@ -533,8 +536,12 @@ public class LabPlayer : MonoBehaviour
         {
             ResolveMagmaContact(c);      // 新贴上的岩浆面在这里结算第一次接触
             // 独立冰块每块有自己的 Enter 回调；合并地形不会，所以 Stay 里补扫冰格。
+            // 修复方块同理，而且它是"贴着就修"：边在贴着期间才变红也认。
             if (c.collider != null && c.collider.GetComponent<LabTerrainField>() != null)
+            {
                 ResolveIceContact(c);
+                ResolveRepairContact(c);
+            }
         }
 
         TryResolveHit(c);
@@ -611,6 +618,9 @@ public class LabPlayer : MonoBehaviour
     void ForgeFromTerrain(Collision2D c)
     {
         if (lab == null || c.contactCount == 0) return;
+
+        // 修复方块和冰都不参与普通地形的锻造状态机：碰到修复面就只结算修复。
+        if (ResolveRepairContact(c)) return;
 
         // 冰不参与普通地形的锻造状态机；合并地形里要先按接触点找到冰格。
         if (ResolveIceContact(c)) return;
@@ -700,7 +710,37 @@ public class LabPlayer : MonoBehaviour
     }
 
     /// <summary>
-    /// 结算一次场景撞击。普通地形走这里；绳反弹、冰和岩浆有自己的结算，不走这里。
+    /// 修复方块接触：按每一个接触点的法线找回被碰的那条边，交给 <see cref="TryRepairEdge"/>。
+    /// 方块不会被消耗，所以同一次接触里几条边各自结算，重复贴同一条边也只是空转。
+    /// 返回 false 表示这次碰撞没碰到修复方块，交给冰和普通地形。
+    /// </summary>
+    bool ResolveRepairContact(Collision2D c)
+    {
+        if (c.collider == null || c.contactCount == 0) return false;
+
+        var field = c.collider.GetComponent<LabTerrainField>();
+        // 关卡生成时修复方块并进地形合并体；测试或手摆的独立方块直接是自身的碰撞箱。
+        var direct = field != null ? null : c.collider.GetComponentInParent<LabRepairBlock>();
+        if (field == null && direct == null) return false;
+
+        bool anyRepair = false;
+        for (int i = 0; i < c.contactCount; i++)
+        {
+            ContactPoint2D contact = c.GetContact(i);
+            Vector2 n = AxisNormal(contact.normal);
+
+            var block = field != null ? LabRepairBlock.AtCell(contact.point - n * 0.02f) : direct;
+            if (block == null) continue;
+
+            anyRepair = true;
+            TryRepairEdge(EdgeFor(-n));
+        }
+
+        return anyRepair;
+    }
+
+    /// <summary>
+    /// 结算一次场景撞击。普通地形走这里；绳反弹、冰、岩浆和修复方块有自己的结算，不走这里。
     /// normal 从物件指向玩家，impact 是碰撞前沿 normal 的分量。
     /// </summary>
     public void ApplyTerrainImpact(Vector2 normal, float impact)
@@ -982,6 +1022,9 @@ public class LabPlayer : MonoBehaviour
     /// <summary>形态变化（碎边组合变了）。膛内的退出逻辑挂这里。</summary>
     public event System.Action<LabPlayer, LabForm> FormChanged;
 
+    /// <summary>冲刺充能从不满补到满；初始满充、传送/复活复位不触发。</summary>
+    public event System.Action<LabPlayer> ChargeCompleted;
+
     public void SetEdge(Edge e, EdgeState next)
     {
         int i = (int)e;
@@ -1148,6 +1191,24 @@ public class LabPlayer : MonoBehaviour
             LabKey key = hits[i] != null ? hits[i].GetComponent<LabKey>() : null;
             if (key != null && key.TryCollect(this)) return;
         }
+    }
+
+    /// <summary>
+    /// 修复一条边：红热（热二）或灵体 → 普通。修复方块不消耗，所以随时再来。
+    ///
+    /// 两类 A 按 issue #63 排除：
+    ///   装填态 —— 修好炮口等于把膛里的人吐出来并顺手拆掉他的炮；
+    ///   幽魂态 —— 四条边全碎，修任意一条就整个换形态，等于白送一次重构。
+    /// 灵体边回普通会重算碎边掩码，形态跟着变；这是设计里"修复"的直接后果，不是副作用。
+    /// </summary>
+    public bool TryRepairEdge(Edge e)
+    {
+        if (!canBeRedHot || IsDead) return false;       // B 没有"边"这个概念
+        if (Loaded || form == LabForm.Spirit) return false;
+        if (edgeStates[(int)e] == EdgeState.Normal) return false;
+
+        SetEdge(e, EdgeState.Normal);
+        return true;
     }
 
     /// <summary>

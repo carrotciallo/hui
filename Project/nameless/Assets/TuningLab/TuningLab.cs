@@ -56,6 +56,16 @@ public class TuningLab : MonoBehaviour
     public float dashCooldown = 0.8f;
     public bool groundOnlyDash = false;
 
+    [Header("冲刺就绪反馈")]
+    public bool chargeReadyFeedbackEnabled = true;
+    [Tooltip("角色轮廓高亮一次的持续时间（秒）。")]
+    [Min(0.04f)] public float chargeReadyFlashDuration = 0.16f;
+    [Range(0.1f, 1f)] public float chargeReadyFlashAlpha = 0.85f;
+    [Tooltip("充能完成时头顶喷出的粒子数量。")]
+    [Range(1, 10)] public int chargeReadyParticleCount = 5;
+    [Tooltip("头顶粒子的存活时间（秒）。")]
+    [Min(0.1f)] public float chargeReadyParticleLife = 0.45f;
+
     [Header("撞击")]
     [Tooltip("红热判定的门槛取哪一级的边界（1 = v1/v2 边界）。Vp ≥ 该边界的 v² 就红热。")]
     [Range(0, 4)] public int redHotTierIndex = 1;
@@ -675,6 +685,10 @@ public class TuningLab : MonoBehaviour
     /// <summary>
     /// 召回：施法者头顶有 1 格空位时，把另一名玩家传送到头顶，并在其旧位置留下幻影。
     /// 能力是全队、永久的；判定集中在这里，输入层只负责读键。
+    ///
+    /// 顺序按 Issue #76 定案：先判断有没有幻影已经被用过（用过就整次召回无效），
+    /// 再生成新幻影，最后才销毁旧幻影 —— 旧幻影的光桥要参与新幻影的生成判定，
+    /// 所以不能先拆桥再铺桥。
     /// </summary>
     public bool TryRecall(LabPlayer caster)
     {
@@ -683,6 +697,9 @@ public class TuningLab : MonoBehaviour
         LabPlayer recalled = caster.other;
         if (recalled == null || !caster.IsAlive || !recalled.IsAlive) return false;
         if (caster.Suspended || recalled.Suspended) return false;
+
+        // 1. 已经有幻影被消耗/使用过（大炮发射或 L 转向）：本次召回无效。
+        if (LabPhantom.AnyUsed) return false;
 
         Bounds body = caster.BodyBounds;
         float headTop = body.max.y;
@@ -711,7 +728,12 @@ public class TuningLab : MonoBehaviour
         var cell = new Vector2Int(
             Mathf.FloorToInt(before.x),
             Mathf.FloorToInt(before.y));
-        LabPhantom.Spawn(this, recalled, caster, cell, spiritMask, pixels, framed);
+
+        // 2. 先生成新幻影——淘汰旧幻影放在它自己的生成逻辑里之后，见 Spawn。
+        LabPhantom.Spawn(this, recalled, caster, cell, spiritMask, pixels, framed, deferEviction: true);
+
+        // 3. 新幻影铺完桥之后再销毁旧的：旧幻影的光桥此时仍参与过生成判定。
+        LabPhantom.EvictOverflow();
         return true;
     }
 
@@ -1424,6 +1446,10 @@ public class TuningLab : MonoBehaviour
         var fxGo = new GameObject("SpeedFx");
         fxGo.transform.SetParent(go.transform, false);
         fxGo.AddComponent<LabSpeedFeedback>().Bind(this, p);
+
+        var chargeFxGo = new GameObject("ChargeFx");
+        chargeFxGo.transform.SetParent(go.transform, false);
+        chargeFxGo.AddComponent<LabChargeFeedback>().Bind(this, p);
         return p;
     }
 
