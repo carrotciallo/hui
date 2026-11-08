@@ -132,11 +132,11 @@ public sealed class LabLightBridgeTests
     }
 
     /// <summary>
-    /// 普通地形不挡光桥：桥压在实体格上继续往前铺（Issue #76）。
+    /// 普通地形照样挡光桥：撞到第一格实体地形就停，不会压在墙上继续往前长。
     /// 用真实关卡地形建墙，才走的是 LabTerrainField 合并几何那条路径。
     /// </summary>
     [UnityTest]
-    public IEnumerator BridgePassesThroughPlainTerrain()
+    public IEnumerator BridgeStopsAtPlainTerrain()
     {
         var level = root.AddComponent<LabLevel>();
         lab.level = level;
@@ -152,10 +152,10 @@ public sealed class LabLightBridgeTests
         var cells = new HashSet<Vector2Int>();
         for (int i = 0; i < phantom.Bridge.Count; i++) cells.Add(phantom.Bridge[i].Cell);
 
-        Assert.IsTrue(cells.Contains(new Vector2Int(2, 5)),
-            "地形格上也要铺光桥，实际 " + string.Join(",", cells));
-        Assert.IsTrue(cells.Contains(new Vector2Int(3, 5)),
-            "穿过地形之后还要继续往右铺，实际 " + string.Join(",", cells));
+        Assert.IsTrue(cells.Contains(new Vector2Int(1, 5)),
+            "地形前一格铺得到，实际 " + string.Join(",", cells));
+        Assert.IsFalse(cells.Contains(new Vector2Int(2, 5)), "地形那一格不铺");
+        Assert.IsFalse(cells.Contains(new Vector2Int(3, 5)), "地形后面不再铺");
     }
 
     /// <summary>
