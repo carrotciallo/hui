@@ -167,6 +167,11 @@ MonoBehaviour:
   dashLockTime: 0
   dashCooldown: 0.8
   groundOnlyDash: 0
+  chargeReadyFeedbackEnabled: 1
+  chargeReadyFlashDuration: 0.16
+  chargeReadyFlashAlpha: 0.85
+  chargeReadyParticleCount: 5
+  chargeReadyParticleLife: 0.45
   redHotTierIndex: 1
   forgeTierIndex: 0
   verticalHitEnabled: 1
@@ -246,8 +251,8 @@ MonoBehaviour:
       y: -102
       width: 1178
       height: 227
-    spawnA: {x: 500.5, y: -20}
-    spawnB: {x: 500.5, y: -21}
+    spawnA: {x: 500.5, y: -21}
+    spawnB: {x: 499.5, y: -21}
     cameraMinSize: 13.1
     cameraMaxSize: 25.917202
     solids:
@@ -6226,10 +6231,6 @@ MonoBehaviour:
       cells: 1
       chainId: 0
       orientation: 1
-    - center: {x: 502.5, y: -22.5}
-      cells: 1
-      chainId: 0
-      orientation: 0
     - center: {x: 503.5, y: -22.5}
       cells: 1
       chainId: 0
@@ -6246,10 +6247,6 @@ MonoBehaviour:
       cells: 1
       chainId: 0
       orientation: 0
-    - center: {x: 502.5, y: -21.5}
-      cells: 1
-      chainId: 0
-      orientation: 0
     - center: {x: 503.5, y: -21.5}
       cells: 1
       chainId: 0
@@ -6259,10 +6256,6 @@ MonoBehaviour:
       chainId: 0
       orientation: 0
     - center: {x: 504.5, y: -21.5}
-      cells: 1
-      chainId: 0
-      orientation: 0
-    - center: {x: 502.5, y: -23.5}
       cells: 1
       chainId: 0
       orientation: 0
@@ -6306,6 +6299,10 @@ MonoBehaviour:
       cells: 1
       chainId: 0
       orientation: 1
+    - center: {x: 502.5, y: -22.5}
+      cells: 3
+      chainId: 0
+      orientation: 0
     keys:
     - position: {x: 113.5, y: 23.5}
     - position: {x: 298.5, y: -10.5}
@@ -9058,6 +9055,7 @@ MonoBehaviour:
       groupId: 3
     - cell: {x: 486, y: 22}
       groupId: 3
+    repairBlocks: []
     respawnPoints:
     - position: {x: 546.5, y: -26.5}
     - position: {x: 442.5, y: -21.5}

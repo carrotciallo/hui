@@ -167,6 +167,11 @@ MonoBehaviour:
   dashLockTime: 0
   dashCooldown: 0.8
   groundOnlyDash: 0
+  chargeReadyFeedbackEnabled: 1
+  chargeReadyFlashDuration: 0.16
+  chargeReadyFlashAlpha: 0.85
+  chargeReadyParticleCount: 5
+  chargeReadyParticleLife: 0.45
   redHotTierIndex: 1
   forgeTierIndex: 0
   verticalHitEnabled: 1
@@ -246,8 +251,8 @@ MonoBehaviour:
       y: -86
       width: 501
       height: 220
-    spawnA: {x: 335.5, y: -69}
-    spawnB: {x: 323.5, y: -65}
+    spawnA: {x: 208.5, y: -6}
+    spawnB: {x: 209.5, y: -6}
     cameraMinSize: 13.69
     cameraMaxSize: 27
     solids:
@@ -2335,6 +2340,7 @@ MonoBehaviour:
     - {x: -5, y: -18}
     - {x: -4, y: -18}
     - {x: -3, y: -18}
+    - {x: -2, y: -18}
     - {x: 41, y: -18}
     - {x: 42, y: -18}
     - {x: 43, y: -18}
@@ -2406,6 +2412,7 @@ MonoBehaviour:
     - {x: 116, y: -18}
     - {x: 117, y: -18}
     - {x: 118, y: -18}
+    - {x: 119, y: -18}
     - {x: 120, y: -18}
     - {x: 121, y: -18}
     - {x: 122, y: -18}
@@ -2440,6 +2447,8 @@ MonoBehaviour:
     - {x: 75, y: -17}
     - {x: 82, y: -17}
     - {x: 83, y: -17}
+    - {x: 117, y: -17}
+    - {x: 125, y: -17}
     - {x: 198, y: -17}
     - {x: 199, y: -17}
     - {x: 205, y: -17}
@@ -2598,7 +2607,7 @@ MonoBehaviour:
     - {x: 95, y: -13}
     - {x: 97, y: -13}
     - {x: 103, y: -13}
-    - {x: 112, y: -13}
+    - {x: 113, y: -13}
     - {x: 116, y: -13}
     - {x: 131, y: -13}
     - {x: 132, y: -13}
@@ -2639,8 +2648,10 @@ MonoBehaviour:
     - {x: 95, y: -12}
     - {x: 97, y: -12}
     - {x: 103, y: -12}
+    - {x: 107, y: -12}
     - {x: 108, y: -12}
-    - {x: 112, y: -12}
+    - {x: 109, y: -12}
+    - {x: 113, y: -12}
     - {x: 116, y: -12}
     - {x: 117, y: -12}
     - {x: 118, y: -12}
@@ -2686,8 +2697,10 @@ MonoBehaviour:
     - {x: 95, y: -11}
     - {x: 97, y: -11}
     - {x: 103, y: -11}
+    - {x: 107, y: -11}
     - {x: 108, y: -11}
-    - {x: 112, y: -11}
+    - {x: 109, y: -11}
+    - {x: 113, y: -11}
     - {x: 163, y: -11}
     - {x: 198, y: -11}
     - {x: 199, y: -11}
@@ -2716,10 +2729,12 @@ MonoBehaviour:
     - {x: 95, y: -10}
     - {x: 97, y: -10}
     - {x: 103, y: -10}
+    - {x: 106, y: -10}
     - {x: 107, y: -10}
     - {x: 108, y: -10}
     - {x: 109, y: -10}
-    - {x: 112, y: -10}
+    - {x: 110, y: -10}
+    - {x: 113, y: -10}
     - {x: 163, y: -10}
     - {x: 198, y: -10}
     - {x: 199, y: -10}
@@ -2778,8 +2793,10 @@ MonoBehaviour:
     - {x: 101, y: -9}
     - {x: 102, y: -9}
     - {x: 103, y: -9}
+    - {x: 107, y: -9}
     - {x: 108, y: -9}
-    - {x: 112, y: -9}
+    - {x: 109, y: -9}
+    - {x: 113, y: -9}
     - {x: 163, y: -9}
     - {x: 198, y: -9}
     - {x: 199, y: -9}
@@ -2809,9 +2826,8 @@ MonoBehaviour:
     - {x: 2, y: -8}
     - {x: 46, y: -8}
     - {x: 103, y: -8}
-    - {x: 106, y: -8}
-    - {x: 110, y: -8}
-    - {x: 112, y: -8}
+    - {x: 108, y: -8}
+    - {x: 113, y: -8}
     - {x: 163, y: -8}
     - {x: 198, y: -8}
     - {x: 199, y: -8}
@@ -2842,9 +2858,7 @@ MonoBehaviour:
     - {x: 46, y: -7}
     - {x: 83, y: -7}
     - {x: 103, y: -7}
-    - {x: 106, y: -7}
-    - {x: 110, y: -7}
-    - {x: 112, y: -7}
+    - {x: 113, y: -7}
     - {x: 163, y: -7}
     - {x: 198, y: -7}
     - {x: 199, y: -7}
@@ -2875,9 +2889,9 @@ MonoBehaviour:
     - {x: 46, y: -6}
     - {x: 80, y: -6}
     - {x: 103, y: -6}
-    - {x: 106, y: -6}
-    - {x: 110, y: -6}
-    - {x: 112, y: -6}
+    - {x: 105, y: -6}
+    - {x: 111, y: -6}
+    - {x: 113, y: -6}
     - {x: 163, y: -6}
     - {x: 206, y: -6}
     - {x: 211, y: -6}
@@ -2896,12 +2910,9 @@ MonoBehaviour:
     - {x: 45, y: -5}
     - {x: 46, y: -5}
     - {x: 103, y: -5}
-    - {x: 106, y: -5}
-    - {x: 107, y: -5}
-    - {x: 108, y: -5}
-    - {x: 109, y: -5}
-    - {x: 110, y: -5}
-    - {x: 112, y: -5}
+    - {x: 105, y: -5}
+    - {x: 111, y: -5}
+    - {x: 113, y: -5}
     - {x: 163, y: -5}
     - {x: 211, y: -5}
     - {x: 222, y: -5}
@@ -2909,6 +2920,7 @@ MonoBehaviour:
     - {x: 224, y: -5}
     - {x: 225, y: -5}
     - {x: 226, y: -5}
+    - {x: 227, y: -5}
     - {x: 229, y: -5}
     - {x: 230, y: -5}
     - {x: 231, y: -5}
@@ -2923,9 +2935,9 @@ MonoBehaviour:
     - {x: 2, y: -4}
     - {x: 45, y: -4}
     - {x: 103, y: -4}
-    - {x: 104, y: -4}
+    - {x: 105, y: -4}
     - {x: 111, y: -4}
-    - {x: 112, y: -4}
+    - {x: 113, y: -4}
     - {x: 163, y: -4}
     - {x: 211, y: -4}
     - {x: 227, y: -4}
@@ -2946,14 +2958,10 @@ MonoBehaviour:
     - {x: 1, y: -3}
     - {x: 2, y: -3}
     - {x: 45, y: -3}
-    - {x: 104, y: -3}
+    - {x: 103, y: -3}
     - {x: 105, y: -3}
-    - {x: 106, y: -3}
-    - {x: 107, y: -3}
-    - {x: 108, y: -3}
-    - {x: 109, y: -3}
-    - {x: 110, y: -3}
     - {x: 111, y: -3}
+    - {x: 113, y: -3}
     - {x: 163, y: -3}
     - {x: 199, y: -3}
     - {x: 200, y: -3}
@@ -2969,6 +2977,10 @@ MonoBehaviour:
     - {x: 1, y: -2}
     - {x: 2, y: -2}
     - {x: 45, y: -2}
+    - {x: 103, y: -2}
+    - {x: 105, y: -2}
+    - {x: 111, y: -2}
+    - {x: 113, y: -2}
     - {x: 163, y: -2}
     - {x: 164, y: -2}
     - {x: 165, y: -2}
@@ -3027,6 +3039,10 @@ MonoBehaviour:
     - {x: 4, y: -1}
     - {x: 5, y: -1}
     - {x: 45, y: -1}
+    - {x: 103, y: -1}
+    - {x: 105, y: -1}
+    - {x: 111, y: -1}
+    - {x: 113, y: -1}
     - {x: 206, y: -1}
     - {x: 207, y: -1}
     - {x: 208, y: -1}
@@ -3068,11 +3084,24 @@ MonoBehaviour:
     - {x: 5, y: 0}
     - {x: 6, y: 0}
     - {x: 45, y: 0}
+    - {x: 103, y: 0}
+    - {x: 105, y: 0}
+    - {x: 106, y: 0}
+    - {x: 107, y: 0}
+    - {x: 108, y: 0}
+    - {x: 109, y: 0}
+    - {x: 110, y: 0}
+    - {x: 111, y: 0}
+    - {x: 113, y: 0}
     - {x: 206, y: 0}
     - {x: 6, y: 1}
     - {x: 45, y: 1}
+    - {x: 103, y: 1}
+    - {x: 113, y: 1}
     - {x: 6, y: 2}
     - {x: 45, y: 2}
+    - {x: 103, y: 2}
+    - {x: 113, y: 2}
     - {x: -14, y: 3}
     - {x: -13, y: 3}
     - {x: -12, y: 3}
@@ -3082,6 +3111,17 @@ MonoBehaviour:
     - {x: -8, y: 3}
     - {x: 6, y: 3}
     - {x: 45, y: 3}
+    - {x: 103, y: 3}
+    - {x: 104, y: 3}
+    - {x: 105, y: 3}
+    - {x: 106, y: 3}
+    - {x: 107, y: 3}
+    - {x: 108, y: 3}
+    - {x: 109, y: 3}
+    - {x: 110, y: 3}
+    - {x: 111, y: 3}
+    - {x: 112, y: 3}
+    - {x: 113, y: 3}
     - {x: -8, y: 4}
     - {x: 6, y: 4}
     - {x: 45, y: 4}
@@ -3180,19 +3220,7 @@ MonoBehaviour:
       cells: 1
       chainId: 0
       orientation: 0
-    - center: {x: -1.5, y: -13.5}
-      cells: 1
-      chainId: 0
-      orientation: 0
-    - center: {x: -1.5, y: -14.5}
-      cells: 1
-      chainId: 0
-      orientation: 0
     - center: {x: -2.5, y: -14.5}
-      cells: 1
-      chainId: 0
-      orientation: 0
-    - center: {x: -1.5, y: -15.5}
       cells: 1
       chainId: 0
       orientation: 0
@@ -3496,6 +3524,18 @@ MonoBehaviour:
       cells: 3
       chainId: 0
       orientation: 0
+    - center: {x: -1.5, y: -14.5}
+      cells: 3
+      chainId: 0
+      orientation: 0
+    - center: {x: 108, y: -5.875}
+      cells: 4
+      chainId: 0
+      orientation: 1
+    - center: {x: 109, y: -5.875}
+      cells: 4
+      chainId: 0
+      orientation: 1
     keys:
     - position: {x: 10.5, y: 8.5}
     - position: {x: 1.5, y: -16.5}
@@ -3509,6 +3549,7 @@ MonoBehaviour:
     - position: {x: 155.5, y: -42.5}
     - position: {x: 141.5, y: -41.5}
     - position: {x: 321.5, y: -67.5}
+    - position: {x: 109.5, y: -2.5}
     recalls: []
     doors:
     - position: {x: 46.5, y: -15.5}
@@ -3516,8 +3557,6 @@ MonoBehaviour:
     - position: {x: 47.5, y: -15.5}
       color: {r: 0.25, g: 0.75, b: 1, a: 1}
     - position: {x: 111.5, y: -15.5}
-      color: {r: 0.25, g: 0.75, b: 1, a: 1}
-    - position: {x: 112.5, y: -15.5}
       color: {r: 0.25, g: 0.75, b: 1, a: 1}
     - position: {x: 19.5, y: -38.5}
       color: {r: 0.25, g: 0.75, b: 1, a: 1}
@@ -3793,8 +3832,6 @@ MonoBehaviour:
     - cell: {x: 187, y: -19}
       dir: 0
     - cell: {x: 188, y: -19}
-      dir: 0
-    - cell: {x: 119, y: -18}
       dir: 0
     - cell: {x: 125, y: -18}
       dir: 0
@@ -4163,8 +4200,8 @@ MonoBehaviour:
       groupId: 16
     - cell: {x: 240, y: -20}
       groupId: 16
-    - cell: {x: -2, y: -18}
-      groupId: 13
+    - cell: {x: 227, y: -19}
+      groupId: 16
     - cell: {x: -1, y: -18}
       groupId: 13
     - cell: {x: 0, y: -18}
@@ -4555,6 +4592,8 @@ MonoBehaviour:
     - cell: {x: 84, y: -17}
       groupId: 1
     - cell: {x: 81, y: -16}
+      groupId: 1
+    - cell: {x: 109, y: -3}
       groupId: 1
     hiddenBlocks:
     - cell: {x: 39, y: -42}
@@ -5983,6 +6022,7 @@ MonoBehaviour:
       groupId: 6
     - cell: {x: 247, y: 3}
       groupId: 6
+    repairBlocks: []
     respawnPoints:
     - position: {x: 315.5, y: -63.5}
     - position: {x: 128.5, y: -53.5}
@@ -5992,6 +6032,7 @@ MonoBehaviour:
     - position: {x: 16.5, y: -26.5}
     - position: {x: 50.5, y: -15.5}
     - position: {x: 115.5, y: -15.5}
+    - position: {x: 143.5, y: -15.5}
     - position: {x: 204.5, y: -4.5}
     - position: {x: -10.5, y: 1.5}
     teleports:
@@ -6001,7 +6042,6 @@ MonoBehaviour:
     - position: {x: 10.5, y: -26.5}
     - position: {x: 202.5, y: -18.5}
     - position: {x: 15.5, y: -15.5}
-    - position: {x: 143.5, y: -15.5}
     - position: {x: 13.5, y: 8.5}
     partitions:
     - name: Level 1
