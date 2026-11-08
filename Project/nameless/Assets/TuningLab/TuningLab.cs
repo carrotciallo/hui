@@ -253,6 +253,7 @@ public class TuningLab : MonoBehaviour
     readonly List<LabRespawnPoint> respawnPoints = new List<LabRespawnPoint>();
     bool teamDeathPending;
     LabPlayer teamDeathPlayer;
+    readonly Collider2D[] recallHits = new Collider2D[16];   // TryRecall 头顶探测的 NonAlloc 缓冲
 
     // ---- 派生量：所有"速度"都由格算出来，改重力自动跟着走 ----
     public float FixedDt => Time.fixedDeltaTime;
@@ -704,11 +705,11 @@ public class TuningLab : MonoBehaviour
         Bounds body = caster.BodyBounds;
         float headTop = body.max.y;
         Vector2 probeCenter = new Vector2(caster.transform.position.x, headTop + 0.5f);
-        var hits = Physics2D.OverlapBoxAll(probeCenter, Vector2.one, 0f);
+        int hitCount = Physics2D.OverlapBox(probeCenter, Vector2.one, 0f, ContactFilter2D.noFilter, recallHits);
         var casterCollider = caster.GetComponent<Collider2D>();
-        for (int i = 0; i < hits.Length; i++)
+        for (int i = 0; i < hitCount; i++)
         {
-            var hit = hits[i];
+            var hit = recallHits[i];
             if (hit == null || hit == casterCollider) continue;
             if (hit.isTrigger) continue;
             return false;      // 头顶被实体占住：拒绝，不生成幻影
