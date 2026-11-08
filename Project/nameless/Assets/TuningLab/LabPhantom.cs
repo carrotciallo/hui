@@ -46,6 +46,18 @@ public sealed class LabPhantom : MonoBehaviour
     /// <summary>‖ 是竖直光桥，= 是横向光桥。</summary>
     public bool BridgeIsVertical => Form == LabForm.Elevator && LabForms.ElevatorIsVertical(SpiritMask);
 
+    /// <summary>
+    /// 2048 幻影：矛形（只剩一条边）的幻影会自己朝那条边指的方向一直滑到撞墙（Issue #118）。
+    /// 不再是被动挡人的方块，而是会走的机关。
+    /// </summary>
+    public bool Is2048 => Form == LabForm.Spear;
+
+    /// <summary>2048 正在滑动的方向：null 表示还没开始 / 已经撞墙停下。</summary>
+    public Vector2Int? SlideDir { get; private set; }
+
+    /// <summary>2048 是否正在移动。</summary>
+    public bool Sliding => Is2048 && SlideDir.HasValue;
+
     TuningLab lab;
     BoxCollider2D body;
     LabVisual visual;
@@ -55,6 +67,7 @@ public sealed class LabPhantom : MonoBehaviour
     LabPlayer.DashState entryDash;
     Collider2D ignoredCollider;
     bool ignoredWasEnabled;
+    float slideAccumulator;
 
     /// <summary>幻影半高，用来把出膛的玩家放到表面外侧。</summary>
     float HalfHeight => body != null ? body.size.y * 0.5f : Pixels / (2f * TuningLab.CellPixels);
@@ -79,7 +92,11 @@ public sealed class LabPhantom : MonoBehaviour
     /// 来源进膛时 collider 会被关掉，出膛后重建引用，所以每物理步核对一次。
     /// 炮和 L 都是瞬时出膛（#76），这里不再有延时计时器。
     /// </summary>
-    void FixedUpdate() => RefreshIgnorePair();
+    void FixedUpdate()
+    {
+        RefreshIgnorePair();
+        Step2048();
+    }
 
     void RefreshIgnorePair()
     {
@@ -94,6 +111,77 @@ public sealed class LabPhantom : MonoBehaviour
         ignoredWasEnabled = enabledNow;
         if (current != null && body != null)
             Physics2D.IgnoreCollision(body, current, true);
+    }
+
+    /// <summary>
+    /// 2048 幻影的移动（Issue #118）。
+    ///
+    /// 规则来自设计：
+    ///   - 触发：只剩任意一条边（矛形）时
+    ///   - 不受重力和水平阻力，速度固定为二级速度的最小值
+    ///   - 一直朝那条边指的方向走，直到撞墙（撞上的那一格停下，不回退）
+    ///   - **不会与 B 相碰**：滑动期间对 B 完全无碰撞
+    ///
+    /// 一格一格跳，不是连续滑：和 2048 的格子一致，也避免高速穿透地形。
+    /// </summary>
+    void Step2048()
+    {
+        if (!Is2048 || lab == null) return;
+
+        // 第一次进来决定方向：矛的朝向就是它的移动方向。
+        if (!SlideDir.HasValue)
+        {
+            // 只剩一条边，用剩下那条边指的方向当走向。
+            var axis = LabForms.EdgeNormal(LabForms.RemainingEdge(SpiritMask));
+            var dir = new Vector2Int(Mathf.RoundToInt(axis.x), Mathf.RoundToInt(axis.y));
+            if (dir == Vector2Int.zero) return;
+            SlideDir = dir;
+
+            // 2048 不挡 B：一启动就把 B 的碰撞放掉。
+            ReleasePlayerCollision();
+        }
+
+        var step = SlideDir.Value;
+        float speed = SlideSpeed;                    // 二级速度的最小值
+        if (speed <= 0.01f) return;
+
+        // 攒够一整格才挪，保证永远落在格心上。
+        var next = new Vector2Int(Cell.x + step.x, Cell.y + step.y);
+
+        // 撞墙就停：那一格不进去，幻影留在这里。
+        if (!CanSlideInto(next))
+        {
+            SlideDir = null;
+            return;
+        }
+
+        slideAccumulator += speed * Time.fixedDeltaTime;
+        if (slideAccumulator < 1f) return;
+        slideAccumulator -= 1f;
+
+        Cell = next;
+        transform.position = new Vector3(next.x + 0.5f, next.y + 0.5f, 0f);
+        if (body != null) body.transform.position = transform.position;
+    }
+
+    /// <summary>"二级速度的最小值" = 二级区间下界，即 Boundary(1)。</summary>
+    float SlideSpeed => lab != null ? lab.SpeedForCells(lab.Boundary(1)) : 0f;
+
+    /// <summary>2048 能不能进这一格。只看地形和物件，不看玩家（它本来就不和 B 碰）。</summary>
+    bool CanSlideInto(Vector2Int cell)
+    {
+        var center = new Vector2(cell.x + 0.5f, cell.y + 0.5f);
+        if (HasBlockerAt(center)) return false;
+        if (!LabLightBridgeBlock.IsFree(cell)) return false;
+        return true;
+    }
+
+    /// <summary>2048 启动后对 B 不再有碰撞。</summary>
+    void ReleasePlayerCollision()
+    {
+        if (Target == null || body == null) return;
+        var collider = Target.GetComponent<Collider2D>();
+        if (collider != null) Physics2D.IgnoreCollision(body, collider, true);
     }
 
     void OnCollisionEnter2D(Collision2D c) => TryAbsorbCollision(c);
@@ -127,9 +215,15 @@ public sealed class LabPhantom : MonoBehaviour
             && (Form != LabForm.Cannon || struck != LabForms.MouthEdge(SpiritMask)))
             return false;
 
-        if (Form == LabForm.Converter && player.PreImpactVelocity.y <= lab.V0Speed) return false;
+        // L 形入口门槛：竖直来速够 v0 就行，不要求冲刺态。
+        // 原来卡在 v0（20）上面，而走路只有 8、跳跃上冲更低，等于"不冲刺就进不去"，
+        // 实际玩起来很难看出这个机关存在。这里放到"跳上去够快"的量级。
+        if (Form == LabForm.Converter && Mathf.Abs(player.PreImpactVelocity.y) <= lab.converterEntrySpeed)
+            return false;
 
         loaded = player;
+        // L 形是瞬时转身的，如果不给一下"叮"，玩家看不出刚才发生了什么。
+        LabAudio.Play(Form == LabForm.Converter ? LabAudio.Cue.CannonLoad : LabAudio.Cue.CannonFire);
         entryVelocity = player.PreImpactVelocity;
         entryDir = player.DashDirection;
         entryDash = player.CaptureDash();
@@ -158,6 +252,7 @@ public sealed class LabPhantom : MonoBehaviour
         Vector2 position = (Vector2)transform.position
             + dir * (HalfHeight + b.HalfHeight + 0.05f);
         b.WakeFromHost(position, dir * entryVelocity.magnitude, Mathf.Abs(dir.x) > 0.5f);
+        LabAudio.Play(LabAudio.Cue.CannonFire);
 
         // 幻影被这次发射消耗掉。
         Consumed = true;
@@ -269,7 +364,9 @@ public sealed class LabPhantom : MonoBehaviour
             for (int i = 1; i <= MaxBridgeCells; i++)
             {
                 var cell = new Vector2Int(Cell.x + step.x * i, Cell.y + step.y * i);
-                if (!CanBridgeInto(cell)) break;
+                // 竖直光桥允许压过一格红块继续铺：只在于"穿过一次"，后续格子照常判。
+                bool overSolid = false;
+                if (!CanBridgeInto(cell, vertical, out overSolid)) break;
 
                 bool passesForbidden = OverlapsPlayer(cell, Target);
                 var block = LabLightBridgeBlock.Spawn(
@@ -280,6 +377,9 @@ public sealed class LabPhantom : MonoBehaviour
                 block.IgnorePlayer(Source);
                 if (passesForbidden) block.IgnorePlayer(Target);
                 Bridge.Add(block);
+
+                // 压过红块的这一格就是终点：允许穿一次，不往后延续。
+                if (overSolid) break;
             }
         }
 
@@ -292,7 +392,65 @@ public sealed class LabPhantom : MonoBehaviour
     /// 判定用格子中心 + 四条边中内侧采样，不用 0.98 宽的盒子 —— 那个盒子会溢出到相邻格，
     /// 把"隔壁有墙"误判成"这一格被堵"。
     /// </summary>
-    bool CanBridgeInto(Vector2Int cell)
+    bool CanBridgeInto(Vector2Int cell) => CanBridgeInto(cell, false, out _);
+
+    /// <summary>
+    /// 竖直光桥的判定：红块格允许"穿一次"——这一格照样生成光桥，但只放行这一格，
+    /// 再往后就按常规判定（下一格还堵着就停）。
+    /// 横向光桥不放行红块，行为和原来一致。
+    /// </summary>
+    bool CanBridgeInto(Vector2Int cell, bool vertical, out bool overSolid)
+    {
+        overSolid = false;
+        if (vertical && IsSolidTerrainCell(cell))
+        {
+            overSolid = true;
+            return LabLightBridgeBlock.IsFree(cell);
+        }
+        return CanBridgeIntoCore(cell);
+    }
+
+    /// <summary>
+    /// 这一格是不是被普通地形/红块占满。
+    /// 取五个采样点全命中才算，免得把"格子里有半堵墙"当成整格实心。
+    /// 冰、岩浆、修复方块、门不算——它们走 <see cref="HasBlockerAt"/> 的原有路径。
+    /// </summary>
+    static bool IsSolidTerrainCell(Vector2Int cell)
+    {
+        var center = new Vector2(cell.x + 0.5f, cell.y + 0.5f);
+        if (!IsPlainSolidAt(center)) return false;
+        if (!IsPlainSolidAt(center + new Vector2(0.3f, 0.3f))) return false;
+        if (!IsPlainSolidAt(center + new Vector2(-0.3f, 0.3f))) return false;
+        if (!IsPlainSolidAt(center + new Vector2(0.3f, -0.3f))) return false;
+        if (!IsPlainSolidAt(center + new Vector2(-0.3f, -0.3f))) return false;
+        return true;
+    }
+
+    /// <summary>这个点上是不是普通地形（不是冰/岩浆/修复方块/门/玩家/光桥）。</summary>
+    static bool IsPlainSolidAt(Vector2 point)
+    {
+        var hits = new Collider2D[8];
+        int count = Physics2D.OverlapPoint(point, ContactFilter2D.noFilter, hits);
+        bool terrain = false;
+        for (int i = 0; i < count; i++)
+        {
+            Collider2D hit = hits[i];
+            if (hit == null || hit.isTrigger) continue;
+            if (hit.GetComponentInParent<LabPlayer>() != null) continue;
+            if (hit.GetComponentInParent<LabPhantom>() != null) continue;
+            if (hit.GetComponentInParent<LabLightBridgeBlock>() != null) continue;
+            // 这四类是专属物件，不算普通地形。
+            if (hit.GetComponentInParent<LabIce>() != null) return false;
+            if (hit.GetComponentInParent<LabMagma>() != null) return false;
+            if (hit.GetComponentInParent<LabRepairBlock>() != null) return false;
+            if (hit.GetComponentInParent<LabDoor>() != null) return false;
+            if (hit.GetComponentInParent<LabTerrainField>() != null) terrain = true;
+        }
+        return terrain;
+    }
+
+    /// <summary>常规判定：这一格有没有挡桥的东西。</summary>
+    bool CanBridgeIntoCore(Vector2Int cell)
     {
         if (!LabLightBridgeBlock.IsFree(cell)) return false;
 
@@ -391,6 +549,7 @@ public sealed class LabPhantom : MonoBehaviour
         Vector2 position = (Vector2)transform.position
             + dir * (HalfHeight + b.HalfHeight + 0.05f);
         b.WakeFromHost(position, dir * entryVelocity.magnitude, Mathf.Abs(dir.x) > 0.5f);
+        LabAudio.Play(LabAudio.Cue.CannonFire);
         if (entryDash.active)
         {
             entryDash.dir = dir;

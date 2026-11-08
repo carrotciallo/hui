@@ -114,6 +114,10 @@ public class TuningLab : MonoBehaviour
     public float tierSpacingCells = 4f;
     [Tooltip("等级数（不含零级）。6 → 零级..六级。碰撞只读到顶档：更快的速度仍按顶档算。")]
     [Range(1, 6)] public int tierCount = 6;
+    [Tooltip("玻璃大炮 / L 形发射的增益格数。v' = √(Vb² + 2·g·这个数)。2 个间距起步，越大射得越猛。")]
+    public float cannonBoostCells = 8f;
+    [Tooltip("幻影 L 形的进膛门槛（竖直来速）。低于这个速度撞上去不转入，避免走路蹭一下就触发。")]
+    public float converterEntrySpeed = 12f;
 
     [Header("速度上限")]
     [Tooltip("顶档上限 = 顶档门槛 + 这个格数。下落和冰面加速共用同一个值；必须 > 0，否则速度永远差一点进不了顶档。默认 4 = 一个等级间距。")]
@@ -188,6 +192,18 @@ public class TuningLab : MonoBehaviour
     public LabHud Hud { get; private set; }
     public LabAudio Sound { get; private set; }
     public LabSettingsUI SettingsUI { get; private set; }
+
+    /// <summary>
+    /// 当前生效的按键绑定。默认是 Issue #94 定案的两套；设置界面改完之后
+    /// 通过 <see cref="ApplyBindings"/> 整体换掉，玩家每帧从表里读，不需要额外通知。
+    /// </summary>
+    public LabBindings Bindings { get; private set; } = new LabBindings();
+
+    /// <summary>换一套按键绑定。传 null 表示回到默认。</summary>
+    public void ApplyBindings(LabBindings bindings)
+    {
+        Bindings = bindings != null ? bindings.Clone() : new LabBindings();
+    }
     public LabRespawnPoint ActiveRespawnPoint { get; private set; }
 
     /// <summary>设置界面打开时所有玩法冻结；关闭后恢复暂停前的 timeScale。</summary>
@@ -280,8 +296,11 @@ public class TuningLab : MonoBehaviour
     /// 大炮、绳子反弹、双人互换是冲量，可以超过它；超过后等级读数仍是顶档。
     /// </summary>
     public float TopTierSpeed => SpeedForCells(Boundary(MaxTier - 1) + Mathf.Max(0.01f, capOverTopCells));
-    /// <summary>大炮发射的增量 = 一个等级间距的 v²（= 2·g·间距格数）。v' = √(Vb² + 这个数)。</summary>
-    public float CannonBoostV2 => 2f * gravity * Mathf.Max(0.01f, tierSpacingCells);
+    /// <summary>
+    /// 大炮发射的增量 = cannonBoostCells 格的 v²（= 2·g·格数）。v' = √(Vb² + 这个数)。
+    /// 公式保持"平方和再开方"不变，只把增益格数做成可调参数。
+    /// </summary>
+    public float CannonBoostV2 => 2f * gravity * Mathf.Max(0.01f, cannonBoostCells);
 
     // ---- 等级门槛：等距生成，不再手填数组 ----
     float[] cachedBounds;
