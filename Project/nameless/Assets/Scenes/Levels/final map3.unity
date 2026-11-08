@@ -252,7 +252,7 @@ MonoBehaviour:
       width: 250
       height: 122
     spawnA: {x: 96.5, y: -35}
-    spawnB: {x: 40.5, y: -48}
+    spawnB: {x: 69.5, y: -50}
     cameraMinSize: 15.953806
     cameraMaxSize: 36.20382
     solids:
