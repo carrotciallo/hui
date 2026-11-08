@@ -187,6 +187,8 @@ MonoBehaviour:
   tierFirstCells: 4
   tierSpacingCells: 4
   tierCount: 6
+  cannonBoostCells: 8
+  converterEntrySpeed: 12
   capOverTopCells: 4
   showPixelGrid: 0
   showGrid: 1
@@ -251,7 +253,7 @@ MonoBehaviour:
       y: -86
       width: 501
       height: 220
-    spawnA: {x: 208.5, y: -6}
+    spawnA: {x: 329.5, y: -44}
     spawnB: {x: 209.5, y: -6}
     cameraMinSize: 13.69
     cameraMaxSize: 27
@@ -6043,6 +6045,7 @@ MonoBehaviour:
         y: -20
         width: 41
         height: 34
+  asset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -187,6 +187,8 @@ MonoBehaviour:
   tierFirstCells: 4
   tierSpacingCells: 4
   tierCount: 6
+  cannonBoostCells: 8
+  converterEntrySpeed: 12
   capOverTopCells: 4
   showPixelGrid: 0
   showGrid: 1
@@ -1039,6 +1041,11 @@ MonoBehaviour:
     - cell: {x: -3, y: 64}
       groupId: 1
     repairBlocks: []
+    pixelArts:
+    - sprite: {fileID: 491167011383495620, guid: aeb905407103e5b41a5b959418a14952, type: 3}
+      origin: {x: -1, y: 31}
+      size: {x: 4, y: 2}
+      sortingOrder: 1
     respawnPoints:
     - position: {x: 9.5, y: 1.5}
     - position: {x: 17.5, y: 1.5}
@@ -1052,6 +1059,7 @@ MonoBehaviour:
         y: -11
         width: 94
         height: 120
+  asset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
