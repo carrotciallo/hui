@@ -7,10 +7,10 @@ using UnityEngine;
 public sealed class LabSettingsData
 {
     public int version = LabSettingsStore.CurrentVersion;
-    // 默认满音量：没有存档时不改变 LabAudio/TuningLab 现有的混音结果。
-    public float masterVolume = 1f;
-    public float musicVolume = 1f;
-    public float sfxVolume = 1f;
+    // 默认 50%；应用时映射为原来的满音量。
+    public float masterVolume = 0.5f;
+    public float musicVolume = 0.5f;
+    public float sfxVolume = 0.5f;
     public bool fullscreen;
     public int screenWidth;
     public int screenHeight;
@@ -28,7 +28,7 @@ public sealed class LabSettingsData
 /// </summary>
 public static class LabSettingsStore
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
     const string FileName = "settings.json";
     const string BackupFileName = "settings.backup.json";
     const string TempFileName = "settings.tmp";
@@ -53,9 +53,9 @@ public static class LabSettingsStore
         return new LabSettingsData
         {
             version = CurrentVersion,
-            masterVolume = 1f,
-            musicVolume = 1f,
-            sfxVolume = 1f,
+            masterVolume = 0.5f,
+            musicVolume = 0.5f,
+            sfxVolume = 0.5f,
             fullscreen = Screen.fullScreen,
             screenWidth = width,
             screenHeight = height,
@@ -121,9 +121,15 @@ public static class LabSettingsStore
         if (data == null) return;
         data = Sanitize(data);
 
-        AudioListener.volume = Mathf.Clamp01(data.masterVolume);
-        LabAudio.SfxVolume = Mathf.Clamp01(data.sfxVolume);
-        LabAudio.MusicVolume = Mathf.Clamp01(data.musicVolume);
+        // 50% 对应原来的 100%；DSP 滤镜实现 0-2 倍增益，避免被 Unity 音量属性钳掉。
+        AudioListener.volume = 1f;
+        LabAudio.MasterVolume = data.masterVolume * 2f;
+        LabAudio.SfxVolume = data.sfxVolume * 2f;
+        LabAudio.MusicVolume = data.musicVolume * 2f;
+
+        var listener = UnityEngine.Object.FindAnyObjectByType<AudioListener>();
+        if (listener != null && listener.GetComponent<LabAudioGain>() == null)
+            listener.gameObject.AddComponent<LabAudioGain>();
 
         if (!applyWindow) return;
 
@@ -139,6 +145,14 @@ public static class LabSettingsStore
         if (data == null) return CreateDefault();
 
         data.version = Mathf.Max(1, data.version);
+        // v1 的 100% 是 v2 的 50%；迁移时保持实际听感不变。
+        if (data.version == 1)
+        {
+            data.masterVolume *= 0.5f;
+            data.musicVolume *= 0.5f;
+            data.sfxVolume *= 0.5f;
+            data.version = 2;
+        }
         data.masterVolume = Mathf.Clamp01(data.masterVolume);
         data.musicVolume = Mathf.Clamp01(data.musicVolume);
         data.sfxVolume = Mathf.Clamp01(data.sfxVolume);

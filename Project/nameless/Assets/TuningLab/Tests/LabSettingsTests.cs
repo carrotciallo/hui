@@ -20,6 +20,7 @@ public sealed class LabSettingsTests
         LabSettingsStore.DirectoryOverride = dir;
         Time.timeScale = 1f;
         AudioListener.volume = 1f;
+        LabAudio.MasterVolume = 1f;
         LabAudio.SfxVolume = 1f;
         LabAudio.MusicVolume = 1f;
     }
@@ -31,6 +32,7 @@ public sealed class LabSettingsTests
         LabSettingsStore.DirectoryOverride = null;
         Time.timeScale = 1f;
         AudioListener.volume = 1f;
+        LabAudio.MasterVolume = 1f;
         LabAudio.SfxVolume = 1f;
         LabAudio.MusicVolume = 1f;
         if (Directory.Exists(dir)) Directory.Delete(dir, true);
@@ -108,7 +110,9 @@ public sealed class LabSettingsTests
 
         Assert.IsFalse(fromDisk);
         Assert.IsFalse(LabSettingsStore.LastLoadUsedBackup);
-        Assert.AreEqual(1f, loaded.masterVolume, 1e-4f);
+        Assert.AreEqual(0.5f, loaded.masterVolume, 1e-4f);
+        Assert.AreEqual(0.5f, loaded.musicVolume, 1e-4f);
+        Assert.AreEqual(0.5f, loaded.sfxVolume, 1e-4f);
         Assert.GreaterOrEqual(loaded.screenWidth, 640);
         Assert.GreaterOrEqual(loaded.screenHeight, 360);
     }
@@ -119,7 +123,9 @@ public sealed class LabSettingsTests
         var loaded = LabSettingsStore.Load(out bool fromDisk);
 
         Assert.IsFalse(fromDisk);
-        Assert.AreEqual(1f, loaded.masterVolume, 1e-4f);
+        Assert.AreEqual(0.5f, loaded.masterVolume, 1e-4f);
+        Assert.AreEqual(0.5f, loaded.musicVolume, 1e-4f);
+        Assert.AreEqual(0.5f, loaded.sfxVolume, 1e-4f);
         Assert.IsFalse(File.Exists(LabSettingsStore.SavePath));
         Assert.IsFalse(File.Exists(LabSettingsStore.BackupPath));
     }
@@ -128,7 +134,7 @@ public sealed class LabSettingsTests
     public void OutOfRangeValuesAreClampedOnLoad()
     {
         File.WriteAllText(LabSettingsStore.SavePath,
-            "{\"version\":1,\"masterVolume\":9,\"musicVolume\":-2," +
+            "{\"version\":2,\"masterVolume\":9,\"musicVolume\":-2," +
             "\"sfxVolume\":0.5,\"fullscreen\":true,\"screenWidth\":0," +
             "\"screenHeight\":0,\"brightness\":4}");
 
@@ -144,18 +150,34 @@ public sealed class LabSettingsTests
     }
 
     [Test]
-    public void ApplySetsMasterSfxAndMusicLevels()
+    public void VersionOneVolumesMigrateWithoutChangingLoudness()
+    {
+        File.WriteAllText(LabSettingsStore.SavePath,
+            "{\"version\":1,\"masterVolume\":1,\"musicVolume\":0.5,\"sfxVolume\":0}");
+
+        var loaded = LabSettingsStore.Load(out bool fromDisk);
+
+        Assert.IsTrue(fromDisk);
+        Assert.AreEqual(2, loaded.version);
+        Assert.AreEqual(0.5f, loaded.masterVolume, 1e-4f);
+        Assert.AreEqual(0.25f, loaded.musicVolume, 1e-4f);
+        Assert.AreEqual(0f, loaded.sfxVolume, 1e-4f);
+    }
+
+    [Test]
+    public void ApplyMapsFiftyPercentToOriginalFullGainAndKeepsHeadroom()
     {
         LabSettingsStore.Apply(new LabSettingsData
         {
-            masterVolume = 0.4f,
-            musicVolume = 0.6f,
-            sfxVolume = 0.7f,
+            masterVolume = 0.75f,
+            musicVolume = 0.5f,
+            sfxVolume = 0.25f,
         }, false);
 
-        Assert.AreEqual(0.4f, AudioListener.volume, 1e-4f);
-        Assert.AreEqual(0.6f, LabAudio.MusicVolume, 1e-4f);
-        Assert.AreEqual(0.7f, LabAudio.SfxVolume, 1e-4f);
+        Assert.AreEqual(1f, AudioListener.volume, 1e-4f, "主音量改由增益滤镜应用");
+        Assert.AreEqual(1.5f, LabAudio.MasterVolume, 1e-4f);
+        Assert.AreEqual(1f, LabAudio.MusicVolume, 1e-4f);
+        Assert.AreEqual(0.5f, LabAudio.SfxVolume, 1e-4f);
     }
 
     [Test]
