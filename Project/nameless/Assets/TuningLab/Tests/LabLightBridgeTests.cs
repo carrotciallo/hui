@@ -306,6 +306,139 @@ public sealed class LabLightBridgeTests
         Assert.IsTrue(body.usedByEffector, "碰撞箱要交给 effector 处理");
     }
 
+    [UnityTest]
+    public IEnumerator VerticalBridgeRaisesPassContact()
+    {
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        var b = MakePlayer("B_Chunk", TuningLab.B_Pixels, false);
+        Link(a, b);
+        a.Teleport(new Vector2(-15.5f, a.HalfHeight));
+        b.Teleport(new Vector2(-20.5f, b.HalfHeight));
+        yield return null;
+
+        var phantom = SpawnPhantom(
+            LabForms.TopBit | LabForms.BottomBit, new Vector2Int(0, 5), a, b);
+        yield return null;
+
+        var block = FindBridge(phantom, new Vector2Int(0, 6));
+        Assert.IsNotNull(block, "找到竖桥上方那一格");
+        var contacts = new List<LabLightBridgeBlock.BridgeContact>();
+        block.Contacted += contacts.Add;
+
+        lab.horizontalAirDrag = false;
+        b.Teleport(new Vector2(-2.5f, 6.5f));
+        yield return null;
+        b.SetVelocity(new Vector2(31f, 0f));
+
+        float deadline = Time.time + 0.35f;
+        while (Time.time < deadline) yield return new WaitForFixedUpdate();
+
+        Assert.AreEqual(1, contacts.Count, "二级穿过只触发一次接触事件");
+        Assert.AreEqual(2, contacts[0].tier);
+        Assert.IsTrue(contacts[0].passed);
+        Assert.IsFalse(contacts[0].bounced);
+        Assert.AreSame(block, contacts[0].block);
+        Assert.AreSame(b, contacts[0].player);
+    }
+
+    [UnityTest]
+    public IEnumerator VerticalBridgeRaisesBounceContactWithoutRepeating()
+    {
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        var b = MakePlayer("B_Chunk", TuningLab.B_Pixels, false);
+        Link(a, b);
+        a.Teleport(new Vector2(-15.5f, a.HalfHeight));
+        b.Teleport(new Vector2(-20.5f, b.HalfHeight));
+        yield return null;
+
+        var phantom = SpawnPhantom(
+            LabForms.TopBit | LabForms.BottomBit, new Vector2Int(0, 5), a, b);
+        yield return null;
+
+        var block = FindBridge(phantom, new Vector2Int(0, 6));
+        Assert.IsNotNull(block);
+        var contacts = new List<LabLightBridgeBlock.BridgeContact>();
+        block.Contacted += contacts.Add;
+
+        lab.horizontalAirDrag = false;
+        b.Teleport(new Vector2(-2.5f, 6.5f));
+        yield return null;
+        b.SetVelocity(new Vector2(37f, 0f));
+
+        float deadline = Time.time + 0.4f;
+        while (Time.time < deadline) yield return new WaitForFixedUpdate();
+
+        Assert.AreEqual(1, contacts.Count, "三级弹回不应按物理步重复上报");
+        Assert.AreEqual(3, contacts[0].tier);
+        Assert.IsFalse(contacts[0].passed);
+        Assert.IsTrue(contacts[0].bounced);
+    }
+
+    [UnityTest]
+    public IEnumerator HorizontalBridgeRaisesLandingAndUpwardPassContacts()
+    {
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        var b = MakePlayer("B_Chunk", TuningLab.B_Pixels, false);
+        Link(a, b);
+        a.Teleport(new Vector2(-15.5f, a.HalfHeight));
+        b.Teleport(new Vector2(-20.5f, b.HalfHeight));
+        yield return null;
+
+        var phantom = SpawnPhantom(
+            LabForms.LeftBit | LabForms.RightBit, new Vector2Int(0, 5), a, b);
+        yield return null;
+
+        var block = FindBridge(phantom, new Vector2Int(1, 5));
+        Assert.IsNotNull(block, "找到横桥右侧那一格");
+        var contacts = new List<LabLightBridgeBlock.BridgeContact>();
+        block.Contacted += contacts.Add;
+
+        b.Teleport(new Vector2(1.5f, 7f));
+        yield return null;
+        b.SetVelocity(new Vector2(0f, -31f));
+        float landingDeadline = Time.time + 0.35f;
+        while (Time.time < landingDeadline) yield return new WaitForFixedUpdate();
+
+        Assert.IsTrue(contacts.Exists(c => !c.passed && !c.bounced),
+            "从上方落到横向光桥要产生落地接触");
+
+        b.Teleport(new Vector2(1.5f, 4f));
+        yield return null;
+        b.SetVelocity(new Vector2(0f, 31f));
+        float passDeadline = Time.time + 0.25f;
+        while (Time.time < passDeadline) yield return new WaitForFixedUpdate();
+
+        Assert.IsTrue(contacts.Exists(c => c.passed && !c.bounced),
+            "从下往上顶穿横向光桥要产生穿过接触");
+    }
+
+    [UnityTest]
+    public IEnumerator LightBridgeLifecycleEventsAreRaisedOncePerGroup()
+    {
+        int spawned = 0;
+        int despawned = 0;
+        LabPhantom.LightBridgeSpawned += CountSpawned;
+        LabPhantom.LightBridgeDespawned += CountDespawned;
+
+        var phantom = SpawnPhantom(
+            LabForms.LeftBit | LabForms.RightBit, new Vector2Int(0, 5));
+        yield return null;
+
+        int spawnedAfterBuild = spawned;
+        phantom.DestroyPhantom();
+        yield return null;
+
+        int despawnedAfterDestroy = despawned;
+        LabPhantom.LightBridgeSpawned -= CountSpawned;
+        LabPhantom.LightBridgeDespawned -= CountDespawned;
+
+        Assert.AreEqual(1, spawnedAfterBuild, "一整组光桥只报一次生成");
+        Assert.AreEqual(1, despawnedAfterDestroy, "一整组光桥只报一次销毁");
+
+        void CountSpawned(LabPhantom _) => spawned++;
+        void CountDespawned(LabPhantom _) => despawned++;
+    }
+
     // 销毁 ---------------------------------------------------------------
 
     /// <summary>幻影被 FIFO 覆盖时，它的光桥一起拆掉。</summary>
@@ -380,6 +513,14 @@ public sealed class LabLightBridgeTests
     {
         return LabPhantom.Spawn(lab, source, target, cell, spiritMask,
             source.pixels, source.canBeRedHot);
+    }
+
+    static LabLightBridgeBlock FindBridge(LabPhantom phantom, Vector2Int cell)
+    {
+        for (int i = 0; i < phantom.Bridge.Count; i++)
+            if (phantom.Bridge[i] != null && phantom.Bridge[i].Cell == cell)
+                return phantom.Bridge[i];
+        return null;
     }
 
     void MakeWall(Vector2Int cell)
