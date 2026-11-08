@@ -76,9 +76,11 @@ public class LabAudio : MonoBehaviour
     /// <summary>静音开关（关掉后所有 Cue 都不再发声，已开始的尾音不管）。</summary>
     public static bool Muted;
 
-    /// <summary>音效音量倍率，由设置界面写入；主音量仍由 AudioListener.volume 统一控制。</summary>
+    /// <summary>主音量增益，由挂在 AudioListener 上的滤镜应用。</summary>
+    public static float MasterVolume = 1f;
+    /// <summary>音效音量增益，由每个声部的滤镜应用。</summary>
     public static float SfxVolume = 1f;
-    /// <summary>音乐音量倍率。当前没有音乐轨，先存值给后续音乐系统使用。</summary>
+    /// <summary>音乐音量增益。当前没有音乐轨，先存值给后续音乐系统使用。</summary>
     public static float MusicVolume = 1f;
 
     readonly AudioClip[][] clips = new AudioClip[Folders.Length][];
@@ -102,6 +104,7 @@ public class LabAudio : MonoBehaviour
             source.playOnAwake = false;
             // 屏幕空间玩法，不做 3D 衰减；音源自己带音量，PlayOneShot 用 1。
             source.spatialBlend = 0f;
+            go.AddComponent<LabAudioGain>().IsSfx = true;
             voices[i] = source;
         }
     }
@@ -235,7 +238,7 @@ public class LabAudio : MonoBehaviour
 
         var voice = voices[nextVoice];
         nextVoice = (nextVoice + 1) % VoiceCount;
-        voice.volume = Volumes[index] * Mathf.Clamp01(SfxVolume);
+        voice.volume = Volumes[index];
         float jitter = PitchJitter[index];
         voice.pitch = jitter > 0f ? 1f + Random.Range(-jitter, jitter) : 1f;
         voice.PlayOneShot(clip, 1f);
