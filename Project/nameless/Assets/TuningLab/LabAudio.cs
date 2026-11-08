@@ -26,8 +26,14 @@ public class LabAudio : MonoBehaviour
         CannonLoad,
         CannonFire,
         RopeBounce,
+        LightBridgePass,
+        LightBridgeLand,
+        LightBridgeSpawn,
+        LightBridgeDespawn,
     }
 
+    // 光桥四个新 Cue 暂时复用现有开源素材；保留独立 Cue 名，
+    // 后续有专用音频时只换目录内容，不改玩法侧调用点。
     static readonly string[] Folders =
     {
         "01_Jump",
@@ -42,31 +48,39 @@ public class LabAudio : MonoBehaviour
         "10_CannonLoad",
         "11_CannonFire",
         "12_RopeBounce",
+        "07_IceMelt",
+        "02_Collision_Light",
+        "08_PortalEnter",
+        "07_IceMelt",
     };
 
-    // 响度过载的位置：撞击和 UI 压低，重击和发射抬高。
+    // 撞击以跳跃音量为基准逐级抬高；UI 保持压低。
     static readonly float[] Volumes =
     {
-        0.55f, 0.35f, 0.45f, 0.7f, 0.5f, 0.65f, 0.4f, 0.7f, 0.35f, 0.4f, 0.85f, 0.5f,
+        0.55f, 0.55f, 0.65f, 0.85f, 0.5f, 0.65f, 0.4f, 0.7f, 0.35f, 0.4f, 0.85f, 0.5f,
+        0.35f, 0.25f, 0.5f, 0.3f,
     };
 
     // 短音效给一点音高抖动，长音和 UI 保持原样。
     static readonly float[] PitchJitter =
     {
         0.06f, 0.08f, 0.08f, 0.05f, 0.06f, 0.07f, 0f, 0f, 0.02f, 0.04f, 0.03f, 0.06f,
+        0.03f, 0.05f, 0.02f, 0f,
     };
 
     const float CooldownSeconds = 0.05f;
-    const int VoiceCount = 12;
+    const int VoiceCount = 16;
 
     static LabAudio current;
 
     /// <summary>静音开关（关掉后所有 Cue 都不再发声，已开始的尾音不管）。</summary>
     public static bool Muted;
 
-    /// <summary>音效音量倍率，由设置界面写入；主音量仍由 AudioListener.volume 统一控制。</summary>
+    /// <summary>主音量增益，由挂在 AudioListener 上的滤镜应用。</summary>
+    public static float MasterVolume = 1f;
+    /// <summary>音效音量增益，由每个声部的滤镜应用。</summary>
     public static float SfxVolume = 1f;
-    /// <summary>音乐音量倍率。当前没有音乐轨，先存值给后续音乐系统使用。</summary>
+    /// <summary>音乐音量增益。当前没有音乐轨，先存值给后续音乐系统使用。</summary>
     public static float MusicVolume = 1f;
 
     readonly AudioClip[][] clips = new AudioClip[Folders.Length][];
@@ -90,6 +104,7 @@ public class LabAudio : MonoBehaviour
             source.playOnAwake = false;
             // 屏幕空间玩法，不做 3D 衰减；音源自己带音量，PlayOneShot 用 1。
             source.spatialBlend = 0f;
+            go.AddComponent<LabAudioGain>().IsSfx = true;
             voices[i] = source;
         }
     }
@@ -103,19 +118,92 @@ public class LabAudio : MonoBehaviour
     public void Bind(TuningLab target)
     {
         if (lab != null) lab.PlayerHit -= OnPlayerHit;
+        UnsubscribeBridgeEvents();
         lab = target;
-        if (lab != null) lab.PlayerHit += OnPlayerHit;
+        if (lab == null) return;
+
+        lab.PlayerHit += OnPlayerHit;
+        LabPhantom.LightBridgeSpawned += OnLightBridgeSpawned;
+        LabPhantom.LightBridgeDespawned += OnLightBridgeDespawned;
+        SubscribeExistingBridges();
     }
 
     void OnDisable()
     {
         if (lab != null) lab.PlayerHit -= OnPlayerHit;
+        UnsubscribeBridgeEvents();
     }
 
     void OnPlayerHit(TuningLab.HitInfo info)
     {
         // 玩家对玩家的撞击：取结算后的挡位，跟撞地形同一套音色。
         PlayImpact(info.tierAfter);
+    }
+
+    void OnLightBridgeSpawned(LabPhantom phantom)
+    {
+        SubscribeBridgeContacts(phantom);
+        Play(Cue.LightBridgeSpawn);
+    }
+
+    void OnLightBridgeDespawned(LabPhantom phantom)
+    {
+        UnsubscribeBridgeContacts(phantom);
+        Play(Cue.LightBridgeDespawn);
+    }
+
+    void OnLightBridgeContact(LabLightBridgeBlock.BridgeContact contact)
+    {
+        LabLightBridgeBlock block = contact.block;
+        if (block == null) return;
+
+        if (block.Vertical)
+        {
+            if (contact.bounced) Play(Cue.RopeBounce);
+            else if (contact.passed) Play(Cue.LightBridgePass);
+            return;
+        }
+
+        Play(contact.passed ? Cue.LightBridgePass : Cue.LightBridgeLand);
+    }
+
+    void SubscribeExistingBridges()
+    {
+        for (int i = 0; i < LabPhantom.All.Count; i++)
+            SubscribeBridgeContacts(LabPhantom.All[i]);
+    }
+
+    static void SubscribeBridgeContacts(LabPhantom phantom)
+    {
+        if (phantom == null) return;
+        for (int i = 0; i < phantom.Bridge.Count; i++)
+        {
+            LabLightBridgeBlock block = phantom.Bridge[i];
+            if (block != null) block.Contacted += OnBridgeContactStatic;
+        }
+    }
+
+    static void UnsubscribeBridgeContacts(LabPhantom phantom)
+    {
+        if (phantom == null) return;
+        for (int i = 0; i < phantom.Bridge.Count; i++)
+        {
+            LabLightBridgeBlock block = phantom.Bridge[i];
+            if (block != null) block.Contacted -= OnBridgeContactStatic;
+        }
+    }
+
+    static void OnBridgeContactStatic(LabLightBridgeBlock.BridgeContact contact)
+    {
+        if (current != null) current.OnLightBridgeContact(contact);
+    }
+
+    void UnsubscribeBridgeEvents()
+    {
+        LabPhantom.LightBridgeSpawned -= OnLightBridgeSpawned;
+        LabPhantom.LightBridgeDespawned -= OnLightBridgeDespawned;
+        for (int i = 0; i < LabPhantom.All.Count; i++)
+            UnsubscribeBridgeContacts(LabPhantom.All[i]);
     }
 
     public static void Play(Cue cue)
@@ -150,7 +238,7 @@ public class LabAudio : MonoBehaviour
 
         var voice = voices[nextVoice];
         nextVoice = (nextVoice + 1) % VoiceCount;
-        voice.volume = Volumes[index] * Mathf.Clamp01(SfxVolume);
+        voice.volume = Volumes[index];
         float jitter = PitchJitter[index];
         voice.pitch = jitter > 0f ? 1f + Random.Range(-jitter, jitter) : 1f;
         voice.PlayOneShot(clip, 1f);

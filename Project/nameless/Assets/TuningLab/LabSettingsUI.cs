@@ -144,9 +144,7 @@ public class LabSettingsUI : MonoBehaviour
 
     void ApplyAudio()
     {
-        AudioListener.volume = Mathf.Clamp01(data.masterVolume);
-        LabAudio.SfxVolume = Mathf.Clamp01(data.sfxVolume);
-        LabAudio.MusicVolume = Mathf.Clamp01(data.musicVolume);
+        LabSettingsStore.Apply(data, false);
     }
 
     void ApplyWindow()

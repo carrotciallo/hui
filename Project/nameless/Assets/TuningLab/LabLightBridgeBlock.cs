@@ -33,10 +33,24 @@ public sealed class LabLightBridgeBlock : MonoBehaviour
     /// <summary>二级穿过后的忽略时长，和竖绳保持一致。</summary>
     public float passWindow = 0.22f;
 
+    /// <summary>一次光桥接触。字段与 <see cref="LabVerticalRope.RopeContact"/> 对齐。</summary>
+    public struct BridgeContact
+    {
+        public LabLightBridgeBlock block;
+        public LabPlayer player;
+        public int tier;
+        public Vector2 normal;     // 光桥 → 玩家
+        public bool passed;
+        public bool bounced;
+    }
+
+    public event System.Action<BridgeContact> Contacted;
+
     BoxCollider2D body;
     TuningLab lab;
     readonly List<Collider2D> passThrough = new List<Collider2D>();
     readonly List<float> passUntil = new List<float>();
+    readonly HashSet<LabPlayer> upwardPassNotified = new HashSet<LabPlayer>();
 
     void Awake()
     {
@@ -75,6 +89,11 @@ public sealed class LabLightBridgeBlock : MonoBehaviour
             passThrough.RemoveAt(i);
             passUntil.RemoveAt(i);
         }
+    }
+
+    void FixedUpdate()
+    {
+        TrackHorizontalUpwardPass();
     }
 
     /// <summary>生成一个光桥方块。填满整格，不再有薄片偏移。</summary>
@@ -149,15 +168,27 @@ public sealed class LabLightBridgeBlock : MonoBehaviour
     /// </summary>
     void OnCollisionEnter2D(Collision2D c)
     {
-        if (!Vertical || !c.collider.TryGetComponent(out LabPlayer player)) return;
-        if (player == null || body == null) return;
+        if (body == null || !c.collider.TryGetComponent(out LabPlayer player)) return;
+        if (Owner != null && player != Owner.Target) return;
+
+        if (!Vertical)
+        {
+            Vector2 platformNormal = ContactNormal(player, c);
+            if (platformNormal.y > 0.5f)
+                Raise(player, 0, platformNormal, false, false);
+            return;
+        }
 
         Vector2 normal = ContactNormal(player, c);
         float impact = Mathf.Abs(Vector2.Dot(player.PreImpactVelocity, normal));
         int tier = lab != null ? lab.TierOfSpeed(impact) : player.SpeedTier;
 
         // 零级 / 一级：和普通墙一样交给物理解算挡住。
-        if (tier < 2) return;
+        if (tier < 2)
+        {
+            Raise(player, tier, normal, false, false);
+            return;
+        }
 
         // 二级：沿法线穿过。忽略到玩家离开方块体，避免反复触发卡住。
         if (tier == 2)
@@ -171,6 +202,7 @@ public sealed class LabLightBridgeBlock : MonoBehaviour
             }
             // 进入回调时碰撞已经把法向速度解算掉了；把入射分量还回去才真的穿过去。
             player.ApplyAxisVelocity(normal, Vector2.Dot(player.PreImpactVelocity, normal));
+            Raise(player, tier, normal, true, false);
             return;
         }
 
@@ -178,6 +210,32 @@ public sealed class LabLightBridgeBlock : MonoBehaviour
         float speed = BounceSpeed(player, normal);
         player.ApplyBounce(normal, speed);
         player.ApplyTerrainImpact(normal, impact);
+        Raise(player, tier, normal, false, true);
+    }
+
+    /// <summary>
+    /// 横向光桥从下往上顶穿时不会产生 Collision2D，只能在玩家穿过体块期间补判。
+    /// 同一名玩家在同一条光桥里只报一次，离开体块后重新上弦。
+    /// </summary>
+    void TrackHorizontalUpwardPass()
+    {
+        if (Vertical || body == null || Owner == null || Owner.Target == null) return;
+
+        LabPlayer player = Owner.Target;
+        bool overlaps = body.bounds.Intersects(player.BodyBounds);
+        if (!overlaps)
+        {
+            upwardPassNotified.Remove(player);
+            return;
+        }
+
+        Vector2 upwardVelocity = player.PreImpactVelocity;
+        bool fromBelow = upwardVelocity.y > 0.01f &&
+                         player.BodyBounds.center.y < body.bounds.center.y;
+        if (!fromBelow || !upwardPassNotified.Add(player)) return;
+
+        int tier = lab != null ? lab.TierOfSpeed(upwardVelocity.y) : player.VerticalTier;
+        Raise(player, tier, Vector2.up, true, false);
     }
 
     /// <summary>接触法线，方向统一为“方块 → 玩家”。只取轴向，再用玩家中心方位定朝外。</summary>
@@ -201,6 +259,19 @@ public sealed class LabLightBridgeBlock : MonoBehaviour
     {
         if (lab == null) return 30f;
         return lab.RopeBounceSpeed(Vector2.Dot(player.PreImpactVelocity, normal));
+    }
+
+    void Raise(LabPlayer player, int tier, Vector2 normal, bool passed, bool bounced)
+    {
+        Contacted?.Invoke(new BridgeContact
+        {
+            block = this,
+            player = player,
+            tier = tier,
+            normal = normal,
+            passed = passed,
+            bounced = bounced
+        });
     }
 
     void ReleasePassThrough()

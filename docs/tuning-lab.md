@@ -88,7 +88,7 @@ Assets/TuningLab/
 ├── LabVisual.cs          玩家边框/眼睛
 ├── LabChargeFeedback.cs  冲刺就绪轮廓闪烁与头顶粒子
 ├── LabSpeedFeedback.cs   V3 起 / 顶档 V6 残影与拖尾
-├── LabAudio.cs           运行时音效（12 个 Cue）
+├── LabAudio.cs           运行时音效（16 个 Cue）
 ├── LabSettingsUI.cs      纯图标设置界面、Esc 暂停/恢复
 ├── LabSettingsStore.cs   设置 JSON、备份与坏档恢复
 ├── Resources/SettingsIcons/  16×16 设置图标（同名 PNG 可替换）

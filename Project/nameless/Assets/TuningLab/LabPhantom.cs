@@ -19,6 +19,9 @@ public sealed class LabPhantom : MonoBehaviour
     /// <summary>Play 时生成的所有幻影，按生成顺序排队（越靠前越旧）。</summary>
     public static readonly List<LabPhantom> All = new List<LabPhantom>();
 
+    public static event System.Action<LabPhantom> LightBridgeSpawned;
+    public static event System.Action<LabPhantom> LightBridgeDespawned;
+
     public LabPlayer Source { get; private set; }
     public LabPlayer Target { get; private set; }
     public LabForm Form { get; private set; }
@@ -279,6 +282,8 @@ public sealed class LabPhantom : MonoBehaviour
                 Bridge.Add(block);
             }
         }
+
+        if (Bridge.Count > 0) LightBridgeSpawned?.Invoke(this);
     }
 
     /// <summary>
@@ -429,6 +434,8 @@ public sealed class LabPhantom : MonoBehaviour
     /// <summary>拆掉这条幻影铺的光桥。方块立即从静态表移除，同一帧的生成不会读到已销毁对象。</summary>
     public void ClearLightBridge()
     {
+        bool hadBridge = Bridge.Count > 0;
+        if (hadBridge) LightBridgeDespawned?.Invoke(this);
         for (int i = 0; i < Bridge.Count; i++)
         {
             var block = Bridge[i];
