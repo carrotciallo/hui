@@ -31,6 +31,7 @@ public sealed partial class LabLevelEditorWindow
         if (data.magmas != null) data.magmas.RemoveAll(magma => magma.cell == cell);
         if (data.hiddenBlocks != null) data.hiddenBlocks.RemoveAll(block => block.cell == cell);
         if (data.repairBlocks != null) data.repairBlocks.RemoveAll(block => block.cell == cell);
+        if (data.pixelArts != null) data.pixelArts.RemoveAll(art => art.Cells().Contains(cell));
         if (data.respawnPoints != null)
             data.respawnPoints.RemoveAll(point => point.Cells().Contains(cell));
         if (data.teleports != null)
@@ -327,6 +328,10 @@ public sealed partial class LabLevelEditorWindow
                 if (RopeCoversCell(data.ropes[i], cell))
                     return new Pick { kind = PickKind.Rope, index = i };
 
+        int pixelArtIndex = data.FindPixelArtIndex(cell);
+        if (pixelArtIndex >= 0)
+            return new Pick { kind = PickKind.PixelArt, index = pixelArtIndex };
+
         if (data.solids != null)
             for (int i = 0; i < data.solids.Count; i++)
                 if (data.solids[i] == cell)
@@ -352,6 +357,7 @@ public sealed partial class LabLevelEditorWindow
             case PickKind.HiddenBlock:
                 return data.hiddenBlocks != null && pick.index >= 0 && pick.index < data.hiddenBlocks.Count;
             case PickKind.RepairBlock: return pick.index >= 0 && pick.index < data.repairBlocks.Count;
+            case PickKind.PixelArt: return pick.index >= 0 && pick.index < data.pixelArts.Count;
             case PickKind.RespawnPoint: return pick.index >= 0 && pick.index < data.respawnPoints.Count;
             case PickKind.TeleportPoint: return pick.index >= 0 && pick.index < data.teleports.Count;
             default: return false;
@@ -374,6 +380,7 @@ public sealed partial class LabLevelEditorWindow
             case PickKind.HiddenBlock:
                 return new RectInt(data.hiddenBlocks[pick.index].cell, Vector2Int.one);
             case PickKind.RepairBlock: return new RectInt(data.repairBlocks[pick.index].cell, Vector2Int.one);
+            case PickKind.PixelArt: return data.pixelArts[pick.index].Cells();
             case PickKind.RespawnPoint: return CellRect(data.respawnPoints[pick.index].position);
             case PickKind.TeleportPoint: return CellRect(data.teleports[pick.index].position);
             default: return new RectInt(0, 0, 0, 0);
@@ -396,6 +403,12 @@ public sealed partial class LabLevelEditorWindow
                 return "隐藏方块 组" + level.Data.hiddenBlocks[pick.index].groupId +
                     " @ " + level.Data.hiddenBlocks[pick.index].cell;
             case PickKind.RepairBlock: return "修复方块 #" + pick.index;
+            case PickKind.PixelArt:
+            {
+                var art = level.Data.pixelArts[pick.index];
+                return "像素画 " + (art.sprite != null ? art.sprite.name : "（丢失 Sprite）")
+                    + " " + art.size + " @ " + art.origin;
+            }
             case PickKind.RespawnPoint: return "重生点 #" + pick.index;
             case PickKind.TeleportPoint: return "传送点 #" + pick.index;
             default: return "（无）";

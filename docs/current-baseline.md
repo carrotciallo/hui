@@ -9,6 +9,7 @@
 - 关卡数据：`Assets/TuningLab/Level/LabLevelData.cs`
 - 关卡生成：`Assets/TuningLab/Level/LabLevel.cs`
 - 音效素材：`Assets/Sounds/Resources/`（运行时 `LabAudio` 挂载，不依赖场景引用）
+- 可摆放像素画素材：`Assets/TuningLab/Art/Resources/PixelArt/`
 - 启动主页：`Assets/Scenes/Home.unity`，Build Settings 第 0 项
 - 设置界面：`Assets/TuningLab/LabSettingsUI.cs`，图标在 `Assets/TuningLab/Resources/SettingsIcons/`
 - 设置存档：`Assets/TuningLab/LabSettingsStore.cs` → `Application.persistentDataPath/settings.json`
@@ -29,7 +30,7 @@
 ## 当前系统
 
 - 玩家：移动、跳跃、四向冲刺、速度等级、双人动量互换、红热锻造、碎边形态、u 大炮、L 转向器、灵体态（限时穿透，耗尽即死并掉临时钥匙）。
-- 关卡物件：竖绳/横绳、钥匙/门、地刺、冰块、岩浆块、隐藏方块、重生点、传送点、召回道具、幻影。
+- 关卡物件：竖绳/横绳、钥匙/门、地刺、冰块、岩浆块、隐藏方块、重生点、传送点、召回道具、幻影、纯视觉像素画。
 - 表现层：V3/V4 残影与拖尾、冲刺就绪轮廓闪烁与头顶粒子、死亡边框闪红、运行时音效（16 个 Cue，无场景引用）。
 - 主页：纯黑背景、三个纯图标入口、两条边缘出发的高亮边框蛇、地图/UI 素材横向漂浮，以及约 0.7 秒的电视关闭式转场。
 - 设置：纯图标 IMGUI；Esc 打开/关闭。玩法场景打开时 `Time.timeScale = 0`，关闭恢复暂停前的值；主页只冻结主页动效。主音量、音乐/音效音量、分辨率、全屏可用，亮度与按键绑定为预留位。

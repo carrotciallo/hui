@@ -57,6 +57,8 @@ public sealed partial class LabLevelEditorWindow
         EditorGUILayout.Space();
         DrawRepairBlocks();
         EditorGUILayout.Space();
+        DrawPixelArts();
+        EditorGUILayout.Space();
         DrawRespawnPoints();
         EditorGUILayout.Space();
         DrawTeleports();
@@ -284,6 +286,12 @@ public sealed partial class LabLevelEditorWindow
                     "同格再点 = 删除。",
                     MessageType.None);
                 break;
+            case Tool.PixelArt:
+                EditorGUILayout.HelpBox(
+                    "左键放置一张纯视觉像素画；同一起点再放同一张素材会删除。占地宽高可选 1×1、2×2 等任意正整数。\n" +
+                    "左下角对齐鼠标所在格，不生成碰撞体，不影响玩家规则。素材与尺寸在「像素画」面板里选择。",
+                    MessageType.None);
+                break;
             case Tool.RespawnPoint:
                 EditorGUILayout.HelpBox(
                     "左键放置 3×3 重生点；同一格再次点击删除。重生点由 LabLevel 数据生成，" +
@@ -355,7 +363,7 @@ public sealed partial class LabLevelEditorWindow
             "同一时间只有一个选区，它只是编辑器的状态，不存进关卡数据。\n" +
             "拖动时选区框和里面的物件一起移动；删除作用在选区覆盖的物件上。\n" +
             "增加选区会把新拖出的矩形并进当前选区，所以选区可以是不规则形状。\n" +
-            "地形格、绳、钥匙、门、地刺、冰块、岩浆块、重生点、传送点都算物件；出生点和关卡分区不算。",
+            "地形格、绳、钥匙、门、地刺、冰块、岩浆块、像素画、重生点、传送点都算物件；出生点和关卡分区不算。",
             MessageType.None);
     }
 

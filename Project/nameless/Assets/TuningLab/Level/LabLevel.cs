@@ -72,6 +72,7 @@ public sealed class LabLevel : MonoBehaviour
     public int MagmaCount => Data.magmas != null ? Data.magmas.Count : 0;
     public int HiddenBlockCount => Data.hiddenBlocks != null ? Data.hiddenBlocks.Count : 0;
     public int RepairBlockCount => Data.repairBlocks != null ? Data.repairBlocks.Count : 0;
+    public int PixelArtCount => Data.pixelArts != null ? Data.pixelArts.Count : 0;
     public int RespawnPointCount => Data.respawnPoints != null ? Data.respawnPoints.Count : 0;
     public int TeleportCount => Data.teleports != null ? Data.teleports.Count : 0;
 
@@ -222,6 +223,8 @@ public sealed class LabLevel : MonoBehaviour
         for (int i = 0; i < data.hiddenBlocks.Count; i++) AddHiddenBlock(root.transform, data.hiddenBlocks[i]);
         for (int i = 0; i < data.repairBlocks.Count; i++)
             AddRepairBlock(terrain, data.repairBlocks[i], material);
+        for (int i = 0; i < data.pixelArts.Count; i++)
+            AddPixelArt(root.transform, data.pixelArts[i]);
         for (int i = 0; i < data.respawnPoints.Count; i++)
             AddRespawnPoint(root.transform, data.respawnPoints[i]);
         for (int i = 0; i < data.teleports.Count; i++)
@@ -372,6 +375,28 @@ public sealed class LabLevel : MonoBehaviour
         go.transform.position = spec.position;
         var point = go.AddComponent<LabRespawnPoint>();
         point.ApplyShape();
+    }
+
+    /// <summary>像素画只负责显示：完整 Sprite 缩放进整数格占地，不创建碰撞体。</summary>
+    static void AddPixelArt(Transform parent, LabPixelArtSpec spec)
+    {
+        if (spec.sprite == null) return;
+
+        var go = new GameObject("PixelArt");
+        go.transform.SetParent(parent, false);
+        go.transform.position = spec.Center;
+
+        var renderer = go.AddComponent<SpriteRenderer>();
+        renderer.sprite = spec.sprite;
+        renderer.color = Color.white;
+        renderer.sortingOrder = spec.sortingOrder;
+
+        Vector2 nativeSize = spec.sprite.bounds.size;
+        if (nativeSize.x <= 0f || nativeSize.y <= 0f) return;
+        go.transform.localScale = new Vector3(
+            spec.size.x / nativeSize.x,
+            spec.size.y / nativeSize.y,
+            1f);
     }
 
     static void AddTeleport(Transform parent, LabTeleportSpec spec)

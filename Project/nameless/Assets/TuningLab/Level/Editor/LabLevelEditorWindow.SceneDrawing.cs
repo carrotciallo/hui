@@ -374,6 +374,22 @@ public sealed partial class LabLevelEditorWindow
         }
     }
 
+    void DrawPixelArtHandles(LabLevelData data)
+    {
+        if (data.pixelArts == null) return;
+        for (int i = 0; i < data.pixelArts.Count; i++)
+        {
+            var art = data.pixelArts[i];
+            Handles.color = art.sprite != null
+                ? new Color(1f, 0.55f, 0.9f, 0.75f)
+                : new Color(1f, 0.3f, 0.25f, 0.95f);
+            var cells = art.Cells();
+            Handles.DrawWireCube(
+                new Vector3(cells.x + cells.width * 0.5f, cells.y + cells.height * 0.5f, 0f),
+                new Vector3(cells.width, cells.height, 0.01f));
+        }
+    }
+
     void DrawRespawnPointHandles(LabLevelData data)
     {
         if (data.respawnPoints == null) return;
@@ -629,6 +645,24 @@ public sealed partial class LabLevelEditorWindow
             return;
         }
 
+        if (tool == Tool.PixelArt)
+        {
+            Vector2Int size = new Vector2Int(
+                Mathf.Max(1, newPixelArtSize.x),
+                Mathf.Max(1, newPixelArtSize.y));
+            bool blocked = newPixelArtSprite == null || !PixelArtFits(cell, size, data);
+            Handles.color = blocked
+                ? new Color(1f, 0.3f, 0.25f, 0.9f)
+                : new Color(1f, 0.55f, 0.9f, 0.9f);
+            Handles.DrawWireCube(
+                new Vector3(cell.x + size.x * 0.5f, cell.y + size.y * 0.5f, 0f),
+                new Vector3(size.x, size.y, 0.01f));
+            Handles.Label(
+                new Vector3(cell.x + 0.5f, cell.y + size.y + 0.2f, 0f),
+                blocked ? "像素画不可放置" : "像素画 " + size.x + "×" + size.y);
+            return;
+        }
+
         if (tool == Tool.RespawnPoint)
         {
             bool blocked = !inBounds;
@@ -700,6 +734,7 @@ public sealed partial class LabLevelEditorWindow
             case Tool.Magma: return new Color(1f, 0.34f, 0.12f, 0.95f);
             case Tool.HiddenBlock: return new Color(0.45f, 0.9f, 0.55f, 0.95f);
             case Tool.RepairBlock: return TuningLab.ColorA;
+            case Tool.PixelArt: return new Color(1f, 0.55f, 0.9f, 0.95f);
             case Tool.RespawnPoint: return new Color(0.35f, 1f, 0.65f, 0.95f);
             case Tool.TeleportPoint: return new Color(0.8f, 0.5f, 1f, 0.95f);
             case Tool.Marquee: return new Color(0.35f, 0.9f, 1f, 0.95f);
