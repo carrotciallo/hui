@@ -54,10 +54,10 @@ public class LabAudio : MonoBehaviour
         "07_IceMelt",
     };
 
-    // 响度过载的位置：撞击和 UI 压低，重击和发射抬高。
+    // 撞击以跳跃音量为基准逐级抬高；UI 保持压低。
     static readonly float[] Volumes =
     {
-        0.55f, 0.35f, 0.45f, 0.7f, 0.5f, 0.65f, 0.4f, 0.7f, 0.35f, 0.4f, 0.85f, 0.5f,
+        0.55f, 0.55f, 0.65f, 0.85f, 0.5f, 0.65f, 0.4f, 0.7f, 0.35f, 0.4f, 0.85f, 0.5f,
         0.35f, 0.25f, 0.5f, 0.3f,
     };
 
