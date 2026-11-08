@@ -41,7 +41,7 @@ _Avoid_: 召唤、拉人
 _Avoid_: 分身、残影（残影是速度反馈，不是可交互实体）
 
 **Cue**:
-`LabAudio` 的一个音效位，和 `Assets/Sounds/Resources/` 下的目录一一对应；12 个 Cue 覆盖跳跃、撞击、冰块、传送门、大炮和绳子。
+`LabAudio` 的一个音效位，映射到 `Assets/Sounds/Resources/` 下的素材目录；多个 Cue 可以暂时复用同一目录。当前 16 个 Cue 覆盖跳跃、撞击、冰块、传送门、大炮、绳子和光桥。
 _Avoid_: 音效事件、SoundEvent
 
 **灵体**:
