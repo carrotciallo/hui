@@ -159,6 +159,8 @@ public class LabPlayer : MonoBehaviour
     public bool CanLoad => canBeRedHot && form == LabForm.Cannon && loaded == null;
     /// <summary>进入时记下的速度 V前；膛空时是零。</summary>
     public Vector2 ChamberVelocity => loaded != null ? loaded.chamberVelocity : Vector2.zero;
+    /// <summary>最近一次出膛的速度，取的是 Wake 那一刻的值（出膛后立刻受重力，读实时速度会偏小）。</summary>
+    public Vector2 LastLaunchVelocity { get; private set; }
     /// <summary>下一发的出膛速度：√(Vb² + 一个等级间距的 v²)。</summary>
     public float LaunchSpeed => lab == null || loaded == null
         ? 0f
@@ -169,12 +171,19 @@ public class LabPlayer : MonoBehaviour
     Collider2D support;
     public LabVisual visual;
 
+    // NonAlloc 查询缓冲（照 LabIce/LabPhantom 的现行写法）：容量按 1 格范围内的
+    // 叠压上限给 16，远超实际（地形是合并碰撞体、玩家 2、钥匙/机关个位数）。
+    readonly Collider2D[] overlapHits = new Collider2D[16];
+    readonly RaycastHit2D[] groundHits = new RaycastHit2D[16];
+
     bool grounded;
     float dashLock;
     float playerContactTimer;
     float coyoteTimer;
     float jumpBuffer;
     float nextHitTime;
+    /// <summary>外抛撞击事件的最小接近速度（#82）：紧贴静止时的求解器残速远低于它，主动顶撞的走路速度 8 远高于它。</summary>
+    const float HitEventMinClosingSpeed = 1f;
     float facing = 1f;
     float dashTimer;
     Vector2 dashDir;
@@ -654,20 +663,55 @@ public class LabPlayer : MonoBehaviour
 
         if (ice == null)
         {
-            // 合并地形没有单块身份：找第一个落在冰块上的接触点。
+            // 合并地形没有单块身份：按接触点找回冰格。
+            //
+            // 不能取第一个能反查到冰的接触点就收工：#108 里玩家同时踩着第二行冰面、
+            // 又侧撞第一行拐角那块，同一个 Collision2D 里地面接触和墙面接触都在，
+            // 谁排在前面由物理引擎决定。按顺序取会拿到地面那个（法线朝上，水平速度
+            // 在它上面投影为 0），真正的撞墙接触永远没机会结算。
+            // 这里按**沿法线的撞击分量**挑最大的那个：谁被撞得最狠就算谁。
+            LabIce fallbackIce = null;
+            Vector2 fallbackN = n;
+            float fallbackImpact = impact;
+            bool haveFallback = false;
+
             for (int i = 0; i < c.contactCount; i++)
             {
                 ContactPoint2D contact = c.GetContact(i);
                 Vector2 cn = AxisNormal(contact.normal);
                 var candidate = LabIce.AtCell(contact.point - cn * 0.02f);
                 if (candidate == null) continue;
-                ice = candidate;
-                n = cn;
-                impact = Mathf.Abs(Vector2.Dot(lastFixedVelocity, cn));
-                break;
+
+                float candidateImpact = Mathf.Abs(Vector2.Dot(lastFixedVelocity, cn));
+
+                // 承重豁免只对"脚下那块冰"生效：踩着它不融，但不妨碍换一个接触面来判。
+                if (grounded && IsIceUnderPlayer(candidate))
+                {
+                    if (!haveFallback)
+                    {
+                        fallbackIce = candidate;
+                        fallbackN = cn;
+                        fallbackImpact = candidateImpact;
+                        haveFallback = true;
+                    }
+                    continue;
+                }
+
+                if (ice == null || candidateImpact > impact)
+                {
+                    ice = candidate;
+                    n = cn;
+                    impact = candidateImpact;
+                }
             }
 
-            if (ice == null) return false;
+            if (ice == null)
+            {
+                if (!haveFallback) return false;      // 有接触但都不是冰：交给普通地形
+                ice = fallbackIce;                    // 只有承重接触：保持原来的豁免行为
+                n = fallbackN;
+                impact = fallbackImpact;
+            }
         }
 
         LastImpactNormal = n;
@@ -860,7 +904,14 @@ public class LabPlayer : MonoBehaviour
         nextHitTime = Time.time + 0.18f;
         other.SetHitCooldown(Time.time + 0.18f);
 
-        if (lab != null)
+        // 只有真的迎面撞上才算一次「撞击事件」（#82，2026-11-07）：
+        // 两块紧贴静止时 Stay 回调每过 0.18s 冷却就会重跑一次互换，
+        // 旧逻辑无条件外抛，订阅方的碰撞音效便跟着无限重播。
+        // 接近速度 = 自己沿轴分量 − 对方沿轴分量（轴由自己指向对方）；
+        // 有一方主动顶着（走路 8）或冲刺/坠落撞入时它远大于门槛，照常外抛，
+        // 锻造/红热的判定在上面已经结算完，不受这道门影响。
+        float closingSpeed = a - b;
+        if (lab != null && closingSpeed > HitEventMinClosingSpeed)
         {
             lab.RaisePlayerHit(new TuningLab.HitInfo
             {
@@ -1122,10 +1173,10 @@ public class LabPlayer : MonoBehaviour
     /// <summary>这个格子中心是不是被实体挡住：只认实心碰撞体，玩家和触发器都让开。</summary>
     bool IsCellFreeOfSolids(Vector2 point)
     {
-        var hits = Physics2D.OverlapPointAll(point);
-        for (int i = 0; i < hits.Length; i++)
+        int count = Physics2D.OverlapPoint(point, ContactFilter2D.noFilter, overlapHits);
+        for (int i = 0; i < count; i++)
         {
-            Collider2D hit = hits[i];
+            Collider2D hit = overlapHits[i];
             if (hit == null || hit == col || hit.isTrigger) continue;
             if (hit.GetComponentInParent<LabPlayer>() != null) continue;
             return false;
@@ -1138,10 +1189,10 @@ public class LabPlayer : MonoBehaviour
     {
         if (col == null || KeyCount >= MaxHeldKeys) return;
         Bounds b = col.bounds;
-        var hits = Physics2D.OverlapBoxAll(b.center, b.size, 0f);
-        for (int i = 0; i < hits.Length; i++)
+        int count = Physics2D.OverlapBox(b.center, b.size, 0f, ContactFilter2D.noFilter, overlapHits);
+        for (int i = 0; i < count; i++)
         {
-            LabKey key = hits[i] != null ? hits[i].GetComponent<LabKey>() : null;
+            LabKey key = overlapHits[i] != null ? overlapHits[i].GetComponent<LabKey>() : null;
             if (key != null && key.TryCollect(this)) return;
         }
     }
@@ -1329,6 +1380,10 @@ public class LabPlayer : MonoBehaviour
         if (exit == entry) return false;
 
         loaded = b;
+        // 和 TryAbsorb 一样要把 B 的 host 指过来：Suspended 靠 host 判定，
+        // 少了这一句 TryResolveHit 开头那道 if (dart.Suspended) return 就挡不住，
+        // 同一个接触会逐帧重复走装填，B 也会继续收碰撞回调被弹开（#96）。
+        b.host = this;
         loadedConverter = true;
         converterExitEdge = exit;
         converterLoadTimer = 1f;
@@ -1369,6 +1424,7 @@ public class LabPlayer : MonoBehaviour
         loadedConverter = false;
         Vector2 dir = LabForms.EdgeNormal(converterExitEdge);
         float speed = b.chamberVelocity.magnitude;
+        LastLaunchVelocity = dir * speed;
         b.Wake(rb.position + dir * (HalfHeight + b.HalfHeight + 0.05f), dir * speed);
         if (loadedDash.active)
         {
@@ -1537,10 +1593,10 @@ public class LabPlayer : MonoBehaviour
         Bounds b = col.bounds;
         var origin = new Vector2(b.center.x, b.min.y + 0.01f);
         var size = new Vector2(b.size.x * 0.9f, 0.02f);
-        var hits = Physics2D.BoxCastAll(origin, size, 0f, Vector2.down, 0.06f, -1);
-        for (int i = 0; i < hits.Length; i++)
+        int count = Physics2D.BoxCast(origin, size, 0f, Vector2.down, ContactFilter2D.noFilter, groundHits, 0.06f);
+        for (int i = 0; i < count; i++)
         {
-            var hit = hits[i].collider;
+            var hit = groundHits[i].collider;
             if (hit == null || hit == col || hit.isTrigger) continue;
             support = hit;
             return true;

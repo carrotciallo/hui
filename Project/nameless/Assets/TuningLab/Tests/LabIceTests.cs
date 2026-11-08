@@ -113,8 +113,14 @@ public sealed class LabIceTests
 
         Assert.IsNotNull(ices[0].GroupBorder, "1 号组有边框");
         Assert.IsNotNull(ices[1].GroupBorder, "2 号组有边框");
-        Assert.AreEqual(LabIce.GroupColor(1), ices[0].GroupBorder.color, "1 号组边框色");
-        Assert.AreEqual(LabIce.GroupColor(2), ices[1].GroupBorder.color, "2 号组边框色");
+
+        // 边框色 = 组色 RGB + BorderAlpha，柔和一点但组别仍然分得清。
+        Color expected1 = LabIce.GroupColor(1);
+        Color expected2 = LabIce.GroupColor(2);
+        expected1.a *= LabIce.BorderAlpha;
+        expected2.a *= LabIce.BorderAlpha;
+        Assert.AreEqual(expected1, ices[0].GroupBorder.color, "1 号组边框色");
+        Assert.AreEqual(expected2, ices[1].GroupBorder.color, "2 号组边框色");
         Assert.AreNotEqual(ices[0].GroupBorder.color, ices[1].GroupBorder.color,
             "不同组的边框颜色不同");
 
@@ -122,6 +128,14 @@ public sealed class LabIceTests
         Assert.AreEqual(1f, texture.GetPixel(0, 0).a, 0.02f, "组色边框不透明");
         Assert.AreEqual(0f, texture.GetPixel(texture.width / 2, texture.height / 2).a,
             0.02f, "边框中间透明，露出蓝色填充");
+
+        // 线宽：#88 —— 可见可分辨，但只占 1 像素（整格的 1/16），不能糊成厚边。
+        // 量 x 方向要取中间那一行：贴边的整行都在边框带上，用 y=0 横着量没有意义。
+        int midRow = texture.height / 2;
+        Assert.AreEqual(1, LabIce.BorderPixels, "边框线宽按 #88 定成 1 像素");
+        Assert.AreEqual(1f, texture.GetPixel(0, midRow).a, 0.02f, "最外沿 1 像素是边框");
+        Assert.AreEqual(0f, texture.GetPixel(LabIce.BorderPixels, midRow).a, 0.02f,
+            "第 2 像素起就是透明填充，说明边框只有 1 像素宽");
         yield return null;
     }
 
@@ -174,6 +188,31 @@ public sealed class LabIceTests
         Assert.IsTrue(ice.GetComponent<BoxCollider2D>().enabled, "碰撞恢复");
         Assert.IsTrue(ice.GetComponent<SpriteRenderer>().enabled, "渲染恢复");
         yield return null;
+    }
+
+    /// <summary>
+    /// #78：冰并进地形的 CompositeCollider2D 之后，BoxCollider2D.enabled 不再代表
+    /// "这一格挡不挡人"，语义读数必须能区分破坏和恢复。这条就是当初永远为红的那条。
+    /// </summary>
+    [UnityTest]
+    public IEnumerator MergedIceReportsSolidStateThroughSemantics()
+    {
+        MakeIceLevel(1);
+        yield return null;
+        Physics2D.SyncTransforms();
+
+        var ice = LabIce.All[0];
+        Assert.IsTrue(ice.IsSolidAtCell(), "合并地形里的冰初始挡得住人");
+
+        ice.BreakOne();
+        Physics2D.SyncTransforms();
+        Assert.IsTrue(ice.Broken, "破坏态");
+        Assert.IsFalse(ice.IsSolidAtCell(), "破坏后不再挡人");
+
+        ice.ResetIce();
+        Physics2D.SyncTransforms();
+        Assert.IsFalse(ice.Broken, "重置后不再是破坏态");
+        Assert.IsTrue(ice.IsSolidAtCell(), "重置后重新挡得住人");
     }
 
     // 冰面识别 -----------------------------------------------------------
@@ -575,5 +614,56 @@ public sealed class LabIceTests
         }
 
         Assert.IsTrue(condition(), $"等待条件超时（{timeoutSeconds}s）");
+    }
+
+    // #108：直角拐角处的冰撞不碎 ------------------------------------------
+
+    /// <summary>
+    /// Issue #108 的布局：(0,1) 一块孤立的冰，正下方 (0,0) 接一整排冰，形成直角。
+    /// 从右侧水平撞向 (0,1)，速度达到破坏门槛时它必须碎。
+    /// </summary>
+    [UnityTest]
+    public IEnumerator IceAtRightAngleCornerBreaksWhenHitFromTheSide()
+    {
+        var level = root.AddComponent<LabLevel>();
+        lab.level = level;
+        for (int x = 0; x <= 8; x++) level.Data.PlaceIce(new Vector2Int(x, 0), 1);   // 下面一整排
+        level.Data.PlaceIce(new Vector2Int(0, 1), 1);                               // 拐角那块
+        level.Data.Normalize();
+        level.BuildRuntime(root.transform, slick);
+        yield return null;
+        Physics2D.SyncTransforms();
+
+        LabIce corner = null;
+        for (int i = 0; i < LabIce.All.Count; i++)
+            if (LabIce.All[i].cell == new Vector2Int(0, 1)) { corner = LabIce.All[i]; break; }
+        Assert.IsNotNull(corner, "拐角那块冰要存在");
+
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        // 站在第二行冰顶上，贴着 (0,1) 的右侧，水平向左撞
+        a.Teleport(new Vector2(2.5f, 1f + a.HalfHeight));
+        yield return WaitUntil(() => a.Grounded, 2f);
+        yield return new WaitForFixedUpdate();
+
+        float speed = lab.IceBreakSpeed + 4f;
+        a.SetVelocity(new Vector2(-speed, 0f));
+
+        // 逐帧记录：位置、速度、撞击读数，失败时能直接看出卡在哪一步
+        string trace = "";
+        for (int i = 0; i < 20; i++)
+        {
+            yield return new WaitForFixedUpdate();
+            trace += i + ": x=" + a.transform.position.x.ToString("F2")
+                + " v=" + a.Velocity.x.ToString("F1")
+                + " tier=" + a.LastImpactTier
+                + " speed=" + a.LastImpactSpeed.ToString("F1")
+                + " n=" + a.LastImpactNormal
+                + " grounded=" + a.Grounded + "\n";
+        }
+
+        Assert.IsTrue(corner.Broken,
+            "从右侧撞直角拐角处的冰，达到破坏速度就该碎。实际 x=" +
+            a.transform.position.x.ToString("F2") + " speed=" + speed.ToString("F1") +
+            " 门槛=" + lab.IceBreakSpeed.ToString("F1") + "\n" + trace);
     }
 }

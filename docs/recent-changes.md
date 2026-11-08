@@ -2,6 +2,22 @@
 
 记录近期合并进 `main` 的工程改动。当前开发入口和规则基准见 [current-baseline.md](current-baseline.md)；设计草稿见 [策划案](策划案/)。
 
+## 2026-11-07
+
+### 机制与表现层
+
+- 修复方块（#63，PR #83）：`LabRepairBlock` + 关卡数据 + 编辑器工具；A 的热二/灵体边贴面回普通，不消耗、不限次数，装填态/灵体整块不响应。
+- 幻影定案与光桥（#76，PR #90）：玻璃大炮、L 幻影瞬时转出、电梯形幻影铺光桥；幻影上限以代码为准是 2 个 FIFO（本文与术语表旧写的 3 个已同步修正）。
+- 主页（#70，PR #86）：`Home.unity` + 动画主页（边框蛇、漂浮素材、电视关闭式转场），Build Settings 第 0 项。
+- 冲刺就绪反馈（PR #85）：充能补满时轮廓闪烁 + 头顶粒子（`LabChargeFeedback`）。
+- 冰块组色边框收窄到 1 像素并压低明度（#88，PR #95）。
+
+### 验证与工程
+
+- PlayCheck 冰块断言改读语义实体状态（#78，PR #89）；地刺忽略零面积接触（#87，PR #93）；玻璃大炮用例不再访问已自毁的幻影。
+- ProjectSettings、包版本与隐藏方块调试关收口（PR #91）。
+- PlayMode 规格增至 17 个文件、197 条（新增 LightBridge 11、Home 12、ChargeFeedback 5 等）；现行规则 §5 的计数已同步。
+
 ## 2026-11-06
 
 ### 机制与表现层
@@ -9,7 +25,7 @@
 - 隐藏方块（#59）：`LabHiddenBlock` + `LabLevelData.hiddenBlocks` + 关卡编辑器工具 + 演示关；无实体、按组永久半透明、`MapReset` 不恢复。
 - 音效（#60）：`LabAudio` 运行时挂载，12 个 Cue；素材在 `Assets/Sounds/Resources/`，不依赖场景引用。
 - 速度/死亡反馈（#62）：`LabSpeedFeedback` 的 V3/V4 残影与拖尾，`TuningLab` 的死亡边框闪红。
-- 召回与幻影（#69）：`LabRecallPickup` / `LabPhantom`；A 按 `Q`、B 按右 `Shift`，头顶 1 格有空间时把另一名玩家拉到头顶并在旧位置留下幻影；最多 3 个 FIFO。
+- 召回与幻影（#69）：`LabRecallPickup` / `LabPhantom`；A 按 `Q`、B 按右 `Shift`，头顶 1 格有空间时把另一名玩家拉到头顶并在旧位置留下幻影；最多 2 个 FIFO；电梯形幻影铺光桥。
 - 判据修复：双人撞击补齐锻造门槛（#65）；A 碎边后仍可拾取钥匙（#67）。
 - 传送门进出场动画收尾；相机 `SnapFocus` 与阶段机接入。
 - 冰块运行时保持默认冰蓝填充，外圈显示 2 像素组色边框，和编辑器手柄共用 `LabIce.GroupColor`；前 1024 个组号不重复。
