@@ -303,7 +303,179 @@ public sealed class LabLightBridgeTests
 
         Assert.IsNotNull(effector, "横向光桥要有单向平台组件");
         Assert.IsTrue(effector.useOneWay, "走单向");
+        Assert.AreEqual(160f, effector.surfaceArc, 0.001f,
+            "收窄单向有效弧，避免横向经过时被侧边挡住");
+        Assert.AreEqual(0f, effector.rotationalOffset, 0.001f, "平台方向不额外旋转");
+        Assert.IsFalse(effector.useSideFriction, "侧面不产生摩擦");
+        Assert.IsFalse(effector.useSideBounce, "侧面不产生反弹");
         Assert.IsTrue(body.usedByEffector, "碰撞箱要交给 effector 处理");
+    }
+
+    [UnityTest]
+    public IEnumerator HorizontalBridgeCanBeEnteredFromBelowAndLandedOn()
+    {
+        var phantom = SpawnPhantom(
+            LabForms.LeftBit | LabForms.RightBit, new Vector2Int(0, 5));
+        yield return null;
+
+        var block = FindBridge(phantom, new Vector2Int(1, 5));
+        Assert.IsNotNull(block);
+        var b = phantom.Target;
+        b.Teleport(new Vector2(1.5f, 4.2f));
+        yield return null;
+        b.SetVelocity(new Vector2(0f, 31f));
+
+        float passDeadline = Time.time + 0.3f;
+        while (Time.time < passDeadline && b.BodyBounds.min.y < block.Bounds.max.y)
+            yield return new WaitForFixedUpdate();
+        Assert.Greater(b.BodyBounds.min.y, block.Bounds.max.y,
+            "B 从下方应能顶穿横向光桥");
+
+        float landDeadline = Time.time + 1.2f;
+        while (Time.time < landDeadline && !b.Grounded) yield return new WaitForFixedUpdate();
+        Assert.IsTrue(b.Grounded, "穿过之后应能正常落回平台顶面");
+        Assert.AreEqual(block.Bounds.max.y, b.BodyBounds.min.y, 0.08f,
+            "脚底落在光桥顶面");
+    }
+
+    [UnityTest]
+    public IEnumerator HorizontalBridgeDoesNotBlockSidewaysTravel()
+    {
+        var block = LabLightBridgeBlock.Spawn(
+            null, new Vector2Int(10, 5), false, false, root.transform, slick);
+        yield return null;
+
+        var b = MakePlayer("B_Chunk", TuningLab.B_Pixels, false);
+        float halfWidth = TuningLab.B_Pixels / (2f * TuningLab.CellPixels);
+        b.Teleport(new Vector2(block.Bounds.min.x - halfWidth - 0.5f, block.Bounds.center.y));
+        yield return null;
+        lab.horizontalAirDrag = false;
+        b.SetVelocity(new Vector2(31f, 0f));
+
+        float deadline = Time.time + 0.4f;
+        while (Time.time < deadline && b.BodyBounds.min.x < block.Bounds.max.x)
+            yield return new WaitForFixedUpdate();
+        Assert.Greater(b.BodyBounds.min.x, block.Bounds.max.x,
+            "横向穿过光桥时不应被侧面挡住");
+    }
+
+    [UnityTest]
+    public IEnumerator DestroyingBridgeImmediatelyReleasesStandingPlayer()
+    {
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        var b = MakePlayer("B_Chunk", TuningLab.B_Pixels, false);
+        Link(a, b);
+        a.Teleport(new Vector2(-15.5f, a.HalfHeight));
+        b.Teleport(new Vector2(-20.5f, b.HalfHeight));
+        yield return null;
+
+        var phantom = SpawnPhantom(
+            LabForms.LeftBit | LabForms.RightBit, new Vector2Int(0, 5), a, b);
+        yield return null;
+        var block = FindBridge(phantom, new Vector2Int(1, 5));
+        Assert.IsNotNull(block);
+
+        b.Teleport(new Vector2(1.5f, block.Bounds.max.y + b.HalfHeight + 0.1f));
+        yield return null;
+
+        float landDeadline = Time.time + 1f;
+        while (Time.time < landDeadline && !b.Grounded) yield return new WaitForFixedUpdate();
+        Assert.IsTrue(b.Grounded, "先站上光桥");
+
+        float beforeY = b.transform.position.y;
+        phantom.DestroyPhantom();
+        yield return new WaitForFixedUpdate();
+
+        Assert.IsFalse(b.Grounded, "桥销毁当步就应撤销落地状态");
+        Assert.LessOrEqual(b.Velocity.y, 0.1f, "不能因碰撞恢复被向上弹");
+        yield return new WaitForFixedUpdate();
+        Assert.Less(b.transform.position.y, beforeY, "失去支撑后开始下落");
+    }
+
+    [UnityTest]
+    public IEnumerator BridgeSpawnUnderStandingPlayerDoesNotDisplaceIt()
+    {
+        var a = MakePlayer("A_Box", TuningLab.A_Pixels, true);
+        var b = MakePlayer("B_Chunk", TuningLab.B_Pixels, false);
+        Link(a, b);
+        a.Teleport(new Vector2(-15.5f, a.HalfHeight));
+        b.Teleport(new Vector2(2.5f, 5.5f));
+        b.GetComponent<Rigidbody2D>().gravityScale = 0f;
+        yield return null;
+        Vector2 before = b.transform.position;
+
+        var phantom = SpawnPhantom(
+            LabForms.LeftBit | LabForms.RightBit, new Vector2Int(0, 5), a, b);
+        yield return null;
+        yield return new WaitForFixedUpdate();
+
+        Assert.Less(Vector2.Distance(before, b.transform.position), 0.08f,
+            "新生成在 B 身上的光桥应该让路，不能把 B 挤出去");
+        var block = FindBridge(phantom, new Vector2Int(2, 5));
+        Assert.IsNotNull(block);
+        Assert.IsTrue(block.PassesForbiddenPlayer);
+    }
+
+    [UnityTest]
+    public IEnumerator BridgeAdjacentToMagmaKeepsOnlyTheApproachCell()
+    {
+        var level = root.AddComponent<LabLevel>();
+        lab.level = level;
+        for (int y = 3; y <= 7; y++) level.Data.PlaceMagma(new Vector2Int(2, y), 1);
+        level.Data.Normalize();
+        level.BuildRuntime(root.transform, slick);
+        yield return null;
+        Physics2D.SyncTransforms();
+
+        var phantom = SpawnPhantom(
+            LabForms.LeftBit | LabForms.RightBit, new Vector2Int(0, 5));
+        yield return null;
+
+        Assert.IsNotNull(FindBridge(phantom, new Vector2Int(1, 5)),
+            "岩浆前一格仍要生成光桥");
+        Assert.IsNull(FindBridge(phantom, new Vector2Int(2, 5)),
+            "光桥不能铺进岩浆格");
+    }
+
+    [UnityTest]
+    public IEnumerator VerticalBridgeAndVerticalRopeCanCoexist()
+    {
+        var ropeGo = new GameObject("VerticalRope");
+        ropeGo.transform.SetParent(root.transform, false);
+        ropeGo.transform.position = new Vector3(2.5f, 5.5f, 0f);
+        var ropeBody = ropeGo.AddComponent<BoxCollider2D>();
+        ropeBody.size = new Vector2(0.375f, 2f);
+        var rope = ropeGo.AddComponent<LabVerticalRope>();
+        rope.cells = 2;
+        rope.ApplyShape();
+        yield return null;
+
+        var phantom = SpawnPhantom(
+            LabForms.TopBit | LabForms.BottomBit, new Vector2Int(0, 5));
+        yield return null;
+
+        Assert.AreSame(rope, LabVerticalRope.All.Find(r => r == rope),
+            "竖绳仍注册在运行时列表");
+        Assert.IsNotNull(FindBridge(phantom, new Vector2Int(0, 6)),
+            "竖直光桥照常向上生成");
+        Assert.IsNotNull(FindBridge(phantom, new Vector2Int(0, 4)),
+            "竖直光桥照常向下生成");
+    }
+
+    [UnityTest]
+    public IEnumerator BridgeLengthStillStopsAtTwentyFourCellsPerSide()
+    {
+        var phantom = SpawnPhantom(
+            LabForms.LeftBit | LabForms.RightBit, new Vector2Int(0, 5));
+        yield return null;
+
+        Assert.AreEqual(LabPhantom.MaxBridgeCells * 2, phantom.Bridge.Count,
+            "空场左右各铺满 24 格");
+        Assert.IsNotNull(FindBridge(phantom, new Vector2Int(1, 5)));
+        Assert.IsNotNull(FindBridge(phantom, new Vector2Int(LabPhantom.MaxBridgeCells, 5)));
+        Assert.IsNull(FindBridge(phantom, new Vector2Int(1 + LabPhantom.MaxBridgeCells, 5)));
+        Assert.IsNotNull(FindBridge(phantom, new Vector2Int(-LabPhantom.MaxBridgeCells, 5)));
+        Assert.IsNull(FindBridge(phantom, new Vector2Int(-1 - LabPhantom.MaxBridgeCells, 5)));
     }
 
     [UnityTest]

@@ -51,6 +51,7 @@ public sealed class LabLightBridgeBlock : MonoBehaviour
 
     BoxCollider2D body;
     TuningLab lab;
+    bool preparedForDestroy;
     readonly List<Collider2D> passThrough = new List<Collider2D>();
     readonly List<float> passUntil = new List<float>();
     readonly HashSet<LabPlayer> upwardPassNotified = new HashSet<LabPlayer>();
@@ -119,7 +120,10 @@ public sealed class LabLightBridgeBlock : MonoBehaviour
             // 横向光桥 = 单向平台：从下往上穿过并站住，其它方向不挡。
             var effector = go.AddComponent<PlatformEffector2D>();
             effector.useOneWay = true;
-            effector.surfaceArc = 180f;
+            effector.surfaceArc = 160f;
+            effector.rotationalOffset = 0f;
+            effector.useSideFriction = false;
+            effector.useSideBounce = false;
             bc.usedByEffector = true;
         }
 
@@ -296,5 +300,22 @@ public sealed class LabLightBridgeBlock : MonoBehaviour
         return true;
     }
 
-    void OnDestroy() => All.Remove(this);
+    /// <summary>
+    /// 销毁前先撤掉玩家对这块桥的支撑/攀附引用，避免桥已排队销毁但玩家还要等一个
+    /// 物理步才重新探地。两个玩家都处理，不假设只有 B 会使用桥。
+    /// </summary>
+    public void PrepareForDestroy()
+    {
+        if (preparedForDestroy) return;
+        preparedForDestroy = true;
+        if (Owner == null) return;
+        if (Owner.Source != null) Owner.Source.ReleaseLightBridge(this);
+        if (Owner.Target != null) Owner.Target.ReleaseLightBridge(this);
+    }
+
+    void OnDestroy()
+    {
+        PrepareForDestroy();
+        All.Remove(this);
+    }
 }

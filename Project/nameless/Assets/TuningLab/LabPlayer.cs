@@ -1806,6 +1806,26 @@ public class LabPlayer : MonoBehaviour
         teleportFrozen = false;
     }
 
+    /// <summary>光桥销毁前主动释放它提供的攀附与落地支撑。</summary>
+    public void ReleaseLightBridge(LabLightBridgeBlock block)
+    {
+        if (block == null) return;
+        if (climbing == block)
+        {
+            climbing = null;
+            climbSide = 0f;
+            if (lab != null) rb.gravityScale = lab.GravityScale;
+        }
+
+        Collider2D bridgeCollider = block.GetComponent<Collider2D>();
+        if (support != null && support == bridgeCollider)
+        {
+            support = null;
+            grounded = false;
+            coyoteTimer = 0f;
+        }
+    }
+
     // ------------------------------------------------------------------
 
     bool ProbeGround()
