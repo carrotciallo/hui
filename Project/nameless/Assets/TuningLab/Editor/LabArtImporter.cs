@@ -1,12 +1,14 @@
 using UnityEditor;
 using UnityEngine;
 
-/// <summary>Issue #26: deterministic native-pixel sprite import settings.</summary>
+/// <summary>Deterministic native-pixel sprite import settings for built-in and placed pixel art.</summary>
 public sealed class LabArtImporter : AssetPostprocessor
 {
     void OnPreprocessTexture()
     {
-        if (!assetPath.StartsWith("Assets/TuningLab/Art/Resources/HuiArt/")) return;
+        if (!assetPath.StartsWith("Assets/TuningLab/Art/Resources/HuiArt/")
+            && !assetPath.StartsWith("Assets/TuningLab/Art/Resources/PixelArt/"))
+            return;
         var importer = (TextureImporter)assetImporter;
         importer.textureType = TextureImporterType.Sprite;
         importer.spriteImportMode = SpriteImportMode.Single;
