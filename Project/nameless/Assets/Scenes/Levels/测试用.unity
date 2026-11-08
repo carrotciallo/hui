@@ -8068,7 +8068,7 @@ Sprite:
       height: 16
     textureRectOffset: {x: 0, y: 0}
     atlasRectOffset: {x: -1, y: -1}
-    settingsRaw: 3136
+    settingsRaw: 64
     uvTransform: {x: 16, y: 8, z: 16, w: 8}
     downscaleMultiplier: 1
   m_AtlasRD:
@@ -23049,6 +23049,11 @@ MonoBehaviour:
   dashLockTime: 0
   dashCooldown: 0.8
   groundOnlyDash: 0
+  chargeReadyFeedbackEnabled: 1
+  chargeReadyFlashDuration: 0.16
+  chargeReadyFlashAlpha: 0.85
+  chargeReadyParticleCount: 5
+  chargeReadyParticleLife: 0.45
   redHotTierIndex: 1
   forgeTierIndex: 0
   verticalHitEnabled: 1
@@ -23268,22 +23273,11 @@ MonoBehaviour:
       groupId: 1
     - cell: {x: 42, y: 1}
       groupId: 1
-    - cell: {x: 43, y: 1}
-      groupId: 1
-    - cell: {x: 44, y: 1}
-      groupId: 1
-    - cell: {x: 45, y: 1}
-      groupId: 1
-    - cell: {x: 46, y: 1}
-      groupId: 1
-    - cell: {x: 47, y: 1}
-      groupId: 1
-    - cell: {x: 48, y: 1}
-      groupId: 1
     - cell: {x: 49, y: 1}
       groupId: 1
     magmas: []
     hiddenBlocks: []
+    repairBlocks: []
     respawnPoints: []
     teleports: []
     partitions:
@@ -24121,7 +24115,7 @@ Sprite:
       height: 48
     textureRectOffset: {x: 0, y: 0}
     atlasRectOffset: {x: -1, y: -1}
-    settingsRaw: 3136
+    settingsRaw: 64
     uvTransform: {x: 16, y: 24, z: 16, w: 24}
     downscaleMultiplier: 1
   m_AtlasRD:
@@ -39102,7 +39096,7 @@ Sprite:
       height: 48
     textureRectOffset: {x: 0, y: 0}
     atlasRectOffset: {x: -1, y: -1}
-    settingsRaw: 3136
+    settingsRaw: 64
     uvTransform: {x: 16, y: 8, z: 16, w: 24}
     downscaleMultiplier: 1
   m_AtlasRD:
