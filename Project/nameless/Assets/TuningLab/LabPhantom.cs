@@ -256,8 +256,6 @@ public sealed class LabPhantom : MonoBehaviour
 
         bool vertical = BridgeIsVertical;
         Transform parent = transform.parent != null ? transform.parent : lab.transform;
-        // 横向光桥的薄板贴着格子上缘，竖直光桥的薄墙贴着格子右缘。
-        int slabSide = vertical ? 1 : 1;
 
         for (int axis = 0; axis < 2; axis++)
         {
@@ -272,7 +270,7 @@ public sealed class LabPhantom : MonoBehaviour
 
                 bool passesForbidden = OverlapsPlayer(cell, Target);
                 var block = LabLightBridgeBlock.Spawn(
-                    this, cell, vertical, slabSide, passesForbidden, parent, lab.SlickMaterial);
+                    this, cell, vertical, passesForbidden, parent, lab.SlickMaterial);
                 if (block == null) break;
 
                 // A（来源）永远能穿过自己幻影铺出来的光桥。
@@ -284,7 +282,8 @@ public sealed class LabPhantom : MonoBehaviour
     }
 
     /// <summary>
-    /// 这一格能不能继续铺：被实体、冰块、岩浆、门（或另一条光桥）占住就停。
+    /// 这一格能不能继续铺。被冰、岩浆、门这些物件或另一条光桥占住就停；
+    /// 普通地形 / 红热实体方块**不再截断**——光桥直接穿过去接着长（Issue #76）。
     /// 判定用格子中心 + 四条边中内侧采样，不用 0.98 宽的盒子 —— 那个盒子会溢出到相邻格，
     /// 把"隔壁有墙"误判成"这一格被堵"。
     /// </summary>
@@ -313,7 +312,13 @@ public sealed class LabPhantom : MonoBehaviour
 
     readonly Collider2D[] bridgeHits = new Collider2D[8];
 
-    /// <summary>这个点上有没有挡桥的实体。玩家不算，幻影自己不算。</summary>
+    /// <summary>
+    /// 这个点上有没有挡桥的东西。玩家不算，幻影自己不算，普通地形和红热实体方块也不算。
+    ///
+    /// 冰、岩浆、修复方块全都并进地形的同一个 CompositeCollider2D，
+    /// 从 collider 上看不出是哪一种，所以命中合并地形后要按**格子**反查：
+    /// 这一格有冰/岩浆/修复方块才停，否则就是普通地形，放行。
+    /// </summary>
     bool HasBlockerAt(Vector2 point)
     {
         int count = Physics2D.OverlapPoint(point, ContactFilter2D.noFilter, bridgeHits);
@@ -324,6 +329,22 @@ public sealed class LabPhantom : MonoBehaviour
             if (hit.GetComponentInParent<LabPhantom>() == this) continue;
             // 玩家不算障碍物：光桥穿过 A/B 继续生成。
             if (hit.GetComponentInParent<LabPlayer>() != null) continue;
+
+            // 独立摆放的物件（测试或手摆）直接看组件。
+            if (hit.GetComponentInParent<LabIce>() != null) return true;
+            if (hit.GetComponentInParent<LabMagma>() != null) return true;
+            if (hit.GetComponentInParent<LabRepairBlock>() != null) return true;
+            if (hit.GetComponentInParent<LabDoor>() != null) return true;
+
+            // 合并地形：按格子反查是不是冰/岩浆/修复方块；都不是就是普通地形，放行。
+            if (hit.GetComponentInParent<LabTerrainField>() != null)
+            {
+                if (LabIce.AtCell(point) != null) return true;
+                if (LabMagma.AtCell(point) != null) return true;
+                if (LabRepairBlock.AtCell(point) != null) return true;
+                continue;
+            }
+
             return true;
         }
         return false;

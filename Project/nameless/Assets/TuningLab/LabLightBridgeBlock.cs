@@ -2,21 +2,22 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 光桥方块：电梯形（‖ / =）幻影沿平行线方向延伸出来的临时薄片（Issue #76）。
+/// 光桥方块：电梯形（‖ / =）幻影沿平行线方向延伸出来的临时格子（Issue #76）。
 ///
-/// 形状按设计：一格宽、只有普通方块三分之一高，上缘与相邻方格的上缘齐平，
-/// 读起来是"贴着格子边缘的一条薄板"，不是一整块砖。美术未定，先用半透明白片顶替；
-/// 透明度比幻影本体（0.35）高一点，看得出是同一条光桥。
+/// 形状：填满整格（1×1），一格就是一条光柱，不再是贴边薄片。半透明白色，比幻影本体
+/// （0.35）实一点，看得出是同一条光桥。
 ///
-/// 碰撞箱和显示一致。A（幻影来源）永远能穿过；B 默认被挡住，只有"出生时就压在 B 身上"
-/// 的那些方块对 B 也让路，避免凭空把人夹进墙里。
+/// 通行规则按方向分两种：
+/// - 横向（=）：当单向平台用。从下往上穿得过去、站得住，从上落下和横向走都不挡。
+///   直接复用 <see cref="PlatformEffector2D"/>，和横绳同一套参数。
+/// - 纵向（‖）：竖绳的二级穿过逻辑。0/1 级挡住，2 级沿法线穿过，3 级及以上弹回并算一次红热撞击。
+///
+/// A（幻影来源）永远能穿过；B 默认按上面的规则走，另外"出生时就压在 B 身上"的那些格子对 B 也让路，
+/// 避免凭空把人夹进方块里。
 /// </summary>
 [RequireComponent(typeof(BoxCollider2D))]
 public sealed class LabLightBridgeBlock : MonoBehaviour
 {
-    /// <summary>薄片占一格的高度比例：设计给的是"三分之一左右"。</summary>
-    public const float HeightRatio = 1f / 3f;
-
     /// <summary>半透明白片，比幻影本体更实一点。</summary>
     public static readonly Color DefaultColor = new Color(0.86f, 0.95f, 1f, 0.55f);
 
@@ -25,26 +26,60 @@ public sealed class LabLightBridgeBlock : MonoBehaviour
 
     public Vector2Int Cell { get; private set; }
     public LabPhantom Owner { get; private set; }
-    /// <summary>竖直光桥：薄墙竖着贴格子的左边或右边。</summary>
+    /// <summary>竖直光桥：走竖绳的二级穿过逻辑。</summary>
     public bool Vertical { get; private set; }
-    /// <summary>贴哪条边：+1 上缘（横向）/ 右缘（竖直），-1 下缘（横向）/ 左缘（竖直）。</summary>
-    public int SlabSide { get; private set; }
+    /// <summary>这一格生成时就压在 B 身上，直接对 B 让路。</summary>
     public bool PassesForbiddenPlayer { get; private set; }
+    /// <summary>二级穿过后的忽略时长，和竖绳保持一致。</summary>
+    public float passWindow = 0.22f;
 
     BoxCollider2D body;
+    TuningLab lab;
+    readonly List<Collider2D> passThrough = new List<Collider2D>();
+    readonly List<float> passUntil = new List<float>();
 
-    void Awake() => body = GetComponent<BoxCollider2D>();
+    void Awake()
+    {
+        body = GetComponent<BoxCollider2D>();
+        lab = FindAnyObjectByType<TuningLab>();
+    }
 
     void OnEnable()
     {
         if (Application.isPlaying && !All.Contains(this)) All.Add(this);
     }
 
-    void OnDisable() => All.Remove(this);
+    void OnDisable()
+    {
+        All.Remove(this);
+        ReleasePassThrough();
+    }
 
-    /// <summary>生成一个光桥方块。</summary>
+    void Update()
+    {
+        // 穿过窗口到点、并且玩家已经离开方块体，才恢复碰撞。
+        // 人还在方块里就别恢复，否则会被推出去或者卡在半截。
+        for (int i = passThrough.Count - 1; i >= 0; i--)
+        {
+            Collider2D target = passThrough[i];
+            if (target == null)
+            {
+                passThrough.RemoveAt(i);
+                passUntil.RemoveAt(i);
+                continue;
+            }
+            if (Time.time < passUntil[i]) continue;
+            if (body.bounds.Intersects(target.bounds)) continue;
+
+            Physics2D.IgnoreCollision(target, body, false);
+            passThrough.RemoveAt(i);
+            passUntil.RemoveAt(i);
+        }
+    }
+
+    /// <summary>生成一个光桥方块。填满整格，不再有薄片偏移。</summary>
     public static LabLightBridgeBlock Spawn(
-        LabPhantom owner, Vector2Int cell, bool vertical, int slabSide, bool passForbidden,
+        LabPhantom owner, Vector2Int cell, bool vertical, bool passForbidden,
         Transform parent, PhysicsMaterial2D material)
     {
         var go = new GameObject("LightBridgeBlock");
@@ -52,44 +87,39 @@ public sealed class LabLightBridgeBlock : MonoBehaviour
         go.transform.position = new Vector3(cell.x + 0.5f, cell.y + 0.5f, 0f);
 
         var bc = go.AddComponent<BoxCollider2D>();
-        // 竖直：薄墙竖着，宽 1/3、高一格，贴左/右缘。
-        // 横向：薄板横着，宽一格、高 1/3，贴上/下缘。
-        float ratio = HeightRatio;
-        bc.size = vertical
-            ? new Vector2(ratio, 1f)
-            : new Vector2(1f, ratio);
-        // offset 让薄片外缘正好压在格边界上；上/右缘齐平取正，下/左缘取负。
-        float edgeOffset = (1f - ratio) * 0.5f;
-        bc.offset = vertical
-            ? new Vector2(edgeOffset * slabSide, 0f)
-            : new Vector2(0f, edgeOffset * slabSide);
+        bc.size = Vector2.one;          // 填满整格
+        bc.offset = Vector2.zero;
         bc.isTrigger = false;
         if (material != null) bc.sharedMaterial = material;
 
-        // 精灵挂在子物体上：缩放子物体不会连带缩放根节点的碰撞箱。
+        if (!vertical)
+        {
+            // 横向光桥 = 单向平台：从下往上穿过并站住，其它方向不挡。
+            var effector = go.AddComponent<PlatformEffector2D>();
+            effector.useOneWay = true;
+            effector.surfaceArc = 180f;
+            bc.usedByEffector = true;
+        }
+
         var spriteGo = new GameObject("Sprite");
         spriteGo.transform.SetParent(go.transform, false);
-        // 子物体位置要跟碰撞箱 offset 对齐，否则显示和碰撞对不上。
-        spriteGo.transform.localPosition = vertical
-            ? new Vector3(edgeOffset * slabSide, 0f, 0f)
-            : new Vector3(0f, edgeOffset * slabSide, 0f);
         var sr = spriteGo.AddComponent<SpriteRenderer>();
         sr.sprite = TuningLab.WhiteSprite;
         sr.color = DefaultColor;
         sr.sortingOrder = 1;
 
-        return go.AddComponent<LabLightBridgeBlock>()
-            .Configure(owner, cell, vertical, slabSide, passForbidden, spriteGo.transform);
+        var block = go.AddComponent<LabLightBridgeBlock>()
+            .Configure(owner, cell, vertical, passForbidden, spriteGo.transform);
+        return block;
     }
 
     LabLightBridgeBlock Configure(
-        LabPhantom owner, Vector2Int cell, bool vertical, int slabSide, bool passForbidden,
+        LabPhantom owner, Vector2Int cell, bool vertical, bool passForbidden,
         Transform spriteTransform)
     {
         Owner = owner;
         Cell = cell;
         Vertical = vertical;
-        SlabSide = slabSide;
         PassesForbiddenPlayer = passForbidden;
 
         var sr = spriteTransform != null ? spriteTransform.GetComponent<SpriteRenderer>() : null;
@@ -97,12 +127,7 @@ public sealed class LabLightBridgeBlock : MonoBehaviour
         {
             Vector2 spriteSize = sr.sprite.bounds.size;
             if (spriteSize.x > 0.0001f && spriteSize.y > 0.0001f)
-            {
-                sr.transform.localScale = new Vector3(
-                    (vertical ? HeightRatio : 1f) / spriteSize.x,
-                    (vertical ? 1f : HeightRatio) / spriteSize.y,
-                    1f);
-            }
+                sr.transform.localScale = new Vector3(1f / spriteSize.x, 1f / spriteSize.y, 1f);
         }
 
         return this;
@@ -115,6 +140,75 @@ public sealed class LabLightBridgeBlock : MonoBehaviour
         var other = player.GetComponent<Collider2D>();
         if (other == null) return;
         Physics2D.IgnoreCollision(body, other, true);
+    }
+
+    /// <summary>
+    /// 竖直光桥的接触结算，和 <see cref="LabVerticalRope.Resolve"/> 同构：
+    /// 0/1 级交给物理解算挡住，2 级沿法线穿过去，3 级及以上弹回并按红热撞击结算。
+    /// 横向光桥走 PlatformEffector2D，不进来。
+    /// </summary>
+    void OnCollisionEnter2D(Collision2D c)
+    {
+        if (!Vertical || !c.collider.TryGetComponent(out LabPlayer player)) return;
+        if (player == null || body == null) return;
+
+        Vector2 normal = ContactNormal(player, c);
+        float impact = Mathf.Abs(Vector2.Dot(player.PreImpactVelocity, normal));
+        int tier = lab != null ? lab.TierOfSpeed(impact) : player.SpeedTier;
+
+        // 零级 / 一级：和普通墙一样交给物理解算挡住。
+        if (tier < 2) return;
+
+        // 二级：沿法线穿过。忽略到玩家离开方块体，避免反复触发卡住。
+        if (tier == 2)
+        {
+            var playerCollider = c.collider;
+            Physics2D.IgnoreCollision(playerCollider, body, true);
+            if (!passThrough.Contains(playerCollider))
+            {
+                passThrough.Add(playerCollider);
+                passUntil.Add(Time.time + passWindow);
+            }
+            // 进入回调时碰撞已经把法向速度解算掉了；把入射分量还回去才真的穿过去。
+            player.ApplyAxisVelocity(normal, Vector2.Dot(player.PreImpactVelocity, normal));
+            return;
+        }
+
+        // 三级及以上：弹回，并且按一次红热撞击结算（和竖绳同一套）。
+        float speed = BounceSpeed(player, normal);
+        player.ApplyBounce(normal, speed);
+        player.ApplyTerrainImpact(normal, impact);
+    }
+
+    /// <summary>接触法线，方向统一为“方块 → 玩家”。只取轴向，再用玩家中心方位定朝外。</summary>
+    Vector2 ContactNormal(LabPlayer player, Collision2D c)
+    {
+        Vector2 sum = Vector2.zero;
+        for (int i = 0; i < c.contactCount; i++) sum += c.GetContact(i).normal;
+        if (sum.sqrMagnitude < 0.0001f) sum = (Vector2)player.transform.position - (Vector2)transform.position;
+
+        Vector2 axis = Mathf.Abs(sum.x) >= Mathf.Abs(sum.y)
+            ? new Vector2(Mathf.Sign(sum.x), 0f)
+            : new Vector2(0f, Mathf.Sign(sum.y));
+
+        Vector2 away = (Vector2)player.transform.position - (Vector2)transform.position;
+        if (Vector2.Dot(away, axis) < 0f) axis = -axis;
+        return axis;
+    }
+
+    /// <summary>弹回速度：保留碰撞前速度，并增加一个等级间距（与竖绳同一套）。</summary>
+    float BounceSpeed(LabPlayer player, Vector2 normal)
+    {
+        if (lab == null) return 30f;
+        return lab.RopeBounceSpeed(Vector2.Dot(player.PreImpactVelocity, normal));
+    }
+
+    void ReleasePassThrough()
+    {
+        for (int i = 0; i < passThrough.Count; i++)
+            if (passThrough[i] != null) Physics2D.IgnoreCollision(passThrough[i], body, false);
+        passThrough.Clear();
+        passUntil.Clear();
     }
 
     /// <summary>这一格还空着吗？两条光桥不能叠在同一格。</summary>
