@@ -131,6 +131,59 @@ public sealed class LabLightBridgeTests
         Assert.IsFalse(cells.Contains(new Vector2Int(3, 5)), "墙后面不再铺");
     }
 
+    /// <summary>
+    /// 普通地形不挡光桥：桥压在实体格上继续往前铺（Issue #76）。
+    /// 用真实关卡地形建墙，才走的是 LabTerrainField 合并几何那条路径。
+    /// </summary>
+    [UnityTest]
+    public IEnumerator BridgePassesThroughPlainTerrain()
+    {
+        var level = root.AddComponent<LabLevel>();
+        lab.level = level;
+        for (int y = 3; y <= 7; y++) level.Data.AddCell(new Vector2Int(2, y));
+        level.Data.Normalize();
+        level.BuildRuntime(root.transform, slick);
+        yield return null;
+        Physics2D.SyncTransforms();
+
+        var phantom = SpawnPhantom(LabForms.LeftBit | LabForms.RightBit, new Vector2Int(0, 5));
+        yield return null;
+
+        var cells = new HashSet<Vector2Int>();
+        for (int i = 0; i < phantom.Bridge.Count; i++) cells.Add(phantom.Bridge[i].Cell);
+
+        Assert.IsTrue(cells.Contains(new Vector2Int(2, 5)),
+            "地形格上也要铺光桥，实际 " + string.Join(",", cells));
+        Assert.IsTrue(cells.Contains(new Vector2Int(3, 5)),
+            "穿过地形之后还要继续往右铺，实际 " + string.Join(",", cells));
+    }
+
+    /// <summary>
+    /// 冰仍然截断光桥。冰虽然也在同一个合并几何里，但按格子反查得到 LabIce，要停。
+    /// </summary>
+    [UnityTest]
+    public IEnumerator BridgeStillStopsAtIce()
+    {
+        var level = root.AddComponent<LabLevel>();
+        lab.level = level;
+        for (int y = 3; y <= 7; y++) level.Data.PlaceIce(new Vector2Int(2, y), 1);
+        level.Data.Normalize();
+        level.BuildRuntime(root.transform, slick);
+        yield return null;
+        Physics2D.SyncTransforms();
+
+        var phantom = SpawnPhantom(LabForms.LeftBit | LabForms.RightBit, new Vector2Int(0, 5));
+        yield return null;
+
+        var cells = new HashSet<Vector2Int>();
+        for (int i = 0; i < phantom.Bridge.Count; i++) cells.Add(phantom.Bridge[i].Cell);
+
+        Assert.IsTrue(cells.Contains(new Vector2Int(1, 5)),
+            "冰前一格铺得到，实际 " + string.Join(",", cells));
+        Assert.IsFalse(cells.Contains(new Vector2Int(2, 5)), "冰那一格不铺");
+        Assert.IsFalse(cells.Contains(new Vector2Int(3, 5)), "冰后面不再铺");
+    }
+
     /// <summary>A/B 站在路上不打断光桥，桥穿过他们继续生成。</summary>
     [UnityTest]
     public IEnumerator BridgePassesThroughPlayers()
@@ -214,9 +267,9 @@ public sealed class LabLightBridgeTests
         Assert.Greater(passable, 0, "确实有压在 B 身上的方块，用例才有效");
     }
 
-    /// <summary>光桥方块有实体碰撞箱，形状是 1/3 高的薄片。</summary>
+    /// <summary>光桥方块填满整格：一条光柱就是一格。</summary>
     [UnityTest]
-    public IEnumerator BridgeBlocksAreThinSolidSlabs()
+    public IEnumerator BridgeBlocksFillWholeCell()
     {
         var phantom = SpawnPhantom(LabForms.LeftBit | LabForms.RightBit, new Vector2Int(0, 5));
         yield return null;
@@ -227,14 +280,30 @@ public sealed class LabLightBridgeTests
 
         Assert.IsNotNull(body, "有碰撞箱");
         Assert.IsFalse(body.isTrigger, "是实体碰撞");
-        Assert.AreEqual(1f, body.size.x, 0.001f, "横向光桥方块宽一格");
-        Assert.AreEqual(LabLightBridgeBlock.HeightRatio, body.size.y, 0.001f,
-            "高度只有普通方块的三分之一");
+        Assert.AreEqual(1f, body.size.x, 0.001f, "宽填满一格");
+        Assert.AreEqual(1f, body.size.y, 0.001f, "高填满一格");
 
-        // 上缘与相邻方格的上缘齐平：薄片顶 = 所在格的顶边（cell.y + 1）。
-        float cellTop = block.Cell.y + 1f;
-        Assert.AreEqual(cellTop, body.bounds.max.y, 0.02f,
-            "薄片上缘与相邻方格齐平（格 " + block.Cell + " 顶边 " + cellTop + "）");
+        // 碰撞箱要正好压在它自己那一格上。
+        Assert.AreEqual(block.Cell.x, body.bounds.min.x, 0.02f, "左缘对齐格子左边");
+        Assert.AreEqual(block.Cell.y, body.bounds.min.y, 0.02f, "下缘对齐格子下边");
+        Assert.AreEqual(block.Cell.x + 1f, body.bounds.max.x, 0.02f, "右缘对齐格子右边");
+        Assert.AreEqual(block.Cell.y + 1f, body.bounds.max.y, 0.02f, "上缘对齐格子上边");
+    }
+
+    /// <summary>横向光桥当单向平台：挂 PlatformEffector2D，能站人但只挡从上来。</summary>
+    [UnityTest]
+    public IEnumerator HorizontalBridgeIsOneWayPlatform()
+    {
+        var phantom = SpawnPhantom(LabForms.LeftBit | LabForms.RightBit, new Vector2Int(0, 5));
+        yield return null;
+
+        Assert.Greater(phantom.Bridge.Count, 0);
+        var body = phantom.Bridge[0].GetComponent<BoxCollider2D>();
+        var effector = body.GetComponent<PlatformEffector2D>();
+
+        Assert.IsNotNull(effector, "横向光桥要有单向平台组件");
+        Assert.IsTrue(effector.useOneWay, "走单向");
+        Assert.IsTrue(body.usedByEffector, "碰撞箱要交给 effector 处理");
     }
 
     // 销毁 ---------------------------------------------------------------
