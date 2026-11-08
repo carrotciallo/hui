@@ -108,10 +108,13 @@ public sealed class LabLevel : MonoBehaviour
         if (!Application.isPlaying) ClearGenerated();
     }
 
-    /// <summary>用 TuningLab 的内置房间覆盖当前关卡。编辑器的"从 Tuning Lab 重置"走这里。</summary>
+    /// <summary>
+    /// 用 TuningLab 的内置房间覆盖当前关卡。编辑器的"从 Tuning Lab 重置"走这里。
+    /// 走 <see cref="Data"/> 而不是直接写内嵌字段：数据绑在独立资源上时，写内嵌字段等于没改。
+    /// </summary>
     public void ApplyBaseline()
     {
-        data = TuningLab.CaptureBaseline();
+        Data.CopyFrom(TuningLab.CaptureBaseline());
         if (!Application.isPlaying) RebuildPreview();
     }
 

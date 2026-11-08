@@ -1311,6 +1311,15 @@ public sealed class LabLevelMergeWindow : EditorWindow
             return false;
         }
 
+        // 模板场景的关卡数据可能挂在独立的 LabLevelAsset 上（Issue #109）。复制场景文件
+        // 会连引用一起复制，写进去等于改到模板场景正在用的那份数据，不能悄悄干。
+        if (level.Asset != null)
+        {
+            error = "模板场景的关卡数据绑在独立资源「" + level.Asset.name
+                + "」上，合并成新场景会改到那份共享数据。先在关卡编辑器里解绑数据资源，再合并。";
+            return false;
+        }
+
         level.CopyFrom(merged, false);
 
         TuningLab lab = level.GetComponent<TuningLab>();
@@ -1364,6 +1373,13 @@ public sealed class LabLevelMergeWindow : EditorWindow
         Undo.RecordObject(level, "合并场景");
         level.CopyFrom(merged);
         EditorUtility.SetDirty(level);
+        // 数据绑在独立资源上时，脏标记要同时打在资源上，否则合并结果不会存盘。
+        if (level.Asset != null)
+        {
+            Undo.RecordObject(level.Asset, "合并场景");
+            EditorUtility.SetDirty(level.Asset);
+            AssetDatabase.SaveAssets();
+        }
 
         TuningLab lab = FindInScene<TuningLab>(scene);
         if (lab != null && lab.level == null)
