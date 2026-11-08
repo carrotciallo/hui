@@ -1424,6 +1424,16 @@ public sealed class LabLevelData
             for (int i = 0; i < other.repairBlocks.Count; i++)
                 if (PlaceRepairBlock(other.repairBlocks[i].cell)) added++;
 
+        // ---- 像素画：按 (Sprite, 起点, 占地, 排序层) 去重；允许重叠叠放 ----
+        if (other.pixelArts != null)
+            for (int i = 0; i < other.pixelArts.Count; i++)
+            {
+                var art = other.pixelArts[i];
+                if (HasPixelArt(art)) continue;
+                pixelArts.Add(art);
+                added++;
+            }
+
         // ---- 重生点 / 传送点：按中心 ----
         if (other.respawnPoints != null)
             for (int i = 0; i < other.respawnPoints.Count; i++)
@@ -1467,6 +1477,21 @@ public sealed class LabLevelData
             if (existing.center != rope.center) continue;
             if (existing.orientation != rope.orientation) continue;
             if (existing.cells != rope.cells) continue;
+            return true;
+        }
+        return false;
+    }
+
+    bool HasPixelArt(LabPixelArtSpec art)
+    {
+        if (pixelArts == null) return false;
+        for (int i = 0; i < pixelArts.Count; i++)
+        {
+            var existing = pixelArts[i];
+            if (existing.sprite != art.sprite) continue;
+            if (existing.origin != art.origin) continue;
+            if (existing.size != art.size) continue;
+            if (existing.sortingOrder != art.sortingOrder) continue;
             return true;
         }
         return false;
@@ -1939,6 +1964,17 @@ public sealed class LabLevelData
             }
         }
 
+        if (source.pixelArts != null)
+        {
+            for (int i = 0; i < source.pixelArts.Count; i++)
+            {
+                var art = source.pixelArts[i];
+                pixelArts.Add(new LabPixelArtSpec(
+                    art.sprite, art.origin + cellOffset, art.size, art.sortingOrder));
+                report.pixelArts++;
+            }
+        }
+
         if (source.respawnPoints != null)
         {
             for (int i = 0; i < source.respawnPoints.Count; i++)
@@ -2032,6 +2068,7 @@ public sealed class LabLevelMergeReport
     public int magmas;
     public int hiddenBlocks;
     public int repairBlocks;
+    public int pixelArts;
     public int respawnPoints;
     public int teleports;
     public int partitions;
@@ -2042,7 +2079,7 @@ public sealed class LabLevelMergeReport
 
     public int ContentCount =>
         solids + ropes + keys + recalls + doors + spikes + ices + magmas
-        + hiddenBlocks + repairBlocks + respawnPoints + teleports;
+        + hiddenBlocks + repairBlocks + pixelArts + respawnPoints + teleports;
 }
 
 [System.Serializable]
