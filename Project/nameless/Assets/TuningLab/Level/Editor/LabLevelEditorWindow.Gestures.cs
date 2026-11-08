@@ -29,6 +29,7 @@ public sealed partial class LabLevelEditorWindow
         DrawMagmaHandles(data);
         DrawHiddenBlockHandles(data);
         DrawRepairBlockHandles(data);
+        DrawPixelArtHandles(data);
         DrawRespawnPointHandles(data);
         DrawTeleportHandles(data);
         DrawSelectionRegion();
@@ -337,6 +338,33 @@ public sealed partial class LabLevelEditorWindow
                 {
                     Record("放修复方块");
                     level.Data.PlaceRepairBlock(cell);
+                }
+                AfterStructuralEdit();
+                break;
+
+            case Tool.PixelArt:
+                if (newPixelArtSprite == null)
+                {
+                    Notify(view, "先在「像素画」面板选择一张 Sprite。");
+                    return;
+                }
+                if (!PixelArtFits(cell, newPixelArtSize, level.Data))
+                {
+                    Notify(view, "像素画占地超出相机范围：" + newPixelArtSize + " @ " + cell);
+                    return;
+                }
+                int existingArt = level.Data.FindPixelArtIndexAtOrigin(cell);
+                if (existingArt >= 0
+                    && level.Data.pixelArts[existingArt].sprite == newPixelArtSprite
+                    && level.Data.pixelArts[existingArt].size == newPixelArtSize)
+                {
+                    Record("删像素画");
+                    level.Data.pixelArts.RemoveAt(existingArt);
+                }
+                else
+                {
+                    Record("放像素画");
+                    level.Data.AddPixelArt(newPixelArtSprite, cell, newPixelArtSize, newPixelArtSortingOrder);
                 }
                 AfterStructuralEdit();
                 break;
@@ -661,6 +689,15 @@ public sealed partial class LabLevelEditorWindow
         MarkSceneDirty();
         validated = false;
         Repaint();
+    }
+
+    static bool PixelArtFits(Vector2Int origin, Vector2Int size, LabLevelData data)
+    {
+        size = new Vector2Int(Mathf.Max(1, size.x), Mathf.Max(1, size.y));
+        return origin.x >= data.bounds.xMin
+            && origin.y >= data.bounds.yMin
+            && origin.x + size.x <= data.bounds.xMax
+            && origin.y + size.y <= data.bounds.yMax;
     }
 
 }

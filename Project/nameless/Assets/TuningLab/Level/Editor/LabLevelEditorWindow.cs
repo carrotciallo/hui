@@ -36,7 +36,8 @@ public sealed partial class LabLevelEditorWindow : EditorWindow
         Move = 16,
         HiddenBlock = 17,
         Recall = 18,
-        RepairBlock = 19
+        RepairBlock = 19,
+        PixelArt = 20
     }
 
     /// <summary>下一次拉选区时怎么处理当前选区。</summary>
@@ -62,7 +63,8 @@ public sealed partial class LabLevelEditorWindow : EditorWindow
         TeleportPoint = 9,
         HiddenBlock = 10,
         Recall = 11,
-        RepairBlock = 12
+        RepairBlock = 12,
+        PixelArt = 13
     }
 
     struct Pick
@@ -78,7 +80,7 @@ public sealed partial class LabLevelEditorWindow : EditorWindow
     static readonly string[] ToolLabels =
     {
         "铺地形", "擦地形", "矩形", "竖绳", "横绳", "出生点 A", "出生点 B", "关卡分区", "钥匙", "门", "地刺", "冰块", "岩浆块", "重生点", "传送点",
-        "选区", "选择", "隐藏方块", "召回道具", "修复方块"
+        "选区", "选择", "隐藏方块", "召回道具", "修复方块", "像素画"
     };
 
     static readonly string[] MarqueeModeLabels = { "重新选择", "增加选区", "删除选区" };
@@ -101,6 +103,10 @@ public sealed partial class LabLevelEditorWindow : EditorWindow
     int iceGroupId = 1;
     int magmaGroupId = 1;
     int hiddenGroupId = 1;
+    Sprite newPixelArtSprite;
+    Vector2Int newPixelArtSize = Vector2Int.one;
+    int newPixelArtSortingOrder = 1;
+    List<Sprite> pixelArtAssets;
     bool showGrid = true;
     bool showSpawns = true;
     bool showCameraFrames = true;
@@ -115,6 +121,7 @@ public sealed partial class LabLevelEditorWindow : EditorWindow
     Vector2 respawnScroll;
     Vector2 teleportScroll;
     Vector2 recallScroll;
+    Vector2 pixelArtScroll;
 
     bool gesture;
     Vector2Int rectStart;

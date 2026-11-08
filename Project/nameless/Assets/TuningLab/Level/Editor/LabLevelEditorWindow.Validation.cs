@@ -364,6 +364,20 @@ public sealed partial class LabLevelEditorWindow
             }
         }
 
+        if (data.pixelArts != null)
+        {
+            for (int i = 0; i < data.pixelArts.Count; i++)
+            {
+                var art = data.pixelArts[i];
+                if (art.sprite == null)
+                    issues.Add("第 " + i + " 张像素画丢失 Sprite：" + art.origin);
+                if (art.size.x <= 0 || art.size.y <= 0)
+                    issues.Add("第 " + i + " 张像素画宽高必须大于 0：" + art.size);
+                if (!PixelArtFits(art.origin, art.size, data))
+                    issues.Add("第 " + i + " 张像素画占地超出相机范围：" + art.Cells());
+            }
+        }
+
         if (data.respawnPoints != null)
         {
             for (int i = 0; i < data.respawnPoints.Count; i++)
@@ -420,10 +434,10 @@ public sealed partial class LabLevelEditorWindow
 
         if (issues.Count == 0)
         {
-            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 个召回道具，{5} 扇门，{6} 根刺，{7} 块冰，{8} 块岩浆，{9} 条隐藏方块，{10} 块修复方块，{11} 个重生点，{12} 个传送点，{13} 个关卡分区。",
+            Debug.Log(string.Format("[LabLevelEditor] 校验通过：{0} 个实心格，{1} 个碰撞矩形，{2} 根绳，{3} 把钥匙，{4} 个召回道具，{5} 扇门，{6} 根刺，{7} 块冰，{8} 块岩浆，{9} 条隐藏方块，{10} 块修复方块，{11} 张像素画，{12} 个重生点，{13} 个传送点，{14} 个关卡分区。",
                 level.SolidCellCount, level.MergedRectCount, level.RopeCount, level.KeyCount, level.RecallCount,
                 level.DoorCount, level.SpikeCount, level.IceCount, level.MagmaCount, level.HiddenBlockCount,
-                level.RepairBlockCount, level.RespawnPointCount, level.TeleportCount,
+                level.RepairBlockCount, level.PixelArtCount, level.RespawnPointCount, level.TeleportCount,
                 data.partitions != null ? data.partitions.Count : 0), level);
         }
         else

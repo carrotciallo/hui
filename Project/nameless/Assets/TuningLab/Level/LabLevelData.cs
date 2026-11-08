@@ -39,6 +39,8 @@ public sealed class LabLevelData
     public List<LabHiddenBlockSpec> hiddenBlocks = new List<LabHiddenBlockSpec>();
     /// <summary>修复方块（1×1，与 A 同色；A 的红热边/灵体边接触其表面 → 那条边回普通，不限次数）。</summary>
     public List<LabRepairBlockSpec> repairBlocks = new List<LabRepairBlockSpec>();
+    /// <summary>纯视觉像素画。按整数格占地缩放，不生成碰撞体。</summary>
+    public List<LabPixelArtSpec> pixelArts = new List<LabPixelArtSpec>();
     /// <summary>重生点（3×3 触发区，中心坐标）。</summary>
     public List<LabRespawnPointSpec> respawnPoints = new List<LabRespawnPointSpec>();
     /// <summary>传送点（3×3 触发区，中心坐标）。双人进入后运行时标记，已标记点可互为终点。</summary>
@@ -116,6 +118,12 @@ public sealed class LabLevelData
     {
         if (repairBlocks == null) repairBlocks = new List<LabRepairBlockSpec>();
         else repairBlocks.Clear();
+    }
+
+    public void ClearPixelArts()
+    {
+        if (pixelArts == null) pixelArts = new List<LabPixelArtSpec>();
+        else pixelArts.Clear();
     }
 
     public void ClearTeleports()
@@ -325,6 +333,55 @@ public sealed class LabLevelData
         return repairBlocks.RemoveAll(block => block.cell == cell) > 0;
     }
 
+    /// <summary>格子内最上层的像素画；没有返回 -1。</summary>
+    public int FindPixelArtIndex(Vector2Int cell)
+    {
+        if (pixelArts == null) return -1;
+        int best = -1;
+        int bestOrder = int.MinValue;
+        for (int i = 0; i < pixelArts.Count; i++)
+        {
+            var art = pixelArts[i];
+            if (!art.Cells().Contains(cell) || art.sortingOrder < bestOrder) continue;
+            best = i;
+            bestOrder = art.sortingOrder;
+        }
+        return best;
+    }
+
+    public bool HasPixelArt(Vector2Int cell) => FindPixelArtIndex(cell) >= 0;
+
+    public int FindPixelArtIndexAtOrigin(Vector2Int origin)
+    {
+        if (pixelArts == null) return -1;
+        int best = -1;
+        int bestOrder = int.MinValue;
+        for (int i = 0; i < pixelArts.Count; i++)
+        {
+            var art = pixelArts[i];
+            if (art.origin != origin || art.sortingOrder < bestOrder) continue;
+            best = i;
+            bestOrder = art.sortingOrder;
+        }
+        return best;
+    }
+
+    public bool AddPixelArt(Sprite sprite, Vector2Int origin, Vector2Int size, int sortingOrder)
+    {
+        if (sprite == null) return false;
+        if (pixelArts == null) pixelArts = new List<LabPixelArtSpec>();
+        pixelArts.Add(new LabPixelArtSpec(sprite, origin, size, sortingOrder));
+        return true;
+    }
+
+    public bool RemovePixelArt(Vector2Int cell)
+    {
+        int index = FindPixelArtIndex(cell);
+        if (index < 0) return false;
+        pixelArts.RemoveAt(index);
+        return true;
+    }
+
     public bool PlaceRespawnPoint(Vector2Int cell)
     {
         if (respawnPoints == null) respawnPoints = new List<LabRespawnPointSpec>();
@@ -466,6 +523,7 @@ public sealed class LabLevelData
         if (magmas == null) magmas = new List<LabMagmaSpec>();
         if (hiddenBlocks == null) hiddenBlocks = new List<LabHiddenBlockSpec>();
         if (repairBlocks == null) repairBlocks = new List<LabRepairBlockSpec>();
+        if (pixelArts == null) pixelArts = new List<LabPixelArtSpec>();
         if (respawnPoints == null) respawnPoints = new List<LabRespawnPointSpec>();
         if (teleports == null) teleports = new List<LabTeleportSpec>();
         if (partitions == null) partitions = new List<LabLevelPartition>();
@@ -611,6 +669,26 @@ public sealed class LabLevelData
             repairBlocks[repairWrite++] = repairBlocks[read];
         }
         if (repairWrite < repairBlocks.Count) repairBlocks.RemoveRange(repairWrite, repairBlocks.Count - repairWrite);
+
+        // 像素画允许彼此叠放；只修正无效尺寸并稳定排序，避免编辑器保存顺序抖动。
+        for (int i = 0; i < pixelArts.Count; i++)
+        {
+            var art = pixelArts[i];
+            art.size = new Vector2Int(
+                Mathf.Clamp(art.size.x, 1, 256),
+                Mathf.Clamp(art.size.y, 1, 256));
+            pixelArts[i] = art;
+        }
+        pixelArts.Sort((a, b) =>
+        {
+            int byCell = CompareCells(a.origin, b.origin);
+            if (byCell != 0) return byCell;
+            int byWidth = a.size.x.CompareTo(b.size.x);
+            if (byWidth != 0) return byWidth;
+            int byHeight = a.size.y.CompareTo(b.size.y);
+            if (byHeight != 0) return byHeight;
+            return a.sortingOrder.CompareTo(b.sortingOrder);
+        });
     }
 
     public void CopyFrom(LabLevelData other)
@@ -632,6 +710,7 @@ public sealed class LabLevelData
             magmas = new List<LabMagmaSpec>();
             hiddenBlocks = new List<LabHiddenBlockSpec>();
             repairBlocks = new List<LabRepairBlockSpec>();
+            pixelArts = new List<LabPixelArtSpec>();
             respawnPoints = new List<LabRespawnPointSpec>();
             teleports = new List<LabTeleportSpec>();
             partitions = new List<LabLevelPartition>();
@@ -655,6 +734,8 @@ public sealed class LabLevelData
             other.hiddenBlocks ?? new List<LabHiddenBlockSpec>());
         repairBlocks = new List<LabRepairBlockSpec>(
             other.repairBlocks ?? new List<LabRepairBlockSpec>());
+        pixelArts = new List<LabPixelArtSpec>(
+            other.pixelArts ?? new List<LabPixelArtSpec>());
         respawnPoints = new List<LabRespawnPointSpec>(
             other.respawnPoints ?? new List<LabRespawnPointSpec>());
         teleports = new List<LabTeleportSpec>(
@@ -877,6 +958,17 @@ public sealed class LabLevelData
             }
         }
 
+        if (pixelArts != null)
+        {
+            for (int i = 0; i < pixelArts.Count; i++)
+            {
+                var art = pixelArts[i];
+                if (!oldRect.Contains(art.Center)) continue;
+                art.origin += delta;
+                pixelArts[i] = art;
+            }
+        }
+
         if (respawnPoints != null)
         {
             for (int i = 0; i < respawnPoints.Count; i++)
@@ -964,6 +1056,8 @@ public sealed class LabLevelData
                 hiddenBlocks.RemoveAll(block => rect.Contains(new Vector2(block.cell.x + 0.5f, block.cell.y + 0.5f)));
             if (repairBlocks != null)
                 repairBlocks.RemoveAll(block => rect.Contains(block.Center));
+            if (pixelArts != null)
+                pixelArts.RemoveAll(art => rect.Contains(art.Center));
             if (respawnPoints != null)
                 respawnPoints.RemoveAll(point => rect.Contains(point.position));
             if (teleports != null)
@@ -1005,13 +1099,14 @@ public sealed class LabLevelData
         internal readonly List<int> magmas = new List<int>();
         internal readonly List<int> hiddenBlocks = new List<int>();
         internal readonly List<int> repairBlocks = new List<int>();
+        internal readonly List<int> pixelArts = new List<int>();
         internal readonly List<int> respawnPoints = new List<int>();
         internal readonly List<int> teleports = new List<int>();
 
         /// <summary>锁定的条目数（地形格也算一条）。</summary>
         public int Count => solids.Count + ropes.Count + keys.Count + recalls.Count + doors.Count
             + spikes.Count + ices.Count + magmas.Count + hiddenBlocks.Count + repairBlocks.Count
-            + respawnPoints.Count + teleports.Count;
+            + pixelArts.Count + respawnPoints.Count + teleports.Count;
     }
 
     /// <summary>
@@ -1061,6 +1156,10 @@ public sealed class LabLevelData
         if (repairBlocks != null)
             for (int i = 0; i < repairBlocks.Count; i++)
                 if (InAnyArea(areas, CellCenter(repairBlocks[i].cell))) capture.repairBlocks.Add(i);
+
+        if (pixelArts != null)
+            for (int i = 0; i < pixelArts.Count; i++)
+                if (InAnyArea(areas, CellCenter(pixelArts[i].origin))) capture.pixelArts.Add(i);
 
         if (respawnPoints != null)
             for (int i = 0; i < respawnPoints.Count; i++)
@@ -1171,6 +1270,15 @@ public sealed class LabLevelData
                 moved++;
             }
 
+        if (pixelArts != null)
+            foreach (int i in capture.pixelArts)
+            {
+                var art = pixelArts[i];
+                art.origin += delta;
+                pixelArts[i] = art;
+                moved++;
+            }
+
         if (respawnPoints != null)
             foreach (int i in capture.respawnPoints)
             {
@@ -1223,6 +1331,8 @@ public sealed class LabLevelData
             removed += hiddenBlocks.RemoveAll(block => InAnyArea(areas, CellCenter(block.cell)));
         if (repairBlocks != null)
             removed += repairBlocks.RemoveAll(block => InAnyArea(areas, CellCenter(block.cell)));
+        if (pixelArts != null)
+            removed += pixelArts.RemoveAll(art => InAnyArea(areas, CellCenter(art.origin)));
         if (respawnPoints != null)
             removed += respawnPoints.RemoveAll(point => InAnyArea(areas, point.position));
         if (teleports != null)
@@ -1268,6 +1378,9 @@ public sealed class LabLevelData
         if (repairBlocks != null)
             for (int i = 0; i < repairBlocks.Count; i++)
                 if (InAnyArea(areas, CellCenter(repairBlocks[i].cell))) count++;
+        if (pixelArts != null)
+            for (int i = 0; i < pixelArts.Count; i++)
+                if (InAnyArea(areas, CellCenter(pixelArts[i].origin))) count++;
         if (respawnPoints != null)
             for (int i = 0; i < respawnPoints.Count; i++)
                 if (InAnyArea(areas, respawnPoints[i].position)) count++;
@@ -1352,7 +1465,7 @@ public sealed class LabLevelData
         return true;
     }
 
-    /// <summary>地形和绳子的格子范围；没有内容时退回相机范围。给"跳到关卡"用。</summary>
+    /// <summary>所有可摆放内容的格子范围；没有内容时退回相机范围。给"跳到关卡"用。</summary>
     public RectInt ContentBounds()
     {
         bool any = false;
@@ -1452,6 +1565,22 @@ public sealed class LabLevelData
                 var block = repairBlocks[i];
                 int cx0 = block.cell.x, cx1 = block.cell.x + 1;
                 int cy0 = block.cell.y, cy1 = block.cell.y + 1;
+                if (!any) { x0 = cx0; y0 = cy0; x1 = cx1; y1 = cy1; any = true; }
+                else
+                {
+                    x0 = Mathf.Min(x0, cx0); y0 = Mathf.Min(y0, cy0);
+                    x1 = Mathf.Max(x1, cx1); y1 = Mathf.Max(y1, cy1);
+                }
+            }
+        }
+
+        if (pixelArts != null)
+        {
+            for (int i = 0; i < pixelArts.Count; i++)
+            {
+                var cells = pixelArts[i].Cells();
+                int cx0 = cells.x, cx1 = cells.x + cells.width;
+                int cy0 = cells.y, cy1 = cells.y + cells.height;
                 if (!any) { x0 = cx0; y0 = cy0; x1 = cx1; y1 = cy1; any = true; }
                 else
                 {
@@ -1767,6 +1896,33 @@ public struct LabRepairBlockSpec
 
     /// <summary>修复方块盖住的格子（1×1）。</summary>
     public RectInt Cells() => new RectInt(cell.x, cell.y, 1, 1);
+}
+
+/// <summary>
+/// 一张预先画好的像素画。origin 是左下角格，size 是整数格占地；
+/// 渲染时把完整 Sprite 缩放进该矩形，不生成碰撞体。
+/// </summary>
+[System.Serializable]
+public struct LabPixelArtSpec
+{
+    public Sprite sprite;
+    public Vector2Int origin;
+    public Vector2Int size;
+    public int sortingOrder;
+
+    public LabPixelArtSpec(Sprite sprite, Vector2Int origin, Vector2Int size, int sortingOrder = 1)
+    {
+        this.sprite = sprite;
+        this.origin = origin;
+        this.size = new Vector2Int(Mathf.Max(1, size.x), Mathf.Max(1, size.y));
+        this.sortingOrder = sortingOrder;
+    }
+
+    public Vector2 Center => new Vector2(
+        origin.x + size.x * 0.5f,
+        origin.y + size.y * 0.5f);
+
+    public RectInt Cells() => new RectInt(origin.x, origin.y, size.x, size.y);
 }
 
 [System.Serializable]

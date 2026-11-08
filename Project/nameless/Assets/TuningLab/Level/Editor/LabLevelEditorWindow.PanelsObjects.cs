@@ -430,6 +430,151 @@ public sealed partial class LabLevelEditorWindow
         }
     }
 
+    const string PixelArtFolder = "Assets/TuningLab/Art/Resources/PixelArt";
+
+    void DrawPixelArts()
+    {
+        EditorGUILayout.LabelField("像素画", EditorStyles.boldLabel);
+        var data = level.Data;
+        if (data.pixelArts == null) data.pixelArts = new List<LabPixelArtSpec>();
+        EditorGUILayout.LabelField("像素画", level.PixelArtCount + "（纯视觉，整数格占地，无碰撞）");
+
+        if (!AssetDatabase.IsValidFolder(PixelArtFolder))
+        {
+            EditorGUILayout.HelpBox(
+                "素材目录不存在：" + PixelArtFolder + "\n创建目录并放入 PNG 后点「刷新素材」。",
+                MessageType.Warning);
+        }
+        else
+        {
+            EditorGUILayout.HelpBox(
+                "把预先画好的 PNG 放进 " + PixelArtFolder + "；导入器会固定 PPU 16、Point、无压缩。\n" +
+                "也可以直接指定 Sprite。",
+                MessageType.None);
+        }
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (GUILayout.Button("刷新素材")) RefreshPixelArtAssets();
+            if (GUILayout.Button("打开素材目录")) EditorUtility.RevealInFinder(PixelArtFolder);
+        }
+
+        if (pixelArtAssets == null) RefreshPixelArtAssets();
+        if (pixelArtAssets.Count == 0)
+        {
+            EditorGUILayout.LabelField("（目录里还没有 Sprite）");
+        }
+        else
+        {
+            var labels = new string[pixelArtAssets.Count];
+            int selected = 0;
+            for (int i = 0; i < pixelArtAssets.Count; i++)
+            {
+                labels[i] = pixelArtAssets[i] != null ? pixelArtAssets[i].name : "（丢失）";
+                if (pixelArtAssets[i] == newPixelArtSprite) selected = i;
+            }
+            EditorGUI.BeginChangeCheck();
+            selected = EditorGUILayout.Popup("素材", selected, labels);
+            if (EditorGUI.EndChangeCheck()) newPixelArtSprite = pixelArtAssets[selected];
+        }
+
+        newPixelArtSprite = (Sprite)EditorGUILayout.ObjectField(
+            "Sprite", newPixelArtSprite, typeof(Sprite), false);
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            newPixelArtSize.x = Mathf.Max(1, EditorGUILayout.IntField("宽（格）", newPixelArtSize.x));
+            newPixelArtSize.y = Mathf.Max(1, EditorGUILayout.IntField("高（格）", newPixelArtSize.y));
+        }
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (GUILayout.Button("1×1")) newPixelArtSize = Vector2Int.one;
+            if (GUILayout.Button("2×2")) newPixelArtSize = new Vector2Int(2, 2);
+            if (GUILayout.Button("3×3")) newPixelArtSize = new Vector2Int(3, 3);
+            if (GUILayout.Button("4×4")) newPixelArtSize = new Vector2Int(4, 4);
+        }
+        newPixelArtSortingOrder = EditorGUILayout.IntField("排序层", newPixelArtSortingOrder);
+
+        if (newPixelArtSprite != null)
+        {
+            Texture preview = AssetPreview.GetAssetPreview(newPixelArtSprite);
+            if (preview == null) preview = AssetPreview.GetMiniThumbnail(newPixelArtSprite);
+            if (preview != null) GUILayout.Box(preview, GUILayout.Width(64f), GUILayout.Height(64f));
+        }
+
+        EditorGUILayout.HelpBox(
+            "左键以鼠标所在格为左下角放置；同一起点再放同一张素材会删掉那张。\n" +
+            "排序层越大越靠前；默认 1，可压在地形上、位于多数玩法物件附近。",
+            MessageType.None);
+
+        pixelArtScroll = EditorGUILayout.BeginScrollView(pixelArtScroll, GUILayout.MaxHeight(140f));
+        for (int i = 0; i < data.pixelArts.Count; i++)
+        {
+            var art = data.pixelArts[i];
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                string name = art.sprite != null ? art.sprite.name : "（丢失 Sprite）";
+                EditorGUILayout.LabelField(
+                    string.Format("{0} @ ({1},{2})", name, art.origin.x, art.origin.y),
+                    EditorStyles.miniLabel, GUILayout.Width(150f));
+
+                EditorGUI.BeginChangeCheck();
+                int width = Mathf.Max(1, EditorGUILayout.IntField(art.size.x, GUILayout.Width(36f)));
+                int height = Mathf.Max(1, EditorGUILayout.IntField(art.size.y, GUILayout.Width(36f)));
+                int order = EditorGUILayout.IntField(art.sortingOrder, GUILayout.Width(48f));
+                if (EditorGUI.EndChangeCheck())
+                {
+                    Record("改像素画");
+                    art.size = new Vector2Int(width, height);
+                    art.sortingOrder = order;
+                    data.pixelArts[i] = art;
+                    MarkDirty(true);
+                }
+
+                if (GUILayout.Button("×", GUILayout.Width(24f)))
+                {
+                    Record("删像素画");
+                    data.pixelArts.RemoveAt(i);
+                    AfterStructuralEdit();
+                    break;
+                }
+            }
+        }
+        EditorGUILayout.EndScrollView();
+
+        using (new EditorGUI.DisabledScope(level.PixelArtCount == 0))
+        {
+            if (GUILayout.Button("清空像素画"))
+            {
+                if (!EditorUtility.DisplayDialog("清空像素画", "删掉所有像素画？", "清空", "取消")) return;
+                Record("清空像素画");
+                data.ClearPixelArts();
+                AfterStructuralEdit();
+            }
+        }
+    }
+
+    void RefreshPixelArtAssets()
+    {
+        if (pixelArtAssets == null) pixelArtAssets = new List<Sprite>();
+        pixelArtAssets.Clear();
+        if (!AssetDatabase.IsValidFolder(PixelArtFolder))
+        {
+            newPixelArtSprite = null;
+            return;
+        }
+
+        var guids = AssetDatabase.FindAssets("t:Sprite", new[] { PixelArtFolder });
+        for (int i = 0; i < guids.Length; i++)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+            var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+            if (sprite != null) pixelArtAssets.Add(sprite);
+        }
+        pixelArtAssets.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+        if (newPixelArtSprite == null && pixelArtAssets.Count > 0) newPixelArtSprite = pixelArtAssets[0];
+    }
+
     void DrawSpawns()
     {
         EditorGUILayout.LabelField("出生点（脚底）", EditorStyles.boldLabel);
