@@ -599,6 +599,7 @@ public sealed class LabPhantom : MonoBehaviour
         {
             var block = Bridge[i];
             if (block == null) continue;
+            block.PrepareForDestroy();
             LabLightBridgeBlock.All.Remove(block);
             Destroy(block.gameObject);
         }
