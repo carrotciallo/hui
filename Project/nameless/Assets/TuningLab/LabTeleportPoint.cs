@@ -94,13 +94,13 @@ public sealed class LabTeleportPoint : MonoBehaviour
     }
 
     /// <summary>
-    /// 把两名玩家放到这个传送点两侧，保留形态并清零速度。传送会重置地图并吞掉钥匙；
+    /// 把两名玩家放到这个传送点两侧，保留形态并清零速度。传送会重置终点附近的地图并吞掉钥匙；
     /// 重生点记录不受影响（地图重置不会清 ActiveRespawnPoint）。
     /// </summary>
     public void TeleportPlayersHere(TuningLab owner)
     {
         if (owner == null) return;
-        owner.ResetMap();
+        owner.ResetMap(transform.position);
 
         Vector2 center = transform.position;
         owner.PlayerA?.TeleportPreservingState(center + Vector2.left * 0.65f, Vector2.zero);

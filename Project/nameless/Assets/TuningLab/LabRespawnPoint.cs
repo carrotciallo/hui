@@ -166,7 +166,7 @@ public sealed class LabRespawnPoint : MonoBehaviour
     {
         if (owner == null) return;
         contactResolved = true;
-        owner.ResetMap();
+        owner.ResetMap(transform.position);
         PlacePlayer(owner.PlayerA, (Vector2)transform.position + Vector2.left, keepLivingForms);
         PlacePlayer(owner.PlayerB, (Vector2)transform.position + Vector2.right, keepLivingForms);
     }

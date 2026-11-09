@@ -29,7 +29,7 @@ public enum HomeSnakeEdge
 [DisallowMultipleComponent]
 public sealed class HomeScreen : MonoBehaviour
 {
-    public const string LevelSceneName = "Final Map";
+    public const string LevelSceneName = "REAL FINAL MAP";
 
     enum HomeAction
     {

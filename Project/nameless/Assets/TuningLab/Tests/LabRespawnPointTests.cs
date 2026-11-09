@@ -507,6 +507,64 @@ public sealed class LabRespawnPointTests
         Assert.AreEqual(0, lab.PlayerA.KeyCount);
     }
 
+    [UnityTest]
+    public IEnumerator ResetPlayersReturnsTeamToActiveCheckpoint()
+    {
+        var checkpointPosition = new Vector2(0f, 5f);
+        var checkpoint = MakeCheckpoint(checkpointPosition);
+        yield return null;
+        MakeKinematic(lab.PlayerA, lab.PlayerB);
+        yield return Activate(checkpointPosition);
+        Assert.AreSame(checkpoint, lab.ActiveRespawnPoint);
+
+        // 走远之后按 R：应回激活过的重生点，而不是出生点。
+        MoveBody(lab.PlayerA, new Vector2(200f, 5f));
+        MoveBody(lab.PlayerB, new Vector2(202f, 5f));
+        lab.ResetPlayers();
+
+        Assert.AreEqual(checkpointPosition.x - 1f, lab.PlayerA.transform.position.x, 0.001f,
+            "R 重开应把 A 放回重生点左侧 1 格");
+        Assert.AreEqual(checkpointPosition.y, lab.PlayerA.transform.position.y, 0.001f);
+        Assert.AreEqual(checkpointPosition.x + 1f, lab.PlayerB.transform.position.x, 0.001f,
+            "R 重开应把 B 放回重生点右侧 1 格");
+        AssertNormal(lab.PlayerA, "R 重开应以普通状态复活");
+        AssertNormal(lab.PlayerB, "R 重开应以普通状态复活");
+    }
+
+    [UnityTest]
+    public IEnumerator CheckpointResetRestoresOnlyNearbyBrokenIce()
+    {
+        lab.mapResetRadius = 10f;
+        var levelGo = new GameObject("Level");
+        levelGo.transform.SetParent(labGo.transform, false);
+        var level = levelGo.AddComponent<LabLevel>();
+        var data = new LabLevelData();
+        data.ices.Add(new LabIceSpec(new Vector2Int(3, 5), 1));
+        data.ices.Add(new LabIceSpec(new Vector2Int(60, 5), 2));
+        level.CopyFrom(data);
+        level.BuildRuntime(levelGo.transform, null);
+
+        LabIce near = null, far = null;
+        for (int i = 0; i < LabIce.All.Count; i++)
+        {
+            if (LabIce.All[i] != null && LabIce.All[i].cell.x == 3) near = LabIce.All[i];
+            if (LabIce.All[i] != null && LabIce.All[i].cell.x == 60) far = LabIce.All[i];
+        }
+        Assert.IsNotNull(near, "近处冰块应生成");
+        Assert.IsNotNull(far, "远处冰块应生成");
+        near.BreakOne();
+        far.BreakOne();
+
+        var checkpointPosition = new Vector2(0f, 5f);
+        MakeCheckpoint(checkpointPosition);
+        yield return null;
+        MakeKinematic(lab.PlayerA, lab.PlayerB);
+        yield return Activate(checkpointPosition);
+
+        Assert.IsFalse(near.Broken, "范围内的碎冰应恢复");
+        Assert.IsTrue(far.Broken, "范围外的碎冰应保持破坏（范围重置）");
+    }
+
     /// <summary>把 A 放在区域外，等重生点采样一次，再从外面走进中心触发。</summary>
     IEnumerator Activate(Vector2 center)
     {
