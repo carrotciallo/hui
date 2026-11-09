@@ -1,6 +1,6 @@
 # 音效库（阶段二实装中）
 
-来源：Freesound，全部 **CC0**（publicdomain/zero/1.0），免署名、可商用。
+来源：Freesound 素材均为 **CC0**（publicdomain/zero/1.0），免署名、可商用；`06_IceBreak` 当前素材由用户提供（Sound Instants 下载），许可未独立核实。
 投票结果见 issue #60 正文，每人不限勾选次数；102 个候选中入选 19 个，弃选的 83 个文件连同 `.meta` 已删除。
 投票后按体感返工过一次：跳跃槽入选的 2 条（386647 / 386636）大家都不满意，已连同 `.meta` 删除，换成下表这一条——所以当前库内共 18 个文件。
 
@@ -68,7 +68,7 @@
 
 | 文件 | 时长 | 来源 | 试听 |
 | --- | --- | --- | --- |
-| `ice_break_703115_crush1.mp3` | 0.45s | [Freesound 703115](https://freesound.org/people/franzzle/sounds/703115/) | [703115](https://cdn.freesound.org/previews/703/703115_1823770-hq.mp3) |
+| `ice_break_sound_instants_DM_20261105205135_001.mp3` | 1.33s | 用户提供（Sound Instants 下载；许可未独立核实） | — |
 
 ## `07_IceMelt` — 冰融化（LabIce 融化，可循环）
 
