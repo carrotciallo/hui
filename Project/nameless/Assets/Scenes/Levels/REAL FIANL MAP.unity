@@ -5811,7 +5811,6 @@ MonoBehaviour:
     - {x: 497, y: -24}
     - {x: 500, y: -24}
     - {x: 501, y: -24}
-    - {x: 503, y: -24}
     - {x: 506, y: -24}
     - {x: 507, y: -24}
     - {x: 508, y: -24}
@@ -5911,6 +5910,7 @@ MonoBehaviour:
     - {x: 266, y: -21}
     - {x: 424, y: -21}
     - {x: 467, y: -21}
+    - {x: 498, y: -21}
     - {x: 540, y: -21}
     - {x: 579, y: -21}
     - {x: 631, y: -21}
@@ -6609,6 +6609,7 @@ MonoBehaviour:
     - {x: 348, y: -12}
     - {x: 363, y: -12}
     - {x: 364, y: -12}
+    - {x: 384, y: -12}
     - {x: 385, y: -12}
     - {x: 388, y: -12}
     - {x: 397, y: -12}
@@ -6710,6 +6711,7 @@ MonoBehaviour:
     - {x: 308, y: -11}
     - {x: 348, y: -11}
     - {x: 363, y: -11}
+    - {x: 386, y: -11}
     - {x: 388, y: -11}
     - {x: 397, y: -11}
     - {x: 427, y: -11}
@@ -6975,6 +6977,7 @@ MonoBehaviour:
     - {x: 261, y: -8}
     - {x: 262, y: -8}
     - {x: 263, y: -8}
+    - {x: 271, y: -8}
     - {x: 294, y: -8}
     - {x: 295, y: -8}
     - {x: 296, y: -8}
@@ -7076,6 +7079,7 @@ MonoBehaviour:
     - {x: 261, y: -7}
     - {x: 262, y: -7}
     - {x: 263, y: -7}
+    - {x: 271, y: -7}
     - {x: 294, y: -7}
     - {x: 295, y: -7}
     - {x: 296, y: -7}
@@ -10607,10 +10611,6 @@ MonoBehaviour:
       cells: 1
       chainId: 0
       orientation: 1
-    - center: {x: 503.5, y: -22.5}
-      cells: 1
-      chainId: 0
-      orientation: 0
     - center: {x: 504.5, y: -22.5}
       cells: 1
       chainId: 0
@@ -10620,10 +10620,6 @@ MonoBehaviour:
       chainId: 0
       orientation: 0
     - center: {x: 505.5, y: -22.5}
-      cells: 1
-      chainId: 0
-      orientation: 0
-    - center: {x: 503.5, y: -21.5}
       cells: 1
       chainId: 0
       orientation: 0
@@ -11191,6 +11187,10 @@ MonoBehaviour:
       cells: 4
       chainId: 0
       orientation: 1
+    - center: {x: 503.5, y: -22.5}
+      cells: 3
+      chainId: 0
+      orientation: 0
     keys:
     - position: {x: 113.5, y: 23.5}
     - position: {x: 298.5, y: -10.5}
@@ -11280,8 +11280,6 @@ MonoBehaviour:
     - position: {x: 720.5, y: -81.5}
       color: {r: 0.25, g: 0.75, b: 1, a: 1}
     - position: {x: 904.5, y: -103.5}
-      color: {r: 0.25, g: 0.75, b: 1, a: 1}
-    - position: {x: 903.5, y: -103.5}
       color: {r: 0.25, g: 0.75, b: 1, a: 1}
     - position: {x: 967.5, y: -167.5}
       color: {r: 0.25, g: 0.75, b: 1, a: 1}
@@ -11735,9 +11733,9 @@ MonoBehaviour:
     - cell: {x: 726, y: -46}
       dir: 0
     - cell: {x: 583, y: -40}
-      dir: 3
+      dir: 0
     - cell: {x: 586, y: -40}
-      dir: 2
+      dir: 0
     - cell: {x: 583, y: -39}
       dir: 3
     - cell: {x: 586, y: -39}
@@ -13455,8 +13453,6 @@ MonoBehaviour:
       groupId: 8
     - cell: {x: 383, y: -12}
       groupId: 8
-    - cell: {x: 384, y: -12}
-      groupId: 8
     - cell: {x: 386, y: -12}
       groupId: 8
     - cell: {x: 387, y: -12}
@@ -13495,8 +13491,6 @@ MonoBehaviour:
       groupId: 3
     - cell: {x: 296, y: -11}
       groupId: 4
-    - cell: {x: 386, y: -11}
-      groupId: 8
     - cell: {x: 387, y: -11}
       groupId: 8
     - cell: {x: 426, y: -11}
@@ -13563,16 +13557,12 @@ MonoBehaviour:
       groupId: 9
     - cell: {x: 436, y: -9}
       groupId: 10
-    - cell: {x: 271, y: -8}
-      groupId: 3
     - cell: {x: 386, y: -8}
       groupId: 8
     - cell: {x: 387, y: -8}
       groupId: 8
     - cell: {x: 436, y: -8}
       groupId: 10
-    - cell: {x: 271, y: -7}
-      groupId: 3
     - cell: {x: 386, y: -7}
       groupId: 8
     - cell: {x: 387, y: -7}
@@ -15815,7 +15805,7 @@ MonoBehaviour:
       groupId: 1
     - cell: {x: 373, y: -10}
       groupId: 1
-    - cell: {x: 378, y: -10}
+    - cell: {x: 379, y: -10}
       groupId: 1
     - cell: {x: 468, y: -10}
       groupId: 3
@@ -15843,8 +15833,6 @@ MonoBehaviour:
       groupId: 1
     - cell: {x: 374, y: -9}
       groupId: 1
-    - cell: {x: 377, y: -9}
-      groupId: 1
     - cell: {x: 378, y: -9}
       groupId: 1
     - cell: {x: 379, y: -9}
@@ -15852,6 +15840,8 @@ MonoBehaviour:
     - cell: {x: 380, y: -9}
       groupId: 1
     - cell: {x: 381, y: -9}
+      groupId: 1
+    - cell: {x: 382, y: -9}
       groupId: 1
     - cell: {x: 468, y: -9}
       groupId: 3
@@ -15869,9 +15859,29 @@ MonoBehaviour:
       groupId: 3
     - cell: {x: 333, y: -8}
       groupId: 1
+    - cell: {x: 370, y: -8}
+      groupId: 1
+    - cell: {x: 371, y: -8}
+      groupId: 1
+    - cell: {x: 372, y: -8}
+      groupId: 1
     - cell: {x: 373, y: -8}
       groupId: 1
+    - cell: {x: 374, y: -8}
+      groupId: 1
+    - cell: {x: 375, y: -8}
+      groupId: 1
+    - cell: {x: 377, y: -8}
+      groupId: 1
     - cell: {x: 378, y: -8}
+      groupId: 1
+    - cell: {x: 379, y: -8}
+      groupId: 1
+    - cell: {x: 380, y: -8}
+      groupId: 1
+    - cell: {x: 381, y: -8}
+      groupId: 1
+    - cell: {x: 382, y: -8}
       groupId: 1
     - cell: {x: 468, y: -8}
       groupId: 3
@@ -15889,6 +15899,26 @@ MonoBehaviour:
       groupId: 3
     - cell: {x: 333, y: -7}
       groupId: 1
+    - cell: {x: 370, y: -7}
+      groupId: 1
+    - cell: {x: 371, y: -7}
+      groupId: 1
+    - cell: {x: 372, y: -7}
+      groupId: 1
+    - cell: {x: 373, y: -7}
+      groupId: 1
+    - cell: {x: 374, y: -7}
+      groupId: 1
+    - cell: {x: 378, y: -7}
+      groupId: 1
+    - cell: {x: 379, y: -7}
+      groupId: 1
+    - cell: {x: 380, y: -7}
+      groupId: 1
+    - cell: {x: 381, y: -7}
+      groupId: 1
+    - cell: {x: 382, y: -7}
+      groupId: 1
     - cell: {x: 468, y: -7}
       groupId: 3
     - cell: {x: 469, y: -7}
@@ -15904,6 +15934,10 @@ MonoBehaviour:
     - cell: {x: 474, y: -7}
       groupId: 3
     - cell: {x: 333, y: -6}
+      groupId: 1
+    - cell: {x: 373, y: -6}
+      groupId: 1
+    - cell: {x: 379, y: -6}
       groupId: 1
     - cell: {x: 468, y: -6}
       groupId: 3
@@ -17786,6 +17820,22 @@ MonoBehaviour:
       origin: {x: 969, y: -122}
       size: {x: 4, y: 2}
       sortingOrder: 1
+    - sprite: {fileID: 4057704999641396611, guid: 2a4242f0dca6a53468a0fb65988a4b4d, type: 3}
+      origin: {x: 591, y: -41}
+      size: {x: 4, y: 2}
+      sortingOrder: 1
+    - sprite: {fileID: 2289247203497718647, guid: 19e656711f7c29546932b27e70b9ea3e, type: 3}
+      origin: {x: 663, y: -40}
+      size: {x: 4, y: 2}
+      sortingOrder: 1
+    - sprite: {fileID: -7817034919847397993, guid: 283b9a1b71aca8c458887d981c120533, type: 3}
+      origin: {x: 580, y: -30}
+      size: {x: 2, y: 4}
+      sortingOrder: 1
+    - sprite: {fileID: -2430311879158790913, guid: 571b78a50ec3c6c448115e320db1e857, type: 3}
+      origin: {x: 380, y: -2}
+      size: {x: 4, y: 2}
+      sortingOrder: 1
     respawnPoints:
     - position: {x: 1014.5, y: -183.5}
     - position: {x: 972.5, y: -167.5}
@@ -17819,6 +17869,7 @@ MonoBehaviour:
     - position: {x: 464.5, y: 9.5}
     - position: {x: 46.5, y: 16.5}
     - position: {x: 78.5, y: 16.5}
+    - position: {x: 95.5, y: 16.5}
     - position: {x: 108.5, y: 16.5}
     - position: {x: 139.5, y: 16.5}
     teleports:
@@ -17830,9 +17881,8 @@ MonoBehaviour:
     - position: {x: 603.5, y: -66.5}
     - position: {x: 597.5, y: -54.5}
     - position: {x: 789.5, y: -46.5}
-    - position: {x: 602.5, y: -43.5}
+    - position: {x: 567.5, y: -26.5}
     - position: {x: 488.5, y: -19.5}
-    - position: {x: 600.5, y: -19.5}
     - position: {x: 310.5, y: -9.5}
     - position: {x: 299.5, y: -5.5}
     - position: {x: 235.5, y: -2.5}
