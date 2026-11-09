@@ -21,6 +21,8 @@ public sealed class LabLevelData
     public float cameraMinSize = TuningLab.DefaultCameraMinSize;
     /// <summary>自由相机跟随的最大正交尺寸（格，半高）。</summary>
     public float cameraMaxSize = TuningLab.DefaultCameraMaxSize;
+    /// <summary>滚动拼接背景的资源名（Resources/Backgrounds 下，如 level1）；空串 = 无背景。</summary>
+    public string background = "";
     public List<Vector2Int> solids = new List<Vector2Int>();
     public List<LabRopeSpec> ropes = new List<LabRopeSpec>();
     /// <summary>钥匙（1×1，拾取后消失）。</summary>
@@ -705,6 +707,7 @@ public sealed class LabLevelData
             spawnB = new Vector2(10f, 0f);
             cameraMinSize = TuningLab.DefaultCameraMinSize;
             cameraMaxSize = TuningLab.DefaultCameraMaxSize;
+            background = "";
             solids = new List<Vector2Int>();
             ropes = new List<LabRopeSpec>();
             keys = new List<LabKeySpec>();
@@ -727,6 +730,7 @@ public sealed class LabLevelData
         spawnB = other.spawnB;
         cameraMinSize = other.cameraMinSize;
         cameraMaxSize = other.cameraMaxSize;
+        background = other.background ?? "";
         solids = new List<Vector2Int>(other.solids ?? new List<Vector2Int>());
         ropes = new List<LabRopeSpec>(other.ropes ?? new List<LabRopeSpec>());
         keys = new List<LabKeySpec>(other.keys ?? new List<LabKeySpec>());

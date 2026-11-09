@@ -40,9 +40,19 @@ public class LabSettingsUI : MonoBehaviour
     static readonly Color CardColor = new Color(0.06f, 0.08f, 0.13f, 1f);
     static readonly Color PanelColor = new Color(0.10f, 0.13f, 0.20f, 1f);
     static readonly Color TrackColor = new Color(0.16f, 0.20f, 0.29f, 1f);
-    static readonly Color ChipColor = new Color(0.91f, 0.89f, 0.80f, 1f);
-    static readonly Color ChipDimColor = new Color(0.58f, 0.57f, 0.52f, 1f);
-    static readonly Color ChipHoverColor = new Color(1f, 0.98f, 0.88f, 1f);
+    // 图标牌从"米白底 + 白图标"改成"深蓝底 + 浅图标"（Issue #131）：
+    // 原来那套白色牌子和游戏整体的深蓝夜色差太远，一开设置就像另一个游戏。
+    //
+    // 注意：这里只改**牌子的底色**。文字和滑块用的是下面那几个 Ink*，
+    // 一旦混用就会出现"深色字画在深色底上"——第 2 页那些按键名就是这么看不见的。
+    static readonly Color ChipColor = new Color(0.13f, 0.17f, 0.25f, 1f);
+    static readonly Color ChipDimColor = new Color(0.09f, 0.11f, 0.16f, 1f);
+    static readonly Color ChipHoverColor = new Color(0.20f, 0.26f, 0.36f, 1f);
+
+    /// <summary>前景色：文字、滑块轨道、旋钮。和牌子的底色是两回事。</summary>
+    static readonly Color InkColor = new Color(0.85f, 0.91f, 0.98f, 1f);
+    /// <summary>前景色的暗版，用于禁用态。</summary>
+    static readonly Color InkDimColor = new Color(0.45f, 0.50f, 0.58f, 1f);
     static readonly Color AccentColor = new Color(0.36f, 0.89f, 1f, 1f);
     static readonly Color AccentDimColor = new Color(0.20f, 0.48f, 0.58f, 1f);
     static readonly Color ReservedFillColor = new Color(0.30f, 0.34f, 0.44f, 1f);
@@ -64,7 +74,7 @@ public class LabSettingsUI : MonoBehaviour
     float scale = 1f;
 
     /// <summary>设置界面的两页。</summary>
-    enum Page { Basic, Controls }
+    enum Page { Basic, Controls, Credits }
 
     Page page = Page.Basic;
 
@@ -83,9 +93,14 @@ public class LabSettingsUI : MonoBehaviour
     public bool IsOpen => open;
 
     /// <summary>界面对外暴露的页枚举。</summary>
-    public enum SettingsPage { Basic, Controls }
+    public enum SettingsPage { Basic, Controls, Credits }
 
-    public SettingsPage CurrentPage => page == Page.Basic ? SettingsPage.Basic : SettingsPage.Controls;
+    public SettingsPage CurrentPage => page switch
+    {
+        Page.Basic => SettingsPage.Basic,
+        Page.Controls => SettingsPage.Controls,
+        _ => SettingsPage.Credits,
+    };
 
     /// <summary>当前是否有键在等待改键。</summary>
     public bool IsRebinding => pendingRebind != null;
@@ -95,7 +110,8 @@ public class LabSettingsUI : MonoBehaviour
                                 && data.bindings.ConflictedKeys().Count > 0;
 
     public void ShowBasicPage() { page = Page.Basic; pendingRebind = null; }
-    public void ShowControlsPage() { page = Page.Controls; }
+    public void ShowControlsPage() { page = Page.Controls; pendingRebind = null; }
+    public void ShowCreditsPage() { page = Page.Credits; pendingRebind = null; }
 
     /// <summary>进入某个键的改键状态。</summary>
     public void BeginRebind(bool isBig, LabAction action)
@@ -364,7 +380,8 @@ public class LabSettingsUI : MonoBehaviour
         DrawClose(card);
 
         if (page == Page.Basic) DrawBasicPage(card);
-        else DrawControlsPage(card);
+        else if (page == Page.Controls) DrawControlsPage(card);
+        else DrawCreditsPage(card);
     }
 
     /// <summary>基本设置页：就是原来那一页。</summary>
@@ -482,7 +499,7 @@ public class LabSettingsUI : MonoBehaviour
         string text = waiting ? "..." : LabBindings.KeyName(key);
         var style = PixelLabel(LabPixelFont.UiSize);
         style.alignment = TextAnchor.MiddleCenter;
-        style.normal.textColor = conflict ? ConflictColor : ChipColor;
+        style.normal.textColor = conflict ? ConflictColor : InkColor;
         GUI.Label(rect, text, style);
 
         // 冲突时右上角画一个感叹号。
@@ -527,10 +544,10 @@ public class LabSettingsUI : MonoBehaviour
             ResetBindingsToDefault();
             PlayFeedback();
         }
-        DrawFrame(reset, PanelColor, ChipColourForHover(reset, ChipColor), 2f);
+        DrawFrame(reset, PanelColor, ChipColourForHover(reset, InkColor), 2f);
         var rs = PixelLabel(LabPixelFont.UiSize);
         rs.alignment = TextAnchor.MiddleCenter;
-        rs.normal.textColor = ChipColor;
+        rs.normal.textColor = InkColor;
         GUI.Label(reset, "恢复默认", rs);
     }
 
@@ -577,14 +594,152 @@ public class LabSettingsUI : MonoBehaviour
     }
 
     // ------------------------------------------------------------------
-    // 翻页按钮：卡片外侧左边，竖直两个。不写字，只用图标。
+    // 第三页：关于 / 制作信息
+
+    /// <summary>制作人登录名。头像在 Resources/Credits/&lt;login&gt;.png，拼写必须和 GitHub 账号一致。</summary>
+    public static string[] CreditLogins
+    {
+        get
+        {
+            var names = new string[Credits.Length];
+            for (int i = 0; i < Credits.Length; i++) names[i] = Credits[i].login;
+            return names;
+        }
+    }
+
+    /// <summary>仓库协作者。头像在 Resources/Credits/&lt;login&gt;.png。</summary>
+    static readonly (string login, string role)[] Credits =
+    {
+        ("sfher", "主程序"),
+        ("cyx-weimijiheheda", "主程序"),
+        ("declinegod", "策划 / 主程序"),
+        ("strelizia-z", "美术"),
+    };
+
+    void DrawCreditsPage(Rect card)
+    {
+        float y = RowStart - 8f;
+
+        // ---- 项目名 ----
+        var title = PixelLabel(LabPixelFont.UiSize * 2);
+        title.alignment = TextAnchor.MiddleCenter;
+        title.normal.textColor = AccentColor;
+        GUI.Label(At(card, Pad, y, CardW - Pad * 2f, 36f), "Hui", title);
+        y += 40f;
+
+        // ---- 副标题 ----
+        var sub = PixelLabel(LabPixelFont.UiSize);
+        sub.alignment = TextAnchor.MiddleCenter;
+        sub.normal.textColor = InkColor;
+        GUI.Label(At(card, Pad, y, CardW - Pad * 2f, 24f), "学院路 GameJam 参赛作品", sub);
+        y += 32f;
+
+        DrawSeparator(card, y);
+        y += 14f;
+
+        // ---- 制作者 ----
+        var head = PixelLabel(LabPixelFont.UiSize);
+        head.normal.textColor = ReservedColor;
+        GUI.Label(At(card, Pad, y, CardW - Pad * 2f, 24f), "制作者", head);
+        y += 30f;
+
+        const float avatar = 48f;
+        const float colGap = 12f;
+        int perRow = 2;
+        float colW = (CardW - Pad * 2f - colGap * (perRow - 1)) / perRow;
+
+        for (int i = 0; i < Credits.Length; i++)
+        {
+            int row = i / perRow;
+            int col = i % perRow;
+            float cx = Pad + col * (colW + colGap);
+            float cy = y + row * (avatar + 16f);
+
+            DrawCreditEntry(card, cx, cy, colW, avatar, Credits[i].login, Credits[i].role);
+        }
+
+        // ---- 版权 + 许可 ----
+        y += 2f * (avatar + 16f) + 10f;
+        DrawSeparator(card, y);
+        y += 10f;
+
+        var copy = PixelLabel(LabPixelFont.UiSize - 4);
+        copy.alignment = TextAnchor.MiddleCenter;
+        copy.normal.textColor = ReservedColor;
+        GUI.Label(At(card, Pad, y, CardW - Pad * 2f, 18f),
+            "© 2026 Hui 制作组", copy);
+        y += 18f;
+
+        // 代码用 CC BY 4.0：署名全体协作者（仓库 Collaborators 列表）。
+        GUI.Label(At(card, Pad, y, CardW - Pad * 2f, 18f),
+            "本作品采用 CC BY 4.0 许可", copy);
+        y += 18f;
+
+        GUI.Label(At(card, Pad, y, CardW - Pad * 2f, 18f),
+            "署名：" + CreditNames(), copy);
+        y += 18f;
+
+        // 第三方素材的许可。字体是 OFL，必须署名；
+        // 图标 / 美术包作者声明"无需署名、但不得再分发素材文件"。
+        var lic = PixelLabel(LabPixelFont.UiSize - 4);
+        lic.alignment = TextAnchor.MiddleCenter;
+        lic.normal.textColor = ReservedColor;
+        GUI.Label(At(card, Pad, y, CardW - Pad * 2f, 18f),
+            "字体 Fusion Pixel Font · SIL OFL 1.1", lic);
+        y += 18f;
+
+        GUI.Label(At(card, Pad, y, CardW - Pad * 2f, 18f),
+            "图标 1-bit Pixel Icons · 美术 Pixel Platformer Tileset", lic);
+    }
+
+    /// <summary>把所有协作者的登录名拼成一行，用于 CC BY 署名。</summary>
+    static string CreditNames()
+    {
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < Credits.Length; i++)
+        {
+            if (i > 0) sb.Append(" · ");
+            sb.Append(Credits[i].login);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>一位制作者： avatar + 用户名 + 分工。</summary>
+    void DrawCreditEntry(Rect card, float x, float y, float w, float avatarSize,
+        string login, string role)
+    {
+        var avatarRect = At(card, x, y, avatarSize, avatarSize);
+        DrawFrame(avatarRect, PanelColor, BorderColor, 2f);
+
+        var texture = Resources.Load<Texture2D>("Credits/" + login);
+        if (texture != null)
+        {
+            var inner = new Rect(avatarRect.x + 2f, avatarRect.y + 2f,
+                avatarRect.width - 4f, avatarRect.height - 4f);
+            GUI.DrawTexture(inner, texture, ScaleMode.ScaleToFit, true);
+        }
+
+        float textX = x + avatarSize + 10f;
+        float textW = w - avatarSize - 10f;
+
+        var name = PixelLabel(LabPixelFont.UiSize - 2);
+        name.normal.textColor = InkColor;
+        GUI.Label(At(card, textX, y + 2f, textW, 20f), login, name);
+
+        var roleStyle = PixelLabel(LabPixelFont.UiSize - 4);
+        roleStyle.normal.textColor = ReservedColor;
+        GUI.Label(At(card, textX, y + 24f, textW, 18f), role, roleStyle);
+    }
+
+    // ------------------------------------------------------------------
+    // 翻页按钮：卡片外侧左边，竖直三个。不写字，只用图标。
 
     void DrawPageButtons(Rect card)
     {
         float size = PageBtnSize * scale;
         float gap = PageBtnGap * scale;
         float x = card.x - PageBtnMargin * scale - size;
-        float totalH = size * 2f + gap;
+        float totalH = size * 3f + gap * 2f;
         float y = Mathf.Round(card.y + (card.height - totalH) * 0.5f);
 
         if (IconButton(new Rect(x, y, size, size), "Settings",
@@ -598,6 +753,15 @@ public class LabSettingsUI : MonoBehaviour
                 page == Page.Controls, true, out _))
         {
             page = Page.Controls;
+            pendingRebind = null;
+        }
+
+        // 第三页：关于 / 制作信息。
+        if (IconButton(new Rect(x, y + (size + gap) * 2f, size, size), "Info",
+                page == Page.Credits, true, out _))
+        {
+            page = Page.Credits;
+            pendingRebind = null;
         }
     }
 
@@ -662,7 +826,7 @@ public class LabSettingsUI : MonoBehaviour
             var pip = At(card, start + i * (pipW + 10f), y + 19f, pipW, 10f);
             DrawFrame(pip, i == resolutionIndex ? AccentColor : TrackColor, BorderColor, 1f);
             if (i == resolutionIndex)
-                DrawSolid(At(card, start + i * (pipW + 10f) + 3f, y + 22f, pipW - 6f, 4f), ChipColor);
+                DrawSolid(At(card, start + i * (pipW + 10f) + 3f, y + 22f, pipW - 6f, 4f), InkColor);
         }
 
         bool canRight = resolutionIndex < resolutions.Count - 1;
@@ -731,7 +895,7 @@ public class LabSettingsUI : MonoBehaviour
             screen.y + screen.height * 0.34f,
             screen.width * 0.72f,
             screen.height * 0.40f);
-        DrawSolid(content, fullscreen ? ChipColor : ReservedColor);
+        DrawSolid(content, fullscreen ? InkColor : ReservedColor);
         DrawSolid(new Rect(content.x, content.y + content.height * 0.62f,
             content.width, Mathf.Max(1f, 2f * scale)), BorderColor);
     }
@@ -753,7 +917,7 @@ public class LabSettingsUI : MonoBehaviour
         // 现在直接传具体像素数，不再乘倍率。
         style.fontSize = LabPixelFont.SnapSize(size);
 
-        style.normal.textColor = ChipColor;
+        style.normal.textColor = InkColor;
         return style;
     }
 
@@ -795,7 +959,7 @@ public class LabSettingsUI : MonoBehaviour
         float inset = IconInset(rect);
         DrawFrame(rect, dim ? ChipDimColor : ChipColor, BorderColor, 2f);
         DrawIcon(new Rect(rect.x + inset, rect.y + inset,
-            rect.width - inset * 2f, rect.height - inset * 2f), icon, dim ? 0.55f : 1f);
+            rect.width - inset * 2f, rect.height - inset * 2f), icon, dim ? 0.55f : 1f, IconVariant.Light);
     }
 
     float IconInset(Rect rect) => (rect.width / scale > 44f ? 8f : 4f) * scale;
@@ -818,8 +982,12 @@ public class LabSettingsUI : MonoBehaviour
         Color border = selected ? ChipHoverColor : BorderColor;
         float inset = IconInset(rect);
         DrawFrame(rect, chip, border, 2f);
+
+        // 选中的牌子是青色底，白色图标压上去几乎看不见（Issue #131）——
+        // 换成反色版，深色描边在青底上才有对比。
         DrawIcon(new Rect(rect.x + inset, rect.y + inset,
-            rect.width - inset * 2f, rect.height - inset * 2f), icon, enabled ? 1f : 0.45f);
+            rect.width - inset * 2f, rect.height - inset * 2f), icon,
+            enabled ? 1f : 0.45f, selected ? IconVariant.Dark : IconVariant.Light);
         return clicked;
     }
 
@@ -837,7 +1005,7 @@ public class LabSettingsUI : MonoBehaviour
         float knobW = 12f * scale;
         float knobH = 24f * scale;
         var knob = new Rect(x - knobW * 0.5f, rect.y + (rect.height - knobH) * 0.5f, knobW, knobH);
-        DrawFrame(knob, enabled ? ChipColor : ReservedColor, BorderColor, 2f);
+        DrawFrame(knob, enabled ? InkColor : ReservedColor, BorderColor, 2f);
 
         if (!enabled) return false;
 
@@ -906,9 +1074,11 @@ public class LabSettingsUI : MonoBehaviour
         DrawSolid(new Rect(rect.xMax - t, rect.y, t, rect.height), border);
     }
 
-    static void DrawIcon(Rect rect, string name, float alpha)
+    static void DrawIcon(Rect rect, string name, float alpha) => DrawIcon(rect, name, alpha, IconVariant.Original);
+
+    static void DrawIcon(Rect rect, string name, float alpha, IconVariant variant)
     {
-        var texture = Icon(name);
+        var texture = Icon(name, variant);
         Color previous = GUI.color;
         GUI.color = new Color(1f, 1f, 1f, alpha);
         GUI.DrawTexture(rect, texture, ScaleMode.ScaleToFit, true);
@@ -916,12 +1086,49 @@ public class LabSettingsUI : MonoBehaviour
     }
 
     /// <summary>图标入口：Resources/&lt;IconResourceFolder&gt;/&lt;name&gt;.png；缺失时用占位图。</summary>
-    public static Texture2D Icon(string name)
+    /// <summary>
+    /// 图标资源名。
+    /// 图标是双色的（黑描边 + 白填充），画在不同底色上要换一套：
+    /// 米白牌上用原版，深色 / 青色底上用 _Dark 反色版，否则白底白图看不清（Issue #131）。
+    /// </summary>
+    /// <summary>图标变体：对应三种底色。</summary>
+    public enum IconVariant
     {
-        string path = IconResourceFolder + "/" + name;
+        /// <summary>原版（黑描边 + 白填充）——给米色牌用。</summary>
+        Original = 0,
+        /// <summary>_Dark（深色实心 + 深蓝描边）——给青色高亮底用。</summary>
+        Dark = 1,
+        /// <summary>_Light（冷白 + 中蓝描边）——给深蓝牌用。</summary>
+        Light = 2,
+    }
+
+    static string IconName(string name, IconVariant variant)
+    {
+        switch (variant)
+        {
+            case IconVariant.Dark: return name + "_Dark";
+            case IconVariant.Light: return name + "_Light";
+            default: return name;
+        }
+    }
+
+    public static Texture2D Icon(string name) => Icon(name, IconVariant.Original);
+
+    public static Texture2D Icon(string name, IconVariant variant)
+    {
+        string path = IconResourceFolder + "/" + IconName(name, variant);
         if (iconCache.TryGetValue(path, out var cached) && cached != null) return cached;
 
         var texture = Resources.Load<Texture2D>(path);
+
+        // 变体缺失时退回原图，至少还有个图标，不至于开天窗。
+        if (texture == null && variant != IconVariant.Original)
+        {
+            path = IconResourceFolder + "/" + name;
+            if (iconCache.TryGetValue(path, out cached) && cached != null) return cached;
+            texture = Resources.Load<Texture2D>(path);
+        }
+
         if (texture == null)
         {
             Debug.LogWarning($"LabSettingsUI: 缺少设置图标 Resources/{path}.png，使用占位图。");

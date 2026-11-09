@@ -253,10 +253,11 @@ MonoBehaviour:
       y: -224
       width: 1225
       height: 330
-    spawnA: {x: -16.5, y: 15}
-    spawnB: {x: 5.5, y: 15}
-    cameraMinSize: 13.1
+    spawnA: {x: -6.5, y: 14}
+    spawnB: {x: -1.5, y: 14}
+    cameraMinSize: 6.75
     cameraMaxSize: 25.917202
+    background: level1
     solids:
     - {x: 992, y: -186}
     - {x: 993, y: -186}
@@ -17835,6 +17836,34 @@ MonoBehaviour:
     - sprite: {fileID: -2430311879158790913, guid: 571b78a50ec3c6c448115e320db1e857, type: 3}
       origin: {x: 380, y: -2}
       size: {x: 4, y: 2}
+      sortingOrder: 1
+    - sprite: {fileID: -2677327318154360500, guid: 3d83ae4f69e61a94fa1c93435f17e54f, type: 3}
+      origin: {x: 60, y: 19}
+      size: {x: 4, y: 4}
+      sortingOrder: 1
+    - sprite: {fileID: -5688863303865996864, guid: 4401741f3d0b2b74ab3692d973da1eb8, type: 3}
+      origin: {x: 204, y: 11}
+      size: {x: 4, y: 4}
+      sortingOrder: 1
+    - sprite: {fileID: -4305981829581398747, guid: abe630d26f296e54f891a71cdfc2ec65, type: 3}
+      origin: {x: 320, y: -1}
+      size: {x: 4, y: 4}
+      sortingOrder: 1
+    - sprite: {fileID: 7596379288971176018, guid: 6e612b3da34076e4abbb8052a4f76db1, type: 3}
+      origin: {x: 498, y: -21}
+      size: {x: 4, y: 4}
+      sortingOrder: 1
+    - sprite: {fileID: 8143220845687417128, guid: 057fb80dd999a904ebdac82a03326924, type: 3}
+      origin: {x: 575, y: -24}
+      size: {x: 4, y: 4}
+      sortingOrder: 1
+    - sprite: {fileID: -8195164018292892933, guid: 249b3ce6361151c46b8ae8dfd5642752, type: 3}
+      origin: {x: 750, y: -67}
+      size: {x: 4, y: 4}
+      sortingOrder: 1
+    - sprite: {fileID: -1291175204921559527, guid: 36e3dff799deb4f42ad60f422dfc5811, type: 3}
+      origin: {x: 1000, y: -148}
+      size: {x: 4, y: 4}
       sortingOrder: 1
     respawnPoints:
     - position: {x: 1014.5, y: -183.5}

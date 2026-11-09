@@ -71,6 +71,59 @@ public sealed class LabSettingsControlsPageTests
     }
 
     [UnityTest]
+    public IEnumerator CanSwitchToCreditsPage()
+    {
+        yield return null;
+        ui.Open();
+        ui.ShowCreditsPage();
+        yield return null;
+        Assert.AreEqual(LabSettingsUI.SettingsPage.Credits, ui.CurrentPage,
+            "第三页是制作信息页（Issue #131）");
+
+        // 从别的页也能过来，再切回去。
+        ui.ShowBasicPage();
+        yield return null;
+        Assert.AreEqual(LabSettingsUI.SettingsPage.Basic, ui.CurrentPage);
+
+        ui.ShowCreditsPage();
+        yield return null;
+        Assert.AreEqual(LabSettingsUI.SettingsPage.Credits, ui.CurrentPage);
+    }
+
+    /// <summary>
+    /// 每个制作人的头像资源都要真的存在。
+    /// 之前 cyx 的登录名在代码里少打了一个 m（cyx-weijiheheda vs cyx-weimijiheheda），
+    /// Resources.Load 一直返回 null，界面上只剩一块深色底板 —— 排查了很久才
+    /// 发现是拼写，所以在这里钉死。
+    /// </summary>
+    [Test]
+    public void EveryCreditedMemberHasAnAvatar()
+    {
+        var logins = LabSettingsUI.CreditLogins;
+        Assert.Greater(logins.Length, 0, "制作人列表不能为空");
+
+        foreach (var login in logins)
+        {
+            var texture = Resources.Load<Texture2D>("Credits/" + login);
+            Assert.IsNotNull(texture, $"缺少头像 Resources/Credits/{login}.png（检查登录名拼写）");
+        }
+    }
+
+    [UnityTest]
+    public IEnumerator CreditsPageIgnoresPendingRebind()
+    {
+        yield return null;
+        ui.Open();
+        ui.ShowControlsPage();
+        ui.BeginRebind(true, LabAction.Jump);
+        Assert.IsTrue(ui.IsRebinding);
+
+        ui.ShowCreditsPage();
+        yield return null;
+        Assert.IsFalse(ui.IsRebinding, "切到制作信息页要取消待改键");
+    }
+
+    [UnityTest]
     public IEnumerator SelectingAKeyThenPressingItRemapsThatAction()
     {
         yield return null;

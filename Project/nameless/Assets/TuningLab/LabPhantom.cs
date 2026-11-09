@@ -65,6 +65,7 @@ public sealed class LabPhantom : MonoBehaviour
     Vector2 entryVelocity = Vector2.zero;
     Vector2 entryDir = Vector2.zero;
     LabPlayer.DashState entryDash;
+    Collider2D sourceCollider;
     Collider2D ignoredCollider;
     bool ignoredWasEnabled;
     float slideAccumulator;
@@ -89,7 +90,8 @@ public sealed class LabPhantom : MonoBehaviour
 
     /// <summary>
     /// 幻影只忽略来源玩家：来源可以穿过去，另一名玩家保持实体碰撞。
-    /// 来源进膛时 collider 会被关掉，出膛后重建引用，所以每物理步核对一次。
+    /// 来源进膛时 collider 会被关掉，出膛后重新打开；碰撞体本身不会重建，所以缓存引用，
+    /// 每物理步只核对 enabled。
     /// 炮和 L 都是瞬时出膛（#76），这里不再有延时计时器。
     /// </summary>
     void FixedUpdate()
@@ -100,7 +102,7 @@ public sealed class LabPhantom : MonoBehaviour
 
     void RefreshIgnorePair()
     {
-        Collider2D current = Source != null ? Source.GetComponent<Collider2D>() : null;
+        Collider2D current = Source != null ? sourceCollider : null;
         bool enabledNow = current != null && current.enabled;
         if (current == ignoredCollider && enabledNow == ignoredWasEnabled) return;
 
@@ -307,6 +309,7 @@ public sealed class LabPhantom : MonoBehaviour
     {
         this.lab = lab;
         Source = source;
+        sourceCollider = Source != null ? Source.GetComponent<Collider2D>() : null;
         Target = target;
         Cell = cell;
         SpiritMask = spiritMask;
@@ -331,7 +334,6 @@ public sealed class LabPhantom : MonoBehaviour
         }
 
         // 第一次也要立刻生效，不能等下一个物理步。
-        Collider2D sourceCollider = source != null ? source.GetComponent<Collider2D>() : null;
         if (sourceCollider != null)
         {
             Physics2D.IgnoreCollision(body, sourceCollider, true);

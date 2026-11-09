@@ -812,6 +812,26 @@ public sealed partial class LabLevelEditorWindow
             }
         }
 
+        EditorGUI.BeginChangeCheck();
+        string background = EditorGUILayout.TextField("背景纹理（Backgrounds/）", data.background ?? "");
+        if (EditorGUI.EndChangeCheck())
+        {
+            Record("改背景");
+            data.background = (background ?? "").Trim();
+            MarkDirty();
+        }
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (GUILayout.Button("第一关")) PickBackground("level1");
+            if (GUILayout.Button("第二关")) PickBackground("level2");
+            if (GUILayout.Button("第三关")) PickBackground("level3");
+            if (GUILayout.Button("无背景")) PickBackground("");
+        }
+        EditorGUILayout.HelpBox(
+            "背景在 Play 时按相机滚动镜像拼接（Issue #130 选定图）。\n" +
+            "纹理位于 Assets/TuningLab/Art/Resources/Backgrounds；留空 = 不铺背景。",
+            MessageType.None);
+
         showCameraFrames = EditorGUILayout.ToggleLeft("在 Scene 视图画出最小/最大视野（以出生点中心示意）", showCameraFrames);
 
         if (lab != null && !lab.freeCamera)
@@ -825,6 +845,15 @@ public sealed partial class LabLevelEditorWindow
             "size 是正交相机的半高（格），视野高度 = 2 × size；这是跟随范围，不是相机夹具。\n" +
             "只有整数像素缩放才逐像素对齐；非整数倍只适合概览或调试。",
             MessageType.None);
+    }
+
+    void PickBackground(string name)
+    {
+        var data = level.Data;
+        if ((data.background ?? "") == name) return;
+        Record("改背景");
+        data.background = name;
+        MarkDirty();
     }
 
     void DrawActions()

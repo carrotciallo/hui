@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 static class HomeSceneBuilder
 {
     const string HomeScenePath = "Assets/Scenes/Home.unity";
-    const string LevelScenePath = "Assets/Scenes/Levels/Final Map.unity";
+    const string LevelScenePath = "Assets/Scenes/Levels/REAL FINAL MAP.unity";
 
     [MenuItem("GameJam/Rebuild Home Scene")]
     public static void RebuildHomeScene()

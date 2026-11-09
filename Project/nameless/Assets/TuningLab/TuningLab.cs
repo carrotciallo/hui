@@ -107,6 +107,11 @@ public class TuningLab : MonoBehaviour
              "带地刺的正式关卡要用 RespawnAtSpawn，否则第一脚踩空就把人删了。")]
     public DeathFallback deathWhenNoCheckpoint = DeathFallback.DestroyPlayer;
 
+    [Header("地图重置")]
+    [Tooltip("范围重置半径（格）：复活/传送只恢复重生点周围这个半径内的碎冰、碎岩浆和门。\n" +
+             "调大更接近整图重置；范围内没有任何破坏时几乎零开销。")]
+    [Min(1f)] public float mapResetRadius = 40f;
+
     [Header("等级（等距）")]
     [Tooltip("第一道门槛的落差（格）= 零级的最大速度。必须大于跳高，否则站跳就越级。")]
     public float tierFirstCells = 4f;
@@ -556,6 +561,12 @@ public class TuningLab : MonoBehaviour
 
     public void ResetPlayers()
     {
+        // 激活过重生点就整队回那个点（普通状态 + 重置地图），而不是回出生点。
+        if (ActiveRespawnPoint != null)
+        {
+            ActiveRespawnPoint.ForceRespawn(this);
+            return;
+        }
         if (PlayerA != null)
         {
             Vector2 feet = level != null ? level.Data.spawnA : SpawnAFeet;
@@ -649,7 +660,7 @@ public class TuningLab : MonoBehaviour
 
         if (deathWhenNoCheckpoint == DeathFallback.RespawnAtSpawn)
         {
-            ResetMap();
+            ResetMap(level != null ? level.Data.spawnA : SpawnAFeet);
             ResetPlayers();
             return;
         }
@@ -695,12 +706,37 @@ public class TuningLab : MonoBehaviour
             Destroy(deadPlayer.gameObject);
     }
 
-    public void ResetMap()
+    /// <summary>
+    /// 全图重置：编辑器自检和测试用。玩法里的复活/传送走 <see cref="ResetMap(Vector2?)"/>
+    /// 的范围重置，避免大地图每次重生都恢复全部冰块岩浆。
+    /// </summary>
+    public void ResetMap() => ResetMap(null);
+
+    /// <summary>
+    /// 地图重置。传 center 时只恢复中心附近 <see cref="mapResetRadius"/> 格内的物件
+    /// （冰/岩浆按组完整恢复）；传 null 恢复全图。幻影和临时钥匙一律全清。
+    /// </summary>
+    public void ResetMap(Vector2? center)
     {
+        mapResetCenter = center;
         LabPhantom.ClearAll();
         LabKey.ClearTemporaries();
-        MapReset?.Invoke();
+        try
+        {
+            MapReset?.Invoke();
+        }
+        finally
+        {
+            mapResetCenter = null;
+        }
     }
+
+    /// <summary>本次重置是否覆盖这个位置；全图重置（无中心）恒为 true。</summary>
+    public bool InMapResetRange(Vector2 position)
+        => mapResetCenter == null
+           || (position - mapResetCenter.Value).sqrMagnitude <= mapResetRadius * mapResetRadius;
+
+    Vector2? mapResetCenter;
 
     /// <summary>
     /// 召回：施法者头顶有 1 格空位时，把另一名玩家传送到头顶，并在其旧位置留下幻影。
