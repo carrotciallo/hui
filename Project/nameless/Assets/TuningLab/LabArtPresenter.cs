@@ -16,6 +16,31 @@ public sealed class LabArtPresenter : MonoBehaviour
     LabDoor door;
     LabTeleportPoint portal;
     LabRespawnPoint checkpoint;
+    State lastState;
+    bool hasLastState;
+
+    // Every input Refresh reads. Equal signatures skip all renderer writes.
+    struct State
+    {
+        public string selected;
+        public Color color;
+        public bool enabled;
+        public bool flipX;
+        public bool flipY;
+        public int sortingLayerID;
+        public int sortingOrder;
+        public Material material;
+        public Vector3 scale;
+        public Sprite sprite;
+
+        public bool Equals(State other)
+        {
+            return selected == other.selected && color.Equals(other.color)
+                && enabled == other.enabled && flipX == other.flipX && flipY == other.flipY
+                && sortingLayerID == other.sortingLayerID && sortingOrder == other.sortingOrder
+                && material == other.material && scale.Equals(other.scale) && sprite == other.sprite;
+        }
+    }
 
     public void Configure(SpriteRenderer renderer, string name, bool repeat)
     {
@@ -33,6 +58,7 @@ public sealed class LabArtPresenter : MonoBehaviour
             child.transform.SetParent(transform, false);
             display = child.AddComponent<SpriteRenderer>();
         }
+        hasLastState = false; // Rebound inputs: force a full rewrite even if the signature looks unchanged.
         Refresh();
     }
 
@@ -47,8 +73,24 @@ public sealed class LabArtPresenter : MonoBehaviour
         if (portal != null)
             selected = source.color == portal.activeColor ? "portal-active"
                 : portal.IsMarked ? "portal-marked" : "portal";
+        var state = new State
+        {
+            selected = selected,
+            color = source.color,
+            enabled = source.enabled,
+            flipX = source.flipX,
+            flipY = source.flipY,
+            sortingLayerID = source.sortingLayerID,
+            sortingOrder = source.sortingOrder,
+            material = source.sharedMaterial,
+            scale = transform.localScale,
+            sprite = source.sprite,
+        };
+        if (hasLastState && state.Equals(lastState)) return;
         var sprite = LabArt.Load(selected);
         if (sprite == null) return;
+        lastState = state;
+        hasLastState = true;
         source.forceRenderingOff = true;
         display.sprite = sprite;
         display.enabled = source.enabled;
@@ -80,6 +122,8 @@ public sealed class LabArtPresenter : MonoBehaviour
 
     void OnDisable()
     {
+        // forceRenderingOff and display.enabled were just changed outside Refresh; force a rewrite on re-enable.
+        hasLastState = false;
         if (source != null) source.forceRenderingOff = previousForceOff;
         if (display != null) display.enabled = false;
     }
