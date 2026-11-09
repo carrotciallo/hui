@@ -14,7 +14,7 @@
 - 设置界面：`Assets/TuningLab/LabSettingsUI.cs`，图标在 `Assets/TuningLab/Resources/SettingsIcons/`
 - 设置存档：`Assets/TuningLab/LabSettingsStore.cs` → `Application.persistentDataPath/settings.json`
 - 基准场景：`Assets/Scenes/TuningLab.unity`
-- 正式关卡入口：`Assets/Scenes/Levels/Final Map.unity`
+- 正式关卡入口：`Assets/Scenes/Levels/REAL FINAL MAP.unity`
 - 正式关卡目录：`Assets/Scenes/Levels/`
 - 隐藏方块调试房：`Assets/Scenes/Levels/HiddenBlock_Test.unity`（多组隐藏方块，用于验证揭示与分组）
 - 1 格 = 1 世界单位 = 16px
@@ -41,7 +41,7 @@
 | 目的 | 入口 |
 | --- | --- |
 | 启动主页 | Build Settings 第 0 项：`Assets/Scenes/Home.unity` |
-| 新游戏 / 临时读取存档 | 主页图标 → `Assets/Scenes/Levels/Final Map.unity` |
+| 新游戏 / 临时读取存档 | 主页图标 → `Assets/Scenes/Levels/REAL FINAL MAP.unity` |
 | 重新生成主页 | GameJam → Rebuild Home Scene |
 | 生成基准场景 | GameJam → Build Tuning Lab |
 | 新建关卡 | GameJam → New Level From Tuning Lab |

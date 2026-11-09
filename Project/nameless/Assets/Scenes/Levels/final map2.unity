@@ -257,6 +257,7 @@ MonoBehaviour:
     spawnB: {x: 209.5, y: -6}
     cameraMinSize: 13.69
     cameraMaxSize: 27
+    background: level2
     solids:
     - {x: 308, y: -90}
     - {x: 309, y: -90}

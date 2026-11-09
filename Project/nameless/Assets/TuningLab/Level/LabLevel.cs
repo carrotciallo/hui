@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -93,6 +94,8 @@ public sealed class LabLevel : MonoBehaviour
     readonly System.Collections.Generic.List<LabIce> runtimeIces = new System.Collections.Generic.List<LabIce>();
     readonly System.Collections.Generic.List<LabMagma> runtimeMagmas = new System.Collections.Generic.List<LabMagma>();
     TuningLab resetLab;
+    CompositeCollider2D runtimeComposite;
+    bool terrainResetDirty;
 
     void OnEnable()
     {
@@ -153,13 +156,21 @@ public sealed class LabLevel : MonoBehaviour
         lab.MapReset += ResetKeyDoors;
         lab.MapReset += ResetIces;
         lab.MapReset += ResetMagmas;
+        lab.MapReset += RebuildTerrainAfterReset;
     }
 
-    /// <summary>地图重置（复活 / 传送）时门关回去，被捡走的钥匙重新长出来。</summary>
+    /// <summary>
+    /// 地图重置（复活 / 传送）：范围内的门关回去。钥匙全局复生——钥匙不贵，
+    /// 且范围重置只关近处的门，若远处的钥匙也被吞掉会出现"门关着、世上没钥匙"的死局。
+    /// </summary>
     void ResetKeyDoors()
     {
         for (int i = 0; i < runtimeDoors.Count; i++)
-            if (runtimeDoors[i] != null) runtimeDoors[i].ResetDoor();
+        {
+            var door = runtimeDoors[i];
+            if (door != null && resetLab.InMapResetRange(door.transform.position))
+                door.ResetDoor();
+        }
 
         Transform root = generatedRoot;
         if (root == null) return;
@@ -170,36 +181,61 @@ public sealed class LabLevel : MonoBehaviour
         }
     }
 
-    /// <summary>地图重置（复活 / 传送）时把所有被破坏的冰块恢复。</summary>
+    /// <summary>
+    /// 地图重置：只恢复范围内被破坏的冰块，且按组完整恢复（组是破坏单位，不能只长半组）。
+    /// 完好的块不动；几何重建推迟到整条重置链末尾只做一次。
+    /// </summary>
     void ResetIces()
     {
-        LabIce any = null;
+        HashSet<int> groups = null;
         for (int i = 0; i < runtimeIces.Count; i++)
         {
             var ice = runtimeIces[i];
-            if (ice == null) continue;
-            ice.ResetIce(false);
-            if (any == null) any = ice;
+            if (ice == null || !ice.Broken) continue;
+            if (!resetLab.InMapResetRange(ice.transform.position)) continue;
+            if (groups == null) groups = new HashSet<int>();
+            groups.Add(ice.groupId);
         }
+        if (groups == null) return;
 
-        // 恢复整组后只重建一次地形合并几何。
-        if (any != null) any.RebuildCollision();
+        for (int i = 0; i < runtimeIces.Count; i++)
+        {
+            var ice = runtimeIces[i];
+            if (ice == null || !ice.Broken || !groups.Contains(ice.groupId)) continue;
+            ice.ResetIce(false);
+            terrainResetDirty = true;
+        }
     }
 
-    /// <summary>地图重置（复活 / 传送）时把所有被破坏的岩浆块恢复。</summary>
+    /// <summary>地图重置：岩浆与冰块同规则——范围内、已破坏、按组完整恢复。</summary>
     void ResetMagmas()
     {
-        LabMagma any = null;
+        HashSet<int> groups = null;
         for (int i = 0; i < runtimeMagmas.Count; i++)
         {
             var magma = runtimeMagmas[i];
-            if (magma == null) continue;
-            magma.ResetMagma(false);
-            if (any == null) any = magma;
+            if (magma == null || !magma.Broken) continue;
+            if (!resetLab.InMapResetRange(magma.transform.position)) continue;
+            if (groups == null) groups = new HashSet<int>();
+            groups.Add(magma.groupId);
         }
+        if (groups == null) return;
 
-        // 恢复整组后只重建一次地形合并几何。
-        if (any != null) any.RebuildCollision();
+        for (int i = 0; i < runtimeMagmas.Count; i++)
+        {
+            var magma = runtimeMagmas[i];
+            if (magma == null || !magma.Broken || !groups.Contains(magma.groupId)) continue;
+            magma.ResetMagma(false);
+            terrainResetDirty = true;
+        }
+    }
+
+    /// <summary>重置链的最后一步：冰/岩浆真的恢复了才重建一次合并几何。</summary>
+    void RebuildTerrainAfterReset()
+    {
+        if (!terrainResetDirty) return;
+        terrainResetDirty = false;
+        if (runtimeComposite != null) runtimeComposite.GenerateGeometry();
     }
 
     void Build(Transform parent, PhysicsMaterial2D material, bool preview)
@@ -214,6 +250,15 @@ public sealed class LabLevel : MonoBehaviour
 
         data.Normalize();
 
+        if (!preview && !string.IsNullOrEmpty(data.background))
+        {
+            var backgroundGo = new GameObject("Background");
+            backgroundGo.transform.SetParent(root.transform, false);
+            var background = backgroundGo.AddComponent<LabBackground>();
+            background.resource = "Backgrounds/" + data.background;
+            background.Load();
+        }
+
         // 地形、冰和岩浆共用一个合并碰撞体：相邻 1×1 方块（冰—冰、冰—地形、
         // 岩浆—岩浆、岩浆—地形）的内侧竖面会在接缝处卡住横走的玩家，也会把
         // 上表面滑行误判成侧面接触。
@@ -227,6 +272,7 @@ public sealed class LabLevel : MonoBehaviour
         fieldComposite.offsetDistance = 0f;
         if (material != null) fieldComposite.sharedMaterial = material;
         fieldGo.AddComponent<LabTerrainField>();
+        if (!preview) runtimeComposite = fieldComposite;
 
         Transform terrain = fieldGo.transform;
         var rects = data.MergedRects();
@@ -473,6 +519,8 @@ public sealed class LabLevel : MonoBehaviour
         runtimeDoors.Clear();
         runtimeIces.Clear();
         runtimeMagmas.Clear();
+        runtimeComposite = null;
+        terrainResetDirty = false;
 
         Transform existing = generatedRoot;
         if (existing == null && transform != null) existing = transform.Find(GeneratedRootName);
@@ -490,6 +538,7 @@ public sealed class LabLevel : MonoBehaviour
         resetLab.MapReset -= ResetKeyDoors;
         resetLab.MapReset -= ResetIces;
         resetLab.MapReset -= ResetMagmas;
+        resetLab.MapReset -= RebuildTerrainAfterReset;
         resetLab = null;
     }
 
