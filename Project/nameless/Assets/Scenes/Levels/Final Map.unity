@@ -249,10 +249,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LabLevel
   data:
     bounds:
-      x: -66
-      y: -102
-      width: 1178
-      height: 227
+      x: -67
+      y: -49
+      width: 618
+      height: 124
     spawnA: {x: -16.5, y: 15}
     spawnB: {x: 5.5, y: 15}
     cameraMinSize: 13.1
@@ -9350,6 +9350,7 @@ MonoBehaviour:
     - cell: {x: 486, y: 22}
       groupId: 3
     repairBlocks: []
+    pixelArts: []
     respawnPoints:
     - position: {x: 546.5, y: -26.5}
     - position: {x: 442.5, y: -21.5}

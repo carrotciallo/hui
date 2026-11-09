@@ -2083,7 +2083,15 @@ MonoBehaviour:
     - cell: {x: 15, y: 29}
       groupId: 2
     repairBlocks: []
-    pixelArts: []
+    pixelArts:
+    - sprite: {fileID: -8772985517507415102, guid: f15119c6295bc354f854bff8a4b71a88, type: 3}
+      origin: {x: 117, y: -29}
+      size: {x: 4, y: 2}
+      sortingOrder: 1
+    - sprite: {fileID: 491167011383495620, guid: aeb905407103e5b41a5b959418a14952, type: 3}
+      origin: {x: 48, y: 28}
+      size: {x: 4, y: 2}
+      sortingOrder: 1
     respawnPoints:
     - position: {x: 93.5, y: -33.5}
     - position: {x: 51.5, y: -17.5}
