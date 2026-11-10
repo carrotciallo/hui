@@ -50,9 +50,6 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # 三个平台串行跑：并行时每个 Unity 容器都要吃 2-4 GB，
-      # 加在一起把标准 runner 的内存打爆（exit 137）。串行慢一些但能跑完。
-      max-parallel: 1
       matrix:
         include:
           - label: windows-x64
