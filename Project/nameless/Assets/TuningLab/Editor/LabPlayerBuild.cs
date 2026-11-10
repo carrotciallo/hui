@@ -64,20 +64,25 @@ public static class LabPlayerBuild
     /// </summary>
     public static void RunFromCi()
     {
-        // unity-builder 通过 customParameters 把这些参数追加到命令行，
-        // 用 -labBuildTarget <target> 传进来；没传就按当前激活平台。
-        string targetName = ArgValue(Environment.GetCommandLineArgs(), "-labBuildTarget");
+        // unity-builder 会设好这些环境变量，优先用它们 ——
+        // 它靠 BUILD_PATH 决定去哪回收产物，写别处的话容器里的文件同步不回宿主机，
+        // Package 步骤就只能对着空目录打包（踩过一次）。
+        string targetName = Environment.GetEnvironmentVariable("BUILD_TARGET");
+        if (string.IsNullOrEmpty(targetName))
+            targetName = ArgValue(Environment.GetCommandLineArgs(), "-labBuildTarget");
         if (string.IsNullOrEmpty(targetName))
             targetName = EditorUserBuildSettings.activeBuildTarget.ToString();
 
         if (!TryParseTarget(targetName, out BuildTarget target))
             throw new InvalidOperationException($"[LabBuild] 不认识的构建目标：{targetName}");
 
-        string outPath = ArgValue(Environment.GetCommandLineArgs(), "-labBuildOutput");
+        string outPath = Environment.GetEnvironmentVariable("BUILD_PATH");
+        if (string.IsNullOrEmpty(outPath))
+            outPath = ArgValue(Environment.GetCommandLineArgs(), "-labBuildOutput");
         if (string.IsNullOrEmpty(outPath))
             outPath = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Builds", targetName));
         else
-            outPath = Path.GetFullPath(outPath);   // 传相对路径时按当前工作目录解析成绝对路径
+            outPath = Path.GetFullPath(outPath);   // 相对路径按当前工作目录解析
 
         Directory.CreateDirectory(outPath);
 

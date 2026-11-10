@@ -113,18 +113,13 @@ jobs:
         run: |
           set -euo pipefail
           NAME="Hui-${VERSION}-${{ matrix.label }}.zip"
+          SRC="build/${{ matrix.target }}"
+
           echo "=== build/ 下的实际内容 ==="
           find build -maxdepth 3 | head -40
 
-          # unity-builder 自己决定产物落在哪一层，这里找"装了可执行文件的那一层"，
-          # 不写死路径 —— 写死过一次，结果它对不上打出空包。
-          SRC=""
-          for d in build/${{ matrix.target }} build build/Hui build/Hui/${{ matrix.target }}; do
-            if [ -d "$d" ] && [ -n "$(ls -A "$d" 2>/dev/null)" ]; then SRC="$d"; break; fi
-          done
-
-          if [ -z "$SRC" ]; then
-            echo "::error::在 build/ 下找不到任何构建产物"
+          if [ ! -d "$SRC" ] || [ -z "$(ls -A "$SRC" 2>/dev/null)" ]; then
+            echo "::error::$SRC 不存在或为空"
             exit 1
           fi
 
