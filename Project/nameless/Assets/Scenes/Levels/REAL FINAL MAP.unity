@@ -255,8 +255,8 @@ MonoBehaviour:
       y: -224
       width: 1225
       height: 330
-    spawnA: {x: -6.5, y: 14}
-    spawnB: {x: -1.5, y: 14}
+    spawnA: {x: -16.5, y: 15}
+    spawnB: {x: 5.5, y: 15}
     cameraMinSize: 6.75
     cameraMaxSize: 25.917202
     background: level1
@@ -6865,6 +6865,13 @@ MonoBehaviour:
     - {x: 308, y: -9}
     - {x: 348, y: -9}
     - {x: 357, y: -9}
+    - {x: 374, y: -9}
+    - {x: 375, y: -9}
+    - {x: 376, y: -9}
+    - {x: 377, y: -9}
+    - {x: 378, y: -9}
+    - {x: 379, y: -9}
+    - {x: 380, y: -9}
     - {x: 388, y: -9}
     - {x: 397, y: -9}
     - {x: 423, y: -9}
@@ -6958,6 +6965,7 @@ MonoBehaviour:
     - {x: 308, y: -8}
     - {x: 348, y: -8}
     - {x: 357, y: -8}
+    - {x: 374, y: -8}
     - {x: 388, y: -8}
     - {x: 397, y: -8}
     - {x: 426, y: -8}
@@ -7045,6 +7053,7 @@ MonoBehaviour:
     - {x: 296, y: -7}
     - {x: 348, y: -7}
     - {x: 357, y: -7}
+    - {x: 374, y: -7}
     - {x: 388, y: -7}
     - {x: 397, y: -7}
     - {x: 441, y: -7}
@@ -8765,8 +8774,6 @@ MonoBehaviour:
     - {x: 199, y: 12}
     - {x: 203, y: 12}
     - {x: 261, y: 12}
-    - {x: 275, y: 12}
-    - {x: 276, y: 12}
     - {x: 277, y: 12}
     - {x: 439, y: 12}
     - {x: 440, y: 12}
@@ -8860,10 +8867,7 @@ MonoBehaviour:
     - {x: 202, y: 13}
     - {x: 203, y: 13}
     - {x: 261, y: 13}
-    - {x: 262, y: 13}
-    - {x: 272, y: 13}
-    - {x: 273, y: 13}
-    - {x: 274, y: 13}
+    - {x: 277, y: 13}
     - {x: 439, y: 13}
     - {x: 440, y: 13}
     - {x: 441, y: 13}
@@ -9060,6 +9064,7 @@ MonoBehaviour:
     - {x: 153, y: 14}
     - {x: 154, y: 14}
     - {x: 158, y: 14}
+    - {x: 261, y: 14}
     - {x: 262, y: 14}
     - {x: 263, y: 14}
     - {x: 264, y: 14}
@@ -9071,6 +9076,11 @@ MonoBehaviour:
     - {x: 270, y: 14}
     - {x: 271, y: 14}
     - {x: 272, y: 14}
+    - {x: 273, y: 14}
+    - {x: 274, y: 14}
+    - {x: 275, y: 14}
+    - {x: 276, y: 14}
+    - {x: 277, y: 14}
     - {x: 439, y: 14}
     - {x: 440, y: 14}
     - {x: 441, y: 14}
@@ -15777,10 +15787,6 @@ MonoBehaviour:
       groupId: 3
     - cell: {x: 333, y: -10}
       groupId: 1
-    - cell: {x: 373, y: -10}
-      groupId: 1
-    - cell: {x: 379, y: -10}
-      groupId: 1
     - cell: {x: 468, y: -10}
       groupId: 3
     - cell: {x: 469, y: -10}
@@ -15796,26 +15802,6 @@ MonoBehaviour:
     - cell: {x: 474, y: -10}
       groupId: 3
     - cell: {x: 333, y: -9}
-      groupId: 1
-    - cell: {x: 370, y: -9}
-      groupId: 1
-    - cell: {x: 371, y: -9}
-      groupId: 1
-    - cell: {x: 372, y: -9}
-      groupId: 1
-    - cell: {x: 373, y: -9}
-      groupId: 1
-    - cell: {x: 374, y: -9}
-      groupId: 1
-    - cell: {x: 378, y: -9}
-      groupId: 1
-    - cell: {x: 379, y: -9}
-      groupId: 1
-    - cell: {x: 380, y: -9}
-      groupId: 1
-    - cell: {x: 381, y: -9}
-      groupId: 1
-    - cell: {x: 382, y: -9}
       groupId: 1
     - cell: {x: 468, y: -9}
       groupId: 3
@@ -15833,30 +15819,6 @@ MonoBehaviour:
       groupId: 3
     - cell: {x: 333, y: -8}
       groupId: 1
-    - cell: {x: 370, y: -8}
-      groupId: 1
-    - cell: {x: 371, y: -8}
-      groupId: 1
-    - cell: {x: 372, y: -8}
-      groupId: 1
-    - cell: {x: 373, y: -8}
-      groupId: 1
-    - cell: {x: 374, y: -8}
-      groupId: 1
-    - cell: {x: 375, y: -8}
-      groupId: 1
-    - cell: {x: 377, y: -8}
-      groupId: 1
-    - cell: {x: 378, y: -8}
-      groupId: 1
-    - cell: {x: 379, y: -8}
-      groupId: 1
-    - cell: {x: 380, y: -8}
-      groupId: 1
-    - cell: {x: 381, y: -8}
-      groupId: 1
-    - cell: {x: 382, y: -8}
-      groupId: 1
     - cell: {x: 468, y: -8}
       groupId: 3
     - cell: {x: 469, y: -8}
@@ -15873,26 +15835,6 @@ MonoBehaviour:
       groupId: 3
     - cell: {x: 333, y: -7}
       groupId: 1
-    - cell: {x: 370, y: -7}
-      groupId: 1
-    - cell: {x: 371, y: -7}
-      groupId: 1
-    - cell: {x: 372, y: -7}
-      groupId: 1
-    - cell: {x: 373, y: -7}
-      groupId: 1
-    - cell: {x: 374, y: -7}
-      groupId: 1
-    - cell: {x: 378, y: -7}
-      groupId: 1
-    - cell: {x: 379, y: -7}
-      groupId: 1
-    - cell: {x: 380, y: -7}
-      groupId: 1
-    - cell: {x: 381, y: -7}
-      groupId: 1
-    - cell: {x: 382, y: -7}
-      groupId: 1
     - cell: {x: 468, y: -7}
       groupId: 3
     - cell: {x: 469, y: -7}
@@ -15908,10 +15850,6 @@ MonoBehaviour:
     - cell: {x: 474, y: -7}
       groupId: 3
     - cell: {x: 333, y: -6}
-      groupId: 1
-    - cell: {x: 373, y: -6}
-      groupId: 1
-    - cell: {x: 379, y: -6}
       groupId: 1
     - cell: {x: 468, y: -6}
       groupId: 3
@@ -17818,8 +17756,16 @@ MonoBehaviour:
       origin: {x: 575, y: -24}
       size: {x: 4, y: 4}
       sortingOrder: 1
+    - sprite: {fileID: -8087695293503228663, guid: 47fc43f729af0944c8fb94b91e922ea5, type: 3}
+      origin: {x: 376, y: -10}
+      size: {x: 4, y: 2}
+      sortingOrder: 1
+    - sprite: {fileID: -969714752165012542, guid: a04fa9ad3f9350043bfb6d035525f2ef, type: 3}
+      origin: {x: 364, y: -9}
+      size: {x: 4, y: 2}
+      sortingOrder: 1
     - sprite: {fileID: -2430311879158790913, guid: 571b78a50ec3c6c448115e320db1e857, type: 3}
-      origin: {x: 380, y: -2}
+      origin: {x: 376, y: -6}
       size: {x: 4, y: 2}
       sortingOrder: 1
     - sprite: {fileID: -4305981829581398747, guid: abe630d26f296e54f891a71cdfc2ec65, type: 3}
