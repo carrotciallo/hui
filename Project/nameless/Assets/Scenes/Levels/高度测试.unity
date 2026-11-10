@@ -184,6 +184,7 @@ MonoBehaviour:
   hiddenRevealedAlpha: 0.5
   spiritDuration: 6
   deathWhenNoCheckpoint: 0
+  mapResetRadius: 40
   tierFirstCells: 4
   tierSpacingCells: 4
   tierCount: 6
@@ -211,6 +212,7 @@ MonoBehaviour:
   trailAlphaTopTier: 1
   autoBuild: 1
   level: {fileID: 129094125}
+  streamLevelBuild: 1
   defaultCameraMinSize: 6.75
   defaultCameraMaxSize: 27
   defaultCameraBounds:
@@ -257,6 +259,7 @@ MonoBehaviour:
     spawnB: {x: -4.5, y: 67}
     cameraMinSize: 13.35
     cameraMaxSize: 27
+    background: 
     solids:
     - {x: 18, y: -6}
     - {x: 19, y: -6}
@@ -629,12 +632,8 @@ MonoBehaviour:
     - {x: 47, y: 64}
     - {x: 48, y: 64}
     - {x: 48, y: 66}
-    - {x: 12, y: 67}
-    - {x: 22, y: 67}
     - {x: 48, y: 67}
     - {x: 49, y: 67}
-    - {x: 19, y: 71}
-    - {x: 20, y: 71}
     - {x: 25, y: 85}
     - {x: 26, y: 85}
     - {x: 0, y: 86}
@@ -788,6 +787,58 @@ MonoBehaviour:
       groupId: 1
     - cell: {x: -3, y: 65}
       groupId: 1
+    - cell: {x: -2, y: 65}
+      groupId: 34
+    - cell: {x: -1, y: 65}
+      groupId: 34
+    - cell: {x: 0, y: 65}
+      groupId: 34
+    - cell: {x: 1, y: 65}
+      groupId: 34
+    - cell: {x: 2, y: 65}
+      groupId: 34
+    - cell: {x: 3, y: 65}
+      groupId: 34
+    - cell: {x: 4, y: 65}
+      groupId: 34
+    - cell: {x: 5, y: 65}
+      groupId: 34
+    - cell: {x: 6, y: 65}
+      groupId: 34
+    - cell: {x: 7, y: 65}
+      groupId: 34
+    - cell: {x: 8, y: 65}
+      groupId: 34
+    - cell: {x: 9, y: 65}
+      groupId: 34
+    - cell: {x: 10, y: 65}
+      groupId: 34
+    - cell: {x: 11, y: 65}
+      groupId: 34
+    - cell: {x: 12, y: 65}
+      groupId: 34
+    - cell: {x: 13, y: 65}
+      groupId: 34
+    - cell: {x: 14, y: 65}
+      groupId: 34
+    - cell: {x: 15, y: 65}
+      groupId: 34
+    - cell: {x: 16, y: 65}
+      groupId: 34
+    - cell: {x: 17, y: 65}
+      groupId: 34
+    - cell: {x: 18, y: 65}
+      groupId: 34
+    - cell: {x: 19, y: 65}
+      groupId: 34
+    - cell: {x: 20, y: 65}
+      groupId: 34
+    - cell: {x: 21, y: 65}
+      groupId: 34
+    - cell: {x: 22, y: 65}
+      groupId: 34
+    - cell: {x: 23, y: 65}
+      groupId: 34
     - cell: {x: 24, y: 65}
       groupId: 1
     - cell: {x: 25, y: 65}
