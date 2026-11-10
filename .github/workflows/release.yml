@@ -93,26 +93,42 @@ jobs:
           #   否则 Package 步骤会对着空目录打包（之前就是这么失败的）。
           buildsPath: build
           buildName: Hui
-          customParameters: -labBuildTarget ${{ matrix.target }} -labBuildOutput ${{ github.workspace }}/build/${{ matrix.target }}
+          customParameters: -labBuildTarget ${{ matrix.target }}
           allowDirtyBuild: true
 
       # 统一命名：Hui-<版本>-<系统>-<架构>.zip
+      # 构建完立刻看宿主机上 build/ 到底有没有东西，
+      # 用来分辨"容器里写了但卷没同步"和"根本没写进去"。
+      - name: Inspect build output
+        run: |
+          echo "=== pwd: $(pwd) ==="
+          echo "=== build/ 树 ==="
+          find build -maxdepth 4 2>/dev/null | head -50
+          echo "=== build/ 大小 ==="
+          du -sh build 2>/dev/null || echo "build/ 不存在"
+
       - name: Package
         env:
           VERSION: ${{ needs.setup.outputs.version }}
         run: |
           set -euo pipefail
-          SRC="build/${{ matrix.target }}"
           NAME="Hui-${VERSION}-${{ matrix.label }}.zip"
-          echo "打包 $SRC -> $NAME"
+          echo "=== build/ 下的实际内容 ==="
+          find build -maxdepth 3 | head -40
 
-          if [ ! -d "$SRC" ] || [ -z "$(ls -A "$SRC" 2>/dev/null)" ]; then
-            echo "::error::构建目录 $SRC 不存在或为空"
-            echo "--- build/ 下实际有什么 ---"
-            find build -maxdepth 2 2>/dev/null | head -30
+          # unity-builder 自己决定产物落在哪一层，这里找"装了可执行文件的那一层"，
+          # 不写死路径 —— 写死过一次，结果它对不上打出空包。
+          SRC=""
+          for d in build/${{ matrix.target }} build build/Hui build/Hui/${{ matrix.target }}; do
+            if [ -d "$d" ] && [ -n "$(ls -A "$d" 2>/dev/null)" ]; then SRC="$d"; break; fi
+          done
+
+          if [ -z "$SRC" ]; then
+            echo "::error::在 build/ 下找不到任何构建产物"
             exit 1
           fi
 
+          echo "打包 $SRC -> $NAME"
           ls -la "$SRC"
           (cd "$SRC" && zip -r -q "$GITHUB_WORKSPACE/$NAME" .)
           ls -la "$GITHUB_WORKSPACE/$NAME"
