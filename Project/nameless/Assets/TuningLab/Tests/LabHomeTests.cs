@@ -189,4 +189,41 @@ public sealed class LabHomeTests
         Assert.Greater(end.width, collapsed.width * 9.9f);
         Assert.AreEqual(collapsed.height, end.height, 1e-5f);
     }
+
+    // ---- 场景名解析 ---------------------------------------------------
+
+    /// <summary>
+    /// 打包后 Build Settings 里存的是**完整路径**，而主页和存档里用的是短名
+    /// （"REAL FINAL MAP"）。直接拿短名去 LoadScene 在打包版本里加载不到，
+    /// 表现就是"点开始游戏没反应"。这里钉死：短名、短名+扩展名、完整路径三种写法
+    /// 都要能解析到同一个场景。
+    /// </summary>
+    [Test]
+    public void ResolveSceneNameAcceptsShortAndFullForms()
+    {
+        const string wanted = "REAL FINAL MAP";
+        string resolved = HomeScreen.ResolveSceneName(wanted);
+
+        Assert.IsNotNull(resolved, "短名必须能解析出场景路径（打包版本靠这个进关）");
+        Assert.IsTrue(resolved.EndsWith(wanted + ".unity"),
+            "解析结果要指向 REAL FINAL MAP.unity，实际：" + resolved);
+        Assert.IsTrue(resolved.StartsWith("Assets/"), "应该是 Assets 下的相对路径，实际：" + resolved);
+    }
+
+    [Test]
+    public void ResolveSceneNameRejectsUnknownScene()
+    {
+        Assert.IsNull(HomeScreen.ResolveSceneName("不存在的场景名"),
+            "没有的场景要返回 null，让调用方走报错分支");
+        Assert.IsNull(HomeScreen.ResolveSceneName(""), "空名字返回 null");
+        Assert.IsNull(HomeScreen.ResolveSceneName(null), "null 返回 null");
+    }
+
+    [Test]
+    public void HomeSceneNameResolvesToo()
+    {
+        string resolved = HomeScreen.ResolveSceneName("Home");
+        Assert.IsNotNull(resolved, "主界面自己也要能解析");
+        Assert.IsTrue(resolved.EndsWith("Home.unity"));
+    }
 }

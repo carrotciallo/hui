@@ -353,9 +353,17 @@ public sealed class HomeScreen : MonoBehaviour
         transitionBlackout = true;
         yield return null;
 
-        if (!Application.CanStreamedLevelBeLoaded(sceneName))
+        // 按名字找 Build Settings 里的真实场景名。
+        //
+        // 打包后场景表里存的是 **路径**（Assets/Scenes/Levels/REAL FINAL MAP.unity），
+        // 而这里传进来的一直是短名（REAL FINAL MAP）—— 直接塞给 LoadScene 会失败，
+        // 表现就是"点了开始游戏没反应"。
+        // 先把短名、带扩展名的名字、路径三种写法都试一遍，解析出真正能加载的那个。
+        string resolved = ResolveSceneName(sceneName);
+        if (resolved == null)
         {
-            Debug.LogError($"HomeScreen: 无法加载场景“{sceneName}”。");
+            Debug.LogError($"HomeScreen: 无法加载场景“{sceneName}”，Build Settings 里没有匹配项。" +
+                           "已收录的场景：" + DescribeBuildScenes());
             navigating = false;
             transitionBlackout = false;
             if (settingsUI != null) settingsUI.enabled = true;
@@ -364,8 +372,43 @@ public sealed class HomeScreen : MonoBehaviour
         }
 
         // 点击时才异步加载（不做主页预载）：加载期间帧继续渲染，黑屏上的 Loading 动画能动。
-        AsyncOperation operation = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
+        AsyncOperation operation = SceneManager.LoadSceneAsync(resolved, LoadSceneMode.Single);
         while (!operation.isDone) yield return null;
+    }
+
+    /// <summary>
+    /// 把一个场景名解析成 Build Settings 里能加载的那个。
+    /// 短名 / 短名+扩展名 / 完整路径都能命中；找不到返回 null。
+    /// </summary>
+    public static string ResolveSceneName(string wanted)
+    {
+        if (string.IsNullOrEmpty(wanted)) return null;
+
+        int count = SceneManager.sceneCountInBuildSettings;
+        for (int i = 0; i < count; i++)
+        {
+            string path = SceneUtility.GetScenePathByBuildIndex(i);
+            if (string.IsNullOrEmpty(path)) continue;
+
+            // 完整路径直接对；短名和短名+扩展名按文件名比。
+            if (path == wanted) return path;
+
+            string file = System.IO.Path.GetFileNameWithoutExtension(path);
+            if (file == wanted) return path;
+
+            string fileName = System.IO.Path.GetFileName(path);
+            if (fileName == wanted) return path;
+        }
+        return null;
+    }
+
+    static string DescribeBuildScenes()
+    {
+        int count = SceneManager.sceneCountInBuildSettings;
+        var names = new string[count];
+        for (int i = 0; i < count; i++)
+            names[i] = SceneUtility.GetScenePathByBuildIndex(i);
+        return string.Join(" | ", names);
     }
 
     /// <summary>覆盖存档确认：深色面板 + 青色描边 + 像素字，和主页按钮同一套语言。</summary>
