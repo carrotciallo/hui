@@ -184,6 +184,7 @@ MonoBehaviour:
   hiddenRevealedAlpha: 0.5
   spiritDuration: 3
   deathWhenNoCheckpoint: 0
+  mapResetRadius: 40
   tierFirstCells: 4
   tierSpacingCells: 4
   tierCount: 6
@@ -8594,6 +8595,11 @@ MonoBehaviour:
     - {x: 517, y: 9}
     - {x: 518, y: 9}
     - {x: 519, y: 9}
+    - {x: 93, y: 10}
+    - {x: 94, y: 10}
+    - {x: 95, y: 10}
+    - {x: 96, y: 10}
+    - {x: 97, y: 10}
     - {x: 149, y: 10}
     - {x: 167, y: 10}
     - {x: 189, y: 10}
@@ -8655,6 +8661,9 @@ MonoBehaviour:
     - {x: 517, y: 10}
     - {x: 518, y: 10}
     - {x: 519, y: 10}
+    - {x: 92, y: 11}
+    - {x: 96, y: 11}
+    - {x: 97, y: 11}
     - {x: 149, y: 11}
     - {x: 160, y: 11}
     - {x: 161, y: 11}
@@ -8756,6 +8765,9 @@ MonoBehaviour:
     - {x: 89, y: 12}
     - {x: 90, y: 12}
     - {x: 91, y: 12}
+    - {x: 92, y: 12}
+    - {x: 96, y: 12}
+    - {x: 97, y: 12}
     - {x: 119, y: 12}
     - {x: 120, y: 12}
     - {x: 121, y: 12}
@@ -8855,6 +8867,8 @@ MonoBehaviour:
     - {x: 83, y: 13}
     - {x: 91, y: 13}
     - {x: 92, y: 13}
+    - {x: 96, y: 13}
+    - {x: 97, y: 13}
     - {x: 119, y: 13}
     - {x: 130, y: 13}
     - {x: 146, y: 13}
@@ -9024,8 +9038,6 @@ MonoBehaviour:
     - {x: 82, y: 14}
     - {x: 83, y: 14}
     - {x: 92, y: 14}
-    - {x: 93, y: 14}
-    - {x: 94, y: 14}
     - {x: 95, y: 14}
     - {x: 96, y: 14}
     - {x: 97, y: 14}
@@ -17817,9 +17829,17 @@ MonoBehaviour:
       origin: {x: 1038, y: -179}
       size: {x: 4, y: 2}
       sortingOrder: 1
+    - sprite: {fileID: -1291175204921559527, guid: 36e3dff799deb4f42ad60f422dfc5811, type: 3}
+      origin: {x: 1000, y: -148}
+      size: {x: 4, y: 4}
+      sortingOrder: 1
     - sprite: {fileID: 491167011383495620, guid: aeb905407103e5b41a5b959418a14952, type: 3}
       origin: {x: 969, y: -122}
       size: {x: 4, y: 2}
+      sortingOrder: 1
+    - sprite: {fileID: -8195164018292892933, guid: 249b3ce6361151c46b8ae8dfd5642752, type: 3}
+      origin: {x: 750, y: -67}
+      size: {x: 4, y: 4}
       sortingOrder: 1
     - sprite: {fileID: 4057704999641396611, guid: 2a4242f0dca6a53468a0fb65988a4b4d, type: 3}
       origin: {x: 591, y: -41}
@@ -17833,36 +17853,28 @@ MonoBehaviour:
       origin: {x: 580, y: -30}
       size: {x: 2, y: 4}
       sortingOrder: 1
-    - sprite: {fileID: -2430311879158790913, guid: 571b78a50ec3c6c448115e320db1e857, type: 3}
-      origin: {x: 380, y: -2}
-      size: {x: 4, y: 2}
-      sortingOrder: 1
-    - sprite: {fileID: -2677327318154360500, guid: 3d83ae4f69e61a94fa1c93435f17e54f, type: 3}
-      origin: {x: 60, y: 19}
-      size: {x: 4, y: 4}
-      sortingOrder: 1
-    - sprite: {fileID: -5688863303865996864, guid: 4401741f3d0b2b74ab3692d973da1eb8, type: 3}
-      origin: {x: 204, y: 11}
-      size: {x: 4, y: 4}
-      sortingOrder: 1
-    - sprite: {fileID: -4305981829581398747, guid: abe630d26f296e54f891a71cdfc2ec65, type: 3}
-      origin: {x: 320, y: -1}
+    - sprite: {fileID: 8143220845687417128, guid: 057fb80dd999a904ebdac82a03326924, type: 3}
+      origin: {x: 575, y: -24}
       size: {x: 4, y: 4}
       sortingOrder: 1
     - sprite: {fileID: 7596379288971176018, guid: 6e612b3da34076e4abbb8052a4f76db1, type: 3}
       origin: {x: 498, y: -21}
       size: {x: 4, y: 4}
       sortingOrder: 1
-    - sprite: {fileID: 8143220845687417128, guid: 057fb80dd999a904ebdac82a03326924, type: 3}
-      origin: {x: 575, y: -24}
+    - sprite: {fileID: -2430311879158790913, guid: 571b78a50ec3c6c448115e320db1e857, type: 3}
+      origin: {x: 380, y: -2}
+      size: {x: 4, y: 2}
+      sortingOrder: 1
+    - sprite: {fileID: -4305981829581398747, guid: abe630d26f296e54f891a71cdfc2ec65, type: 3}
+      origin: {x: 320, y: -1}
       size: {x: 4, y: 4}
       sortingOrder: 1
-    - sprite: {fileID: -8195164018292892933, guid: 249b3ce6361151c46b8ae8dfd5642752, type: 3}
-      origin: {x: 750, y: -67}
+    - sprite: {fileID: -5688863303865996864, guid: 4401741f3d0b2b74ab3692d973da1eb8, type: 3}
+      origin: {x: 204, y: 11}
       size: {x: 4, y: 4}
       sortingOrder: 1
-    - sprite: {fileID: -1291175204921559527, guid: 36e3dff799deb4f42ad60f422dfc5811, type: 3}
-      origin: {x: 1000, y: -148}
+    - sprite: {fileID: -2677327318154360500, guid: 3d83ae4f69e61a94fa1c93435f17e54f, type: 3}
+      origin: {x: 60, y: 19}
       size: {x: 4, y: 4}
       sortingOrder: 1
     respawnPoints:
@@ -17896,9 +17908,9 @@ MonoBehaviour:
     - position: {x: 186.5, y: 6.5}
     - position: {x: 201.5, y: 9.5}
     - position: {x: 464.5, y: 9.5}
+    - position: {x: 94.5, y: 12.5}
     - position: {x: 46.5, y: 16.5}
     - position: {x: 78.5, y: 16.5}
-    - position: {x: 95.5, y: 16.5}
     - position: {x: 108.5, y: 16.5}
     - position: {x: 139.5, y: 16.5}
     teleports:
