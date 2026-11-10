@@ -129,8 +129,35 @@ public static class LabSettingsStore
 
         int width = Mathf.Max(320, data.screenWidth);
         int height = Mathf.Max(180, data.screenHeight);
-        if (Screen.width != width || Screen.height != height || Screen.fullScreen != data.fullscreen)
-            Screen.SetResolution(width, height, data.fullscreen);
+
+        if (data.fullscreen)
+        {
+            // 全屏时表面尺寸必须等于窗口所在显示器的原生尺寸，不能直接
+            // 请求所选分辨率：player 对非原生全屏只做缩放视口，渲染面与
+            // 指针的坐标系就此错位，IMGUI 按钮会全部点不动（实测矩阵：
+            // 原生全屏正常、非原生全屏全灭、所有窗口化正常），且 player
+            // 合成的模式请求本身就是畸形的（跨显示器拼尺寸、0Hz）。
+            // 改法：表面恒为原生，指针与 UI 始终在原生坐标系里，每个
+            // 档位的全屏都可操作。代价是全屏下所选档位暂不改变渲染
+            // 分辨率（渲染恒为原生）——渲染缩放的两条路线（动态分辨
+            // 率、URP renderScale）在本工程都实测不成立，另开 issue
+            // 跟踪，不在本修复内。
+            var display = Screen.mainWindowDisplayInfo;
+            if (display.width > 0 && display.height > 0)
+            {
+                if (Screen.width != display.width || Screen.height != display.height || !Screen.fullScreen)
+                    Screen.SetResolution(display.width, display.height, true);
+                return;
+            }
+
+            // 拿不到原生尺寸时退回旧行为，不让全屏设置整体失效。
+            if (Screen.width != width || Screen.height != height || !Screen.fullScreen)
+                Screen.SetResolution(width, height, true);
+            return;
+        }
+
+        if (Screen.width != width || Screen.height != height || Screen.fullScreen)
+            Screen.SetResolution(width, height, false);
     }
 
     /// <summary>缺字段、越界值和损坏文件都在这里收口，调用方不必再判。</summary>
