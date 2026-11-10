@@ -17,6 +17,9 @@ using UnityEngine;
 /// </summary>
 public static class LabPlayerBuild
 {
+    /// <summary>仓库根目录（Project/nameless 的上一级）。</summary>
+    static string ProjectRoot => Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..", ".."));
+
     /// <summary>发布版包含的场景，第一个必须是主界面。</summary>
     static readonly string[] ReleaseScenes =
     {
@@ -80,9 +83,13 @@ public static class LabPlayerBuild
         if (string.IsNullOrEmpty(outPath))
             outPath = ArgValue(Environment.GetCommandLineArgs(), "-labBuildOutput");
         if (string.IsNullOrEmpty(outPath))
-            outPath = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Builds", targetName));
+            outPath = Path.Combine(ProjectRoot, "Builds", targetName);
         else
-            outPath = Path.GetFullPath(outPath);   // 相对路径按当前工作目录解析
+            outPath = Path.GetFullPath(Path.Combine(ProjectRoot, outPath));
+        // BUILD_PATH 是相对仓库根的（比如 build/StandaloneWindows64），
+        // 而 Unity 的工作目录是 Project/nameless —— 直接用 GetFullPath 会拼成
+        // Project/nameless/build/...，和宿主机上的 build/ 对不上，Package 就空。
+        // 所以一律以仓库根为基准解析。
 
         Directory.CreateDirectory(outPath);
 

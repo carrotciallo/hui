@@ -60,7 +60,7 @@ jobs:
             image: mac-mono
           - label: linux-x64
             target: StandaloneLinux64
-            image: linux-il2cpp
+            image: linux-mono
 
     steps:
       - uses: actions/checkout@v4
