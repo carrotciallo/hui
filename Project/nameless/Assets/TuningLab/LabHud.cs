@@ -3,9 +3,27 @@ using UnityEngine;
 /// <summary>
 /// 运行时的调参面板 + 读数。用 IMGUI 是为了零资源依赖：
 /// 打开 Play 就能调，不碰场景、不碰 prefab、不改工程设置。
+///
+/// **这是给调参用的，发布包里不该出现。**
+/// <see cref="ShowTuningPanel"/> 默认跟着 Debug.isDebugBuild 走：
+/// 编辑器里和 Development Build 会显示，正式发布包自动隐藏。
+/// 需要强制开关时把它设成 true/false。
 /// </summary>
 public class LabHud : MonoBehaviour
 {
+    /// <summary>
+    /// 是否显示左边那块"手感调试台"面板和右侧读数。
+    /// 默认值在 Awake 里按 Debug.isDebugBuild 决定 —— 不能在字段初始化器里读，
+    /// Unity 不允许在 MonoBehaviour 构造阶段访问 isDebugBuild，会抛异常。
+    /// 需要强制开关时在 Awake 之后改它。
+    /// </summary>
+    public bool showTuningPanel = true;
+
+    void Awake()
+    {
+        showTuningPanel = Debug.isDebugBuild;
+    }
+
     TuningLab lab;
 
     GUIStyle label;
@@ -98,6 +116,10 @@ public class LabHud : MonoBehaviour
     void OnGUI()
     {
         if (lab == null || lab.Paused) return;
+
+        // 发布包不画调试台（Issue: release 里左右两个调试框还挂着）。
+        if (!showTuningPanel) return;
+
         EnsureStyles();
 
         Time.timeScale = lab.timeScale;

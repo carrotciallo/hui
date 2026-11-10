@@ -64,7 +64,11 @@ jobs:
             image: mac-mono
           - label: linux-x64
             target: StandaloneLinux64
-            image: linux-il2cpp
+            # 不用 linux-il2cpp 镜像：那个镜像体积大、加载 LinuxStandaloneSupport
+            # 时稳定 OOM（进程在 Registered in 0.002s 之后 0.6 秒被 Killed，
+            # 重跑两次都一样，不是抖动）。项目本身用的是 Mono 后端，
+            # base 镜像内置 Linux 平台支持，够用且轻。
+            image: base
 
     steps:
       - uses: actions/checkout@v4
