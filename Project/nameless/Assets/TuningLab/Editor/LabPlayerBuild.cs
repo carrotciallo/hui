@@ -17,6 +17,9 @@ using UnityEngine;
 /// </summary>
 public static class LabPlayerBuild
 {
+    /// <summary>仓库根目录（Project/nameless 的上一级）。</summary>
+    static string ProjectRoot => Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..", ".."));
+
     /// <summary>发布版包含的场景，第一个必须是主界面。</summary>
     static readonly string[] ReleaseScenes =
     {
@@ -64,18 +67,29 @@ public static class LabPlayerBuild
     /// </summary>
     public static void RunFromCi()
     {
-        // unity-builder 通过 customParameters 把这些参数追加到命令行，
-        // 用 -labBuildTarget <target> 传进来；没传就按当前激活平台。
-        string targetName = ArgValue(Environment.GetCommandLineArgs(), "-labBuildTarget");
+        // unity-builder 会设好这些环境变量，优先用它们 ——
+        // 它靠 BUILD_PATH 决定去哪回收产物，写别处的话容器里的文件同步不回宿主机，
+        // Package 步骤就只能对着空目录打包（踩过一次）。
+        string targetName = Environment.GetEnvironmentVariable("BUILD_TARGET");
+        if (string.IsNullOrEmpty(targetName))
+            targetName = ArgValue(Environment.GetCommandLineArgs(), "-labBuildTarget");
         if (string.IsNullOrEmpty(targetName))
             targetName = EditorUserBuildSettings.activeBuildTarget.ToString();
 
         if (!TryParseTarget(targetName, out BuildTarget target))
             throw new InvalidOperationException($"[LabBuild] 不认识的构建目标：{targetName}");
 
-        string outPath = ArgValue(Environment.GetCommandLineArgs(), "-labBuildOutput");
+        string outPath = Environment.GetEnvironmentVariable("BUILD_PATH");
         if (string.IsNullOrEmpty(outPath))
-            outPath = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Builds", targetName));
+            outPath = ArgValue(Environment.GetCommandLineArgs(), "-labBuildOutput");
+        if (string.IsNullOrEmpty(outPath))
+            outPath = Path.Combine(ProjectRoot, "Builds", targetName);
+        else
+            outPath = Path.GetFullPath(Path.Combine(ProjectRoot, outPath));
+        // BUILD_PATH 是相对仓库根的（比如 build/StandaloneWindows64），
+        // 而 Unity 的工作目录是 Project/nameless —— 直接用 GetFullPath 会拼成
+        // Project/nameless/build/...，和宿主机上的 build/ 对不上，Package 就空。
+        // 所以一律以仓库根为基准解析。
 
         Directory.CreateDirectory(outPath);
 

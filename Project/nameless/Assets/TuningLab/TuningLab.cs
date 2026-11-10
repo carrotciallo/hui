@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// 手感调试台。一个 GameObject 建出整个世界：地面、楼梯、两队方块、相机、HUD。
@@ -151,7 +152,7 @@ public class TuningLab : MonoBehaviour
     public bool showPixelGrid = false;
 
     [Tooltip("Tab 键切换：相机视野内的整数格网格线。")]
-    public bool showGrid = true;
+    public bool showGrid = false;
 
     [Header("死亡反馈")]
     [Tooltip("任一玩家死亡时，屏幕闪一次红色边缘渐晕。")]
@@ -417,6 +418,12 @@ public class TuningLab : MonoBehaviour
     [Tooltip("有 LabLevel 就按关卡数据搭场地；没有就用调试台内置房间。")]
     public LabLevel level;
 
+    [Tooltip("Play 时渐进搭建关卡：出生点附近同帧就绪，其余地形/物件分帧补全，避免大地图卡死激活帧。关掉则一次性同步搭建（编辑器预览与测试始终同步）。")]
+    public bool streamLevelBuild = true;
+
+    /// <summary>渐进搭建每帧的毫秒预算；越大补全越快但单帧越重。</summary>
+    const float StreamBuildBudgetMs = 4f;
+
     [Header("相机默认")]
     [Tooltip("默认相机最小正交尺寸（格，半高）。没有 LabLevel 时使用；有 LabLevel 时用关卡编辑器的相机跟随尺寸。")]
     public float defaultCameraMinSize = DefaultCameraMinSize;
@@ -430,6 +437,9 @@ public class TuningLab : MonoBehaviour
     void Awake()
     {
         if (level == null) level = GetComponent<LabLevel>();
+        // 关卡场景里序列化的 showGrid 仍是旧默认 1，加载时会盖掉字段默认值；
+        // 这里强制默认关网格（Tab / HUD 仍可运行时打开），不去逐场景改 .unity。
+        showGrid = false;
         if (autoBuild) BuildAll();
         // 已经烘焙好的旧关卡不会再跑 BuildAll；有 HUD 就说明是完整调试台/关卡，补挂设置界面。
         else if (GetComponent<LabHud>() != null) EnsureSettingsUI();
@@ -532,6 +542,7 @@ public class TuningLab : MonoBehaviour
 
     void Update()
     {
+        ConsumePendingContinue();
         if (Paused) return;
         ResolvePendingTeamDeath();
         if (deathFlashLeft > 0f) deathFlashLeft = Mathf.Max(0f, deathFlashLeft - Time.deltaTime);
@@ -585,6 +596,31 @@ public class TuningLab : MonoBehaviour
             respawnPoints.Add(point);
     }
 
+    /// <summary>
+    /// 主页“读取存档”进关后的第一帧：把队伍强制复活到存档重生点（普通状态、清钥匙、范围重置）。
+    /// 此时所有重生点的 Start 注册已完成；点找不到（关卡改过）就留在出生点并告警。
+    /// </summary>
+    void ConsumePendingContinue()
+    {
+        Vector2? pending = LabCheckpointStore.PendingContinue;
+        if (pending == null) return;
+        LabCheckpointStore.PendingContinue = null;
+
+        for (int i = respawnPoints.Count - 1; i >= 0; i--)
+            if (respawnPoints[i] == null) respawnPoints.RemoveAt(i);
+
+        for (int i = 0; i < respawnPoints.Count; i++)
+        {
+            LabRespawnPoint point = respawnPoints[i];
+            if (((Vector2)point.transform.position - pending.Value).sqrMagnitude > 1e-4f) continue;
+            ActivateRespawnPoint(point);
+            point.ForceRespawn(this);
+            return;
+        }
+
+        Debug.LogWarning($"TuningLab: 存档里的重生点 {pending.Value} 在当前场景不存在，队伍留在出生点。");
+    }
+
     public void ActivateRespawnPoint(LabRespawnPoint point)
     {
         if (point == null) return;
@@ -601,7 +637,11 @@ public class TuningLab : MonoBehaviour
 
         if (!respawnPoints.Contains(point))
             respawnPoints.Add(point);
+        bool newlyActivated = ActiveRespawnPoint != point;
         ActiveRespawnPoint = point;
+        // 激活即自动存档（踩点或双人死亡强制触发）；反复死在同一个点不重复写盘。
+        if (newlyActivated)
+            LabCheckpointStore.Save(SceneManager.GetActiveScene().name, point.transform.position);
     }
 
     /// <summary>
@@ -1120,7 +1160,11 @@ public class TuningLab : MonoBehaviour
         if (level != null)
         {
             // 关卡场景：几何完全来自 LabLevel，和编辑器预览走同一条生成路径。
-            level.BuildRuntime(transform, slick);
+            // Play 下渐进搭建：出生点附近同帧就绪，其余分帧补全，避免大地图一次性搭建卡死激活帧。
+            if (Application.isPlaying && streamLevelBuild)
+                level.StartCoroutine(level.BuildRuntimeStreaming(transform, slick, StreamBuildBudgetMs));
+            else
+                level.BuildRuntime(transform, slick);
             return;
         }
 
