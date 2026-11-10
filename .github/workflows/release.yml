@@ -139,7 +139,13 @@ jobs:
   release:
     name: Publish release
     needs: [setup, build]
-    if: always() && needs.build.result == 'success' && (github.ref_type == 'tag' || inputs.dry_run == false)
+    # 两条独立的发版路径，互不依赖：
+    #   1. 推 tag  → 无条件发版（tag 本身就是"要发版"的信号）
+    #   2. 手动触发 → 只有 dry_run 明确为 false 才发
+    # 分开写，避免 tag 触发时去读一个不存在的 inputs.dry_run。
+    if: >-
+      always() && needs.build.result == 'success' &&
+      (github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false))
     runs-on: ubuntu-latest
     permissions:
       contents: write
