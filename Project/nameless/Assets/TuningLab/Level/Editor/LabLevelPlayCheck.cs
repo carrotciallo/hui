@@ -124,7 +124,9 @@ public static class LabLevelPlayCheck
         SessionState.SetFloat(PlayAtKey, -1f);
 
         Attach();
-        EditorApplication.EnterPlaymode();
+        // 先导入刚创建的临时场景，再由空闲编辑器 Tick 进入 Play。
+        // 立即进入会把尚未处理的强制域重载带进 Play，清空运行时列表/事件和协程。
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
     }
 
     static void Attach()
@@ -162,7 +164,14 @@ public static class LabLevelPlayCheck
 
         if (!EditorApplication.isPlaying)
         {
-            if (started >= 0f && now - started > TimeoutSeconds) Finish(false, "进入 Play 超时。");
+            if (started >= 0f && now - started > TimeoutSeconds)
+            {
+                Finish(false, "进入 Play 超时。");
+                return;
+            }
+            if (now - started > 0.5f && !EditorApplication.isPlayingOrWillChangePlaymode
+                && !EditorApplication.isCompiling && !EditorApplication.isUpdating)
+                EditorApplication.EnterPlaymode();
             return;
         }
 
@@ -173,7 +182,16 @@ public static class LabLevelPlayCheck
             return;
         }
 
-        if (now - playAt < WaitSeconds) return;
+        if (now - playAt > TimeoutSeconds)
+        {
+            Finish(false, "关卡加载或物理稳定等待超时。");
+            return;
+        }
+        var runningLab = Object.FindAnyObjectByType<TuningLab>();
+        if (runningLab == null || runningLab.IsLoadingLevel) return;
+        // 分帧加载时玩法暂停，编辑器的墙钟仍在走。必须等实际游戏时间推进，
+        // 否则会在 MapReset 尚未登记、玩家尚未获得落地接触时提前验收。
+        if (Time.timeSinceLevelLoad < WaitSeconds) return;
 
         bool ok;
         string text;

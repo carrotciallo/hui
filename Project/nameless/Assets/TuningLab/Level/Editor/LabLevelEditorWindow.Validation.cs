@@ -17,12 +17,14 @@ public sealed partial class LabLevelEditorWindow
         Undo.IncrementCurrentGroup();
         Undo.SetCurrentGroupName(name);
         Undo.RecordObject(level, name);
+        if (level.Asset != null) Undo.RecordObject(level.Asset, name);
     }
 
     void MarkDirty(bool rebuildPreview = false)
     {
         if (rebuildPreview && !Application.isPlaying) level.RebuildPreview();
         EditorUtility.SetDirty(level);
+        if (level.Asset != null) EditorUtility.SetDirty(level.Asset);
         MarkSceneDirty();
         validated = false;
         Repaint();
@@ -38,11 +40,7 @@ public sealed partial class LabLevelEditorWindow
     void AfterStructuralEdit()
     {
         level.Data.Normalize();
-        level.RebuildPreview();
-        EditorUtility.SetDirty(level);
-        MarkSceneDirty();
-        validated = false;
-        Repaint();
+        MarkDirty(true);
     }
 
     void SaveScene()

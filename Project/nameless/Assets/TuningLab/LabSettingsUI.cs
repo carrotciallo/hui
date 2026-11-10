@@ -210,6 +210,7 @@ public class LabSettingsUI : MonoBehaviour
 
     public void Open()
     {
+        if (lab != null && lab.IsLoadingLevel) return;
         if (open) return;
         if (lab == null) lab = FindAnyObjectByType<TuningLab>();
         if (data == null) Bind(lab);
@@ -236,6 +237,7 @@ public class LabSettingsUI : MonoBehaviour
 
     void Update()
     {
+        if (lab != null && lab.IsLoadingLevel) return;
         var kb = Keyboard.current;
         if (kb != null && kb.escapeKey.wasPressedThisFrame)
         {

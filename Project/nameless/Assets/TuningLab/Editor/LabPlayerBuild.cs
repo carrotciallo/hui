@@ -140,18 +140,13 @@ public static class LabPlayerBuild
 
     static BuildReport Build(BuildTarget target, string outPath)
     {
-        var scenes = ReleaseScenes
-            .Where(p => File.Exists(Path.Combine(
+        var missing = ReleaseScenes
+            .Where(p => !File.Exists(Path.Combine(
                 Path.GetDirectoryName(Application.dataPath), p)))
             .ToArray();
-
-        if (scenes.Length == 0)
-            throw new InvalidOperationException("[LabBuild] 一个发布场景都找不到");
-
-        // 主界面必须在第一个：打包后启动就停在这里。
-        if (scenes[0] != ReleaseScenes[0])
-            throw new InvalidOperationException(
-                $"[LabBuild] 主界面 {ReleaseScenes[0]} 缺失，发布包必须从主界面启动");
+        if (missing.Length != 0)
+            throw new InvalidOperationException($"[LabBuild] 发布场景缺失：{string.Join(", ", missing)}");
+        var scenes = ReleaseScenes;
 
         var options = new BuildPlayerOptions
         {

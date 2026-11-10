@@ -82,15 +82,49 @@ public sealed class LabRespawnPointTests
         yield return null;
         MakeKinematic(lab.PlayerA, lab.PlayerB);
 
-        LabCheckpointStore.PendingContinue = checkpointPosition;
+        LabCheckpointStore.PendingContinue = new LabCheckpointStore.Data
+        {
+            scene = labGo.scene.name, checkpoint = checkpointPosition, recallUnlocked = true
+        };
         yield return null;
 
         Assert.IsNull(LabCheckpointStore.PendingContinue, "续玩点只消费一次");
         Assert.AreSame(checkpoint, lab.ActiveRespawnPoint);
+        Assert.IsTrue(lab.RecallUnlocked, "续玩必须恢复永久解锁的召回能力");
+        Assert.IsTrue(LabCheckpointStore.Load().recallUnlocked, "读档后的自动保存不得抹掉能力");
         Assert.AreEqual(checkpointPosition.x - 1f, lab.PlayerA.transform.position.x, 0.001f);
         Assert.AreEqual(checkpointPosition.x + 1f, lab.PlayerB.transform.position.x, 0.001f);
         AssertNormal(lab.PlayerA, "读档复活必须是普通状态");
         AssertNormal(lab.PlayerB, "读档复活必须是普通状态");
+    }
+
+    [UnityTest]
+    public IEnumerator UnlockingRecallUpdatesTheCurrentCheckpointSave()
+    {
+        var position = new Vector2(0f, 5f);
+        var checkpoint = MakeCheckpoint(position);
+        yield return null;
+        lab.ActivateRespawnPoint(checkpoint);
+        Assert.IsFalse(LabCheckpointStore.Load().recallUnlocked);
+        lab.UnlockRecall();
+        Assert.IsTrue(LabCheckpointStore.Load().recallUnlocked,
+            "拿到能力后退出，即使没有再踩点，也必须保存永久解锁");
+    }
+
+    [UnityTest]
+    public IEnumerator ContinueForAnotherSceneDoesNotMoveOrUnlockPlayers()
+    {
+        var position = new Vector2(0f, 5f);
+        MakeCheckpoint(position);
+        yield return null;
+        LabCheckpointStore.PendingContinue = new LabCheckpointStore.Data
+        {
+            scene = "Another Scene", checkpoint = position, recallUnlocked = true
+        };
+        yield return null;
+        Assert.IsNull(LabCheckpointStore.PendingContinue);
+        Assert.IsNull(lab.ActiveRespawnPoint);
+        Assert.IsFalse(lab.RecallUnlocked);
     }
 
     [UnityTest]

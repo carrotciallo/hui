@@ -291,7 +291,7 @@ public sealed class HomeScreen : MonoBehaviour
         {
             if (!CanLoadGame) return;
             hoveredButton = -1;
-            LabCheckpointStore.PendingContinue = savedGame.checkpoint;
+            LabCheckpointStore.PendingContinue = savedGame;
             StartCoroutine(CloseAndLoadLevel(savedGame.scene));
             return;
         }
@@ -309,6 +309,7 @@ public sealed class HomeScreen : MonoBehaviour
 
     void StartNewGame()
     {
+        LabCheckpointStore.PendingContinue = null;
         if (!Application.CanStreamedLevelBeLoaded(LevelSceneName))
         {
             Debug.LogError($"HomeScreen: 构建场景列表中没有可加载的场景“{LevelSceneName}”。");
@@ -364,6 +365,7 @@ public sealed class HomeScreen : MonoBehaviour
         {
             Debug.LogError($"HomeScreen: 无法加载场景“{sceneName}”，Build Settings 里没有匹配项。" +
                            "已收录的场景：" + DescribeBuildScenes());
+            LabCheckpointStore.PendingContinue = null;
             navigating = false;
             transitionBlackout = false;
             if (settingsUI != null) settingsUI.enabled = true;
@@ -489,7 +491,7 @@ public sealed class HomeScreen : MonoBehaviour
     }
 
     /// <summary>黑屏加载期间的「Loading + 省略号」：省略号在 1~3 个点之间循环，像素字与确认框同一套。</summary>
-    void DrawLoadingIndicator()
+    internal static void DrawLoadingIndicator()
     {
         int dots = 1 + (int)(Time.realtimeSinceStartup / 0.4f) % 3;
         string text = "Loading" + new string('.', dots);

@@ -909,11 +909,17 @@ public sealed partial class LabLevelEditorWindow
                         "解除绑定",
                         "解绑后编辑器会改回读场景内嵌的那份数据，资源里的内容不会自动搬回来。继续吗？",
                         "解绑", "取消"))
+                {
+                    Record("解除关卡资源绑定");
                     level.BindAsset(null);
+                    MarkDirty();
+                }
             }
             else
             {
+                Record("绑定关卡数据资源");
                 level.BindAsset(picked);
+                MarkDirty();
             }
             Repaint();
         }
@@ -950,8 +956,9 @@ public sealed partial class LabLevelEditorWindow
         AssetDatabase.CreateAsset(asset, path);
         AssetDatabase.SaveAssets();
 
+        Record("新建并绑定关卡数据资源");
         level.BindAsset(asset);
-        Repaint();
+        MarkDirty();
     }
 
     void SaveAsset()

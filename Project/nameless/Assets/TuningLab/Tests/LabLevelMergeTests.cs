@@ -147,6 +147,33 @@ public sealed class LabLevelMergeTests
     // ---- LabLevel 绑定 -------------------------------------------------
 
     [Test]
+    public void BoundAssetBuildsCollisionAtItsOwnCells()
+    {
+        var go = new GameObject("AssetGeometryTest");
+        var asset = ScriptableObject.CreateInstance<LabLevelAsset>();
+        try
+        {
+            var level = go.AddComponent<LabLevel>();
+            level.Data.AddCell(Vector2Int.zero);
+            asset.Data.AddCell(new Vector2Int(20, 0));
+            level.BindAsset(asset);
+            level.BuildRuntime(go.transform, null);
+            Physics2D.SyncTransforms();
+            var composite = go.GetComponentInChildren<CompositeCollider2D>();
+            Assert.IsNotNull(composite);
+            Assert.IsTrue(composite.OverlapPoint(new Vector2(20.5f, 0.5f)));
+            Assert.IsFalse(composite.OverlapPoint(new Vector2(0.5f, 0.5f)),
+                "绑定资源后不能继续用内嵌旧地形");
+            Assert.Greater(composite.pathCount, 0, "批量生成后物理几何必须立即可用");
+        }
+        finally
+        {
+            Object.DestroyImmediate(go);
+            Object.DestroyImmediate(asset);
+        }
+    }
+
+    [Test]
     public void LabLevelReadsFromAssetWhenBound()
     {
         var go = new GameObject("Level");
