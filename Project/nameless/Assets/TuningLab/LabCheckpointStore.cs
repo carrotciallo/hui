@@ -11,7 +11,7 @@ using UnityEngine;
 /// </summary>
 public static class LabCheckpointStore
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
     const string FileName = "checkpoint.json";
     const string BackupFileName = "checkpoint.backup.json";
     const string TempFileName = "checkpoint.tmp";
@@ -19,16 +19,17 @@ public static class LabCheckpointStore
     /// <summary>测试/工具可改写到临时目录；为空时使用 Application.persistentDataPath。</summary>
     public static string DirectoryOverride;
 
-    /// <summary>读档后待消费的续玩点：主页设置，TuningLab 进关第一帧拿走并清掉。</summary>
-    public static Vector2? PendingContinue;
+    /// <summary>待消费的续玩数据：主页设置，TuningLab 关卡生成完成后拿走并清掉。</summary>
+    public static Data PendingContinue;
 
-    /// <summary>存档内容：场景名 + 重生点位置。复活状态由 ForceRespawn 规则统一决定。</summary>
+    /// <summary>存档内容：场景、重生点及永久能力。复活形态由 ForceRespawn 规则统一决定。</summary>
     [Serializable]
     public sealed class Data
     {
         public int version = CurrentVersion;
         public string scene;
         public Vector2 checkpoint;
+        public bool recallUnlocked;
     }
 
     public static string DataDirectory =>
@@ -41,10 +42,10 @@ public static class LabCheckpointStore
     public static bool Exists => File.Exists(SavePath) || File.Exists(BackupPath);
 
     /// <summary>激活重生点时自动调用；失败只告警，不影响玩法。</summary>
-    public static bool Save(string scene, Vector2 checkpoint)
+    public static bool Save(string scene, Vector2 checkpoint, bool recallUnlocked = false)
     {
-        if (string.IsNullOrEmpty(scene)) return false;
-        var data = new Data { scene = scene, checkpoint = checkpoint };
+        if (string.IsNullOrWhiteSpace(scene) || !IsFinite(checkpoint)) return false;
+        var data = new Data { scene = scene, checkpoint = checkpoint, recallUnlocked = recallUnlocked };
 
         try
         {
@@ -96,9 +97,10 @@ public static class LabCheckpointStore
         try
         {
             var parsed = JsonUtility.FromJson<Data>(File.ReadAllText(path));
-            if (parsed == null || string.IsNullOrEmpty(parsed.scene))
+            if (parsed == null || string.IsNullOrWhiteSpace(parsed.scene)
+                || parsed.version < 1 || parsed.version > CurrentVersion || !IsFinite(parsed.checkpoint))
             {
-                Debug.LogWarning($"LabCheckpointStore: 存档为空或缺少场景名（{path}）。");
+                Debug.LogWarning($"LabCheckpointStore: 存档版本或内容无效（{path}）。");
                 return false;
             }
             data = parsed;
@@ -111,4 +113,8 @@ public static class LabCheckpointStore
             return false;
         }
     }
+
+    static bool IsFinite(Vector2 point) =>
+        !float.IsNaN(point.x) && !float.IsInfinity(point.x)
+        && !float.IsNaN(point.y) && !float.IsInfinity(point.y);
 }

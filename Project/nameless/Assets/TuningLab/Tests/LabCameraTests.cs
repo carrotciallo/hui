@@ -6,6 +6,16 @@ using UnityEngine;
 /// </summary>
 public sealed class LabCameraTests
 {
+    [Test]
+    public void DestroyingLabAlsoRemovesItsCameraAndAudioListener()
+    {
+        var camera = lab.Cam;
+        var listener = camera.GetComponent<AudioListener>();
+        Object.DestroyImmediate(labGo);
+        Assert.IsTrue(camera == null, "规则台销毁后不应遗留跟随旧玩家的相机");
+        Assert.IsTrue(listener == null, "遗留监听器会导致重复监听和测试串扰");
+    }
+
     GameObject labGo;
     TuningLab lab;
     Vector2 previousGravity;

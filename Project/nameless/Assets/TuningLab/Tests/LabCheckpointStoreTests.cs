@@ -71,6 +71,45 @@ public sealed class LabCheckpointStoreTests
     }
 
     [Test]
+    public void PermanentAbilitySurvivesDiskRoundTrip()
+    {
+        Assert.IsTrue(LabCheckpointStore.Save("REAL FINAL MAP", new Vector2(1034, -180), true));
+        Assert.IsTrue(LabCheckpointStore.Load().recallUnlocked);
+    }
+
+    [Test]
+    public void VersionOneSaveRemainsReadable()
+    {
+        File.WriteAllText(LabCheckpointStore.SavePath,
+            "{\"version\":1,\"scene\":\"REAL FINAL MAP\",\"checkpoint\":{\"x\":4,\"y\":5}}");
+        var data = LabCheckpointStore.Load();
+        Assert.IsNotNull(data);
+        Assert.AreEqual(new Vector2(4, 5), data.checkpoint);
+        Assert.IsFalse(data.recallUnlocked, "旧档未记录能力，不能凭空解锁");
+    }
+
+    [Test]
+    public void UnsupportedVersionFallsBackToKnownBackup()
+    {
+        LabCheckpointStore.Save("A", Vector2.one, true);
+        LabCheckpointStore.Save("B", Vector2.zero);
+        File.WriteAllText(LabCheckpointStore.SavePath,
+            "{\"version\":999,\"scene\":\"B\",\"checkpoint\":{\"x\":0,\"y\":0}}");
+        var data = LabCheckpointStore.Load();
+        Assert.AreEqual("A", data.scene);
+        Assert.IsTrue(data.recallUnlocked);
+    }
+
+    [Test]
+    public void NonFinitePositionCannotOverwriteGoodSave()
+    {
+        LabCheckpointStore.Save("A", Vector2.one, true);
+        Assert.IsFalse(LabCheckpointStore.Save("A", new Vector2(float.NaN, 0)));
+        Assert.IsFalse(LabCheckpointStore.Save("A", new Vector2(0, float.PositiveInfinity)));
+        Assert.AreEqual(Vector2.one, LabCheckpointStore.Load().checkpoint);
+    }
+
+    [Test]
     public void SaveWithoutSceneIsRejected()
     {
         Assert.IsFalse(LabCheckpointStore.Save("", Vector2.zero));

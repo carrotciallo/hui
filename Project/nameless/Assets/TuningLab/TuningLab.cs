@@ -214,6 +214,7 @@ public class TuningLab : MonoBehaviour
 
     /// <summary>设置界面打开时所有玩法冻结；关闭后恢复暂停前的 timeScale。</summary>
     public bool Paused { get; private set; }
+    public bool IsLoadingLevel { get; private set; }
     float pausedTimeScale = 1f;
     public event System.Action MapReset;
     /// <summary>任一玩家死亡后广播（唯一必达点在 NotifyPlayerDied）；现阶段只有边框闪红订阅。</summary>
@@ -226,7 +227,17 @@ public class TuningLab : MonoBehaviour
 
     /// <summary>召回能力：任一玩家拾取道具后全队永久解锁，地图重置不清空。</summary>
     public bool RecallUnlocked { get; private set; }
-    public void UnlockRecall() => RecallUnlocked = true;
+    public void UnlockRecall()
+    {
+        if (RecallUnlocked) return;
+        RecallUnlocked = true;
+        // Unlocking is permanent even if the player quits before reaching another checkpoint.
+        if (ActiveRespawnPoint != null)
+            SaveCheckpoint(ActiveRespawnPoint);
+    }
+
+    // Keep the tuning scene useful; release levels must not expose debug sliders/cheats.
+    public bool DebugControlsEnabled => level == null || Debug.isDebugBuild;
 
     /// <summary>摩擦 0 的共用材质；幻影等运行时实体也用它。</summary>
     internal PhysicsMaterial2D SlickMaterial => slick;
@@ -418,7 +429,7 @@ public class TuningLab : MonoBehaviour
     [Tooltip("有 LabLevel 就按关卡数据搭场地；没有就用调试台内置房间。")]
     public LabLevel level;
 
-    [Tooltip("Play 时渐进搭建关卡：出生点附近同帧就绪，其余地形/物件分帧补全，避免大地图卡死激活帧。关掉则一次性同步搭建（编辑器预览与测试始终同步）。")]
+    [Tooltip("Play 时分帧搭建关卡，完整就绪后恢复玩法与续玩。关掉则同步搭建；两者共用生成逻辑。")]
     public bool streamLevelBuild = true;
 
     /// <summary>渐进搭建每帧的毫秒预算；越大补全越快但单帧越重。</summary>
@@ -498,6 +509,7 @@ public class TuningLab : MonoBehaviour
         if (Hud == null) Hud = gameObject.GetComponent<LabHud>();
         if (Hud == null) Hud = gameObject.AddComponent<LabHud>();
         Hud.Bind(this);
+        Hud.enabled = DebugControlsEnabled;
 
         // 音效和 HUD 同一个路子：运行时挂上来，不进场景、不进 prefab。
         if (Sound == null) Sound = gameObject.GetComponent<LabAudio>();
@@ -506,6 +518,7 @@ public class TuningLab : MonoBehaviour
 
         // 设置界面同样运行时挂载；编辑器烘焙场景时只把组件留在场景里，不在这里应用窗口设置。
         EnsureSettingsUI();
+        if (IsLoadingLevel) SetPaused(true);
     }
 
     void EnsureSettingsUI()
@@ -518,6 +531,7 @@ public class TuningLab : MonoBehaviour
     /// <summary>暂停/恢复由设置界面调用；只改 timescale，不销毁或禁用任何玩法对象。</summary>
     public void SetPaused(bool paused)
     {
+        if (!paused && IsLoadingLevel) return;
         if (Paused == paused) return;
         Paused = paused;
 
@@ -542,6 +556,7 @@ public class TuningLab : MonoBehaviour
 
     void Update()
     {
+        if (IsLoadingLevel) return;
         ConsumePendingContinue();
         if (Paused) return;
         ResolvePendingTeamDeath();
@@ -552,6 +567,7 @@ public class TuningLab : MonoBehaviour
         UpdateTeleportSelection(kb);
         if (TeleportBusy) return;
         if (kb.rKey.wasPressedThisFrame) ResetPlayers();
+        if (!DebugControlsEnabled) return;
         if (kb.pKey.wasPressedThisFrame) showPixelGrid = !showPixelGrid;
         if (kb.tabKey.wasPressedThisFrame) showGrid = !showGrid;
         if (kb.f1Key.wasPressedThisFrame && PlayerA != null) PlayerA.DebugShatterNextEdge();
@@ -597,14 +613,15 @@ public class TuningLab : MonoBehaviour
     }
 
     /// <summary>
-    /// 主页“读取存档”进关后的第一帧：把队伍强制复活到存档重生点（普通状态、清钥匙、范围重置）。
+    /// 主页“读取存档”进关且生成完成后：把队伍强制复活到存档重生点（普通状态、清钥匙、范围重置）。
     /// 此时所有重生点的 Start 注册已完成；点找不到（关卡改过）就留在出生点并告警。
     /// </summary>
     void ConsumePendingContinue()
     {
-        Vector2? pending = LabCheckpointStore.PendingContinue;
+        var pending = LabCheckpointStore.PendingContinue;
         if (pending == null) return;
         LabCheckpointStore.PendingContinue = null;
+        if (pending.scene != gameObject.scene.name) return;
 
         for (int i = respawnPoints.Count - 1; i >= 0; i--)
             if (respawnPoints[i] == null) respawnPoints.RemoveAt(i);
@@ -612,13 +629,14 @@ public class TuningLab : MonoBehaviour
         for (int i = 0; i < respawnPoints.Count; i++)
         {
             LabRespawnPoint point = respawnPoints[i];
-            if (((Vector2)point.transform.position - pending.Value).sqrMagnitude > 1e-4f) continue;
+            if (((Vector2)point.transform.position - pending.checkpoint).sqrMagnitude > 1e-4f) continue;
+            RecallUnlocked = pending.recallUnlocked;
             ActivateRespawnPoint(point);
             point.ForceRespawn(this);
             return;
         }
 
-        Debug.LogWarning($"TuningLab: 存档里的重生点 {pending.Value} 在当前场景不存在，队伍留在出生点。");
+        Debug.LogWarning($"TuningLab: 存档里的重生点 {pending.checkpoint} 在当前场景不存在，队伍留在出生点。");
     }
 
     public void ActivateRespawnPoint(LabRespawnPoint point)
@@ -641,8 +659,11 @@ public class TuningLab : MonoBehaviour
         ActiveRespawnPoint = point;
         // 激活即自动存档（踩点或双人死亡强制触发）；反复死在同一个点不重复写盘。
         if (newlyActivated)
-            LabCheckpointStore.Save(SceneManager.GetActiveScene().name, point.transform.position);
+            SaveCheckpoint(point);
     }
+
+    void SaveCheckpoint(LabRespawnPoint point) =>
+        LabCheckpointStore.Save(gameObject.scene.name, point.transform.position, RecallUnlocked);
 
     /// <summary>
     /// 任意一名玩家死亡后由 <see cref="LabPlayer.Kill"/> 调用。
@@ -1066,6 +1087,15 @@ public class TuningLab : MonoBehaviour
 
     void OnGUI()
     {
+        if (IsLoadingLevel)
+        {
+            Color previous = GUI.color;
+            GUI.color = Color.black;
+            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = previous;
+            HomeScreen.DrawLoadingIndicator();
+            return;
+        }
         if (Paused) return;
         if (TeleportSelecting) DrawTeleportSelectionGui();
         DrawDeathFlashGui();
@@ -1160,9 +1190,12 @@ public class TuningLab : MonoBehaviour
         if (level != null)
         {
             // 关卡场景：几何完全来自 LabLevel，和编辑器预览走同一条生成路径。
-            // Play 下渐进搭建：出生点附近同帧就绪，其余分帧补全，避免大地图一次性搭建卡死激活帧。
+            // Play 下分帧搭建；玩法保持暂停，完整就绪后再进入关卡。
             if (Application.isPlaying && streamLevelBuild)
-                level.StartCoroutine(level.BuildRuntimeStreaming(transform, slick, StreamBuildBudgetMs));
+            {
+                IsLoadingLevel = true;
+                StartCoroutine(BuildLevelAndResume());
+            }
             else
                 level.BuildRuntime(transform, slick);
             return;
@@ -1170,6 +1203,17 @@ public class TuningLab : MonoBehaviour
 
         // 调试台基准场景：内置房间。CaptureBaseline 也读同一段描述，保证两边不会漂。
         DescribeRoom(roomScale, new ObjectRoomSink(this));
+    }
+
+    IEnumerator BuildLevelAndResume()
+    {
+        yield return level.BuildRuntimeStreaming(transform, slick, StreamBuildBudgetMs);
+        // 新生成的重生点/传送点在 Start 注册；完成注册后才消费续玩请求。
+        yield return null;
+        ConsumePendingContinue();
+        IsLoadingLevel = false;
+        SetPaused(false);
+        if (Cam != null) Cam.GetComponent<LabCamera>()?.SnapToPlayers();
     }
 
     /// <summary>
@@ -1590,6 +1634,7 @@ public class TuningLab : MonoBehaviour
     void BuildCamera()
     {
         var go = new GameObject("Main Camera") { tag = "MainCamera" };
+        go.transform.SetParent(transform, false);
         var cam = go.AddComponent<Camera>();
         cam.orthographic = true;
         cam.orthographicSize = RefHeight / (2f * CellPixels);   // 216 / 32 = 6.75 → 可见 13.5 格
