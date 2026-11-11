@@ -1,153 +1,388 @@
-# 回（Hui）· 双人 2D 横板闯关
+# 回（Hui）
 
-Unity 双人协作平台解谜原型。当前仓库的**唯一开发基准是 Tuning Lab**，正式关卡从它派生，旧 `World` 架构、旧编辑器和旧测试房不再作为开发依据。
+**双人协作 2D 平台解谜** · 学院路 GameJam 参赛作品
 
-> **当前进度（2026-11-07）**：核心玩家、速度/冲刺、红热锻造、A 形态、大炮、L 形转向器、钥匙与门、重生点、传送点、冰块、绳子、地刺、隐藏方块、召回/幻影、修复方块、灵体、主页、音效、速度/死亡反馈和纯图标设置界面已经进入 Tuning Lab；关卡编辑器、SelfCheck/PlayCheck 和 PlayMode 规格已建立。美术资源已开始入库（`LabArt`），完整主线关卡仍在进行。
+两个方块、一个世界。大块（A）与小块（B）各自只有四条边，边会碎、会红热、会变成别的形状；两块撞在一起时动量守恒地交换速度。所有解法都建立在"如何让两块互相把对方甩出去"上。
 
-## 先看这里：参考索引
+Unity **6000.6.4f1** · URP 2D · Input System · 全部 x64
 
-### 开发基准（代码和关卡有冲突时优先看这里）
+---
 
-1. [当前项目基准](docs/current-baseline.md)：唯一架构、场景边界、菜单入口、验证层级。
-2. [Tuning Lab 关卡编辑器](docs/tuning-lab-level-editor.md)：关卡数据模型、代码地图、扩展和验证方式。
-3. [冲刺与对撞：现行规则](docs/冲刺与对撞-现行规则.md)：按当前代码整理的冲刺、对撞、锻造、形态、大炮、冰块、岩浆、召回/幻影和隐藏方块规则。
-4. [Tuning Lab 使用手册](docs/tuning-lab.md)：调试台操作与常用快捷键。
-5. [领域术语](GLOSSARY.md)：隐藏方块、死亡反馈、残影、拖尾等跨关卡术语。
+## 目录
 
-### 设计参考（用于规划，不得直接覆盖当前代码基准）
+- [玩法概览](#玩法概览)
+- [快速开始](#快速开始)
+- [操作](#操作)
+- [工程结构](#工程结构)
+- [关卡制作](#关卡制作)
+- [验证体系](#验证体系)
+- [构建与发布](#构建与发布)
+- [开发约定](#开发约定)
+- [文档索引](#文档索引)
+- [制作者](#制作者)
+- [许可](#许可)
 
-- [策划案总览](docs/策划案/回-概述.md)
-- [机制策划案](docs/策划案/回-机制.md)
-- [关卡策划案](docs/策划案/回-关卡%28未完成%29.md)
-- [剧情策划案](docs/策划案/回-剧情.md)
-- [美学策划案](docs/策划案/回-美学.md)
+---
 
-### 协作与历史
+## 玩法概览
 
-- [Issue 流程](docs/agents/issue-tracker.md)：需求、验收和状态约定。
-- [策划 → 程序交接](docs/agents/策划-程序交接.md)：设计变更如何落到代码和关卡。
-- [最近更改](docs/recent-changes.md)：近期合并记录。
-- [速度等级：基准与教训](docs/速度等级-基准与教训.md)：历史复盘，不是当前规范。
+### 两个角色
 
-## 当前架构
+| | 大块 A（方形，带边框） | 小块 B（实心红块） |
+| --- | --- | --- |
+| 碰撞体 | 比格子略小，四条边围成框 | 满格实心 |
+| 特殊能力 | 可以**红热锻造**、碎边改变形态 | 可以进入 A 的炮口被发射 |
+| 在玩法中的角色 | 更多是"被摆布的一方"——它的形状由碎边决定 | 更多是"动力来源"——靠冲刺和高速度撞击 |
+
+### 核心机制
+
+**速度等级** —— 一切判定用"相当于从多少格高落下"来表达。速度折算成格数后分档（v0–v4），撞击门槛、红热门槛、碎冰门槛都按档位比较，而不是按绝对速度。这样数值调起来很直观："差两格"就是差两档。
+
+**碎边与形态** —— A 的四条边可以被打碎，变成"灵体边"。碎哪几条边决定 A 变成什么形态：
+
+| A 的形态 | 碎边数 | 能力 |
+| --- | --- | --- |
+| 普通 | 0 | — |
+| u 大炮 | 1 | 把进来的 B 打出去 |
+| L 转向器 | 2（相邻） | 把从底面进来的 B 转向水平射出 |
+| ‖ / = 电梯 | 2（相对） | 挡人，同时也是竖绳/横绳的延伸 |
+| 矛（"2048"） | 3 | 只剩一条边，会自己滑到撞墙 |
+| 灵体 | 4 | 限时穿透，时间耗尽即死 |
+
+**红热锻造** —— A 红热状态下撞击方块，可以把目标"锻造"成更高级别的速度载体；红热边接触岩浆会被强制红热，接触修复方块会回普通。
+
+**召回与幻影** —— 拾取召回道具后，可以把队友传送到自己头顶，并在队友原来的位置留下一个**幻影**。幻影复制队友当时的形态，能做真实玩家做不到的事：铺光桥、当滑块、当玻璃大炮。
+
+**双人动量** —— 两块相撞时速度互换（本质是能量守恒 + 冲刺态参与计算）。这是所有"把队友打上去"的解法基础。
+
+### 关卡机关
+
+地形、竖绳、横绳、地刺、钥匙与门、冰块（可编组，整组一起碎）、岩浆（接触强制红热，热二再接触即死）、隐藏方块（组内揭示）、修复方块、重生点、传送点、像素画装饰。
+
+---
+
+## 快速开始
+
+### 环境
+
+- Unity Hub + **Unity 6000.6.4f1**（带 Linux/Windows/macOS Build Support 模块）
+- 打开 `Project/nameless/`（**注意不是仓库根目录**）
+
+### 第一次运行
+
+1. Unity Hub 添加 `Project/nameless`
+2. 菜单 **GameJam → Build Tuning Lab** —— 生成规则基准场景
+3. 打开 `Assets/Scenes/TuningLab.unity`，按 Play
+
+想直接玩正式关卡，打开 `Assets/Scenes/Levels/REAL FINAL MAP.unity` 或从主界面进。
+
+### 从发布版运行
+
+从 [Releases](https://github.com/sfher/hui/releases) 下载对应平台的压缩包，解压后运行 `Hui` / `Hui.exe` / `Hui.app`。启动会停在主界面。
+
+---
+
+## 操作
+
+默认键位。**所有键都可以在设置界面里改**（Esc → 操控页）。
+
+### 游戏内
+
+| 动作 | 大块 A | 小块 B |
+| --- | --- | --- |
+| 上下左右 | `W` `A` `S` `D` | `I` `J` `K` `L` |
+| 跳跃 | `Space` | `'`（引号键） |
+| 冲刺 | `LeftShift` | `;` |
+| 召回 | `LeftCtrl` | `Enter` |
+
+### 传送门（两人同时在传送点内时）
+
+| 动作 | 大块 A | 小块 B |
+| --- | --- | --- |
+| 进入选择 / 确认 | `E` | `U` |
+| 取消 | `Q` | `Backspace` |
+
+选择界面里左右用各自的移动键。`Esc` 任何时候都能取消。
+
+### 调试与全局
+
+| 键 | 作用 |
+| --- | --- |
+| `Esc` | 打开/关闭设置界面（打开时全局暂停） |
+| `R` | 重置两人到最近的激活重生点 |
+| `P` | 切换像素网格 |
+| `Tab` | 切换格线 |
+| `F1` | 打碎 A 的下一条边（演示形态用） |
+| `F2` | 恢复 A 的全部边 |
+
+> 按键绑定存在 `settings.json`，按**键名**序列化，Input System 改枚举顺序不会让存档错位。冲突时界面会标红，但**不阻止保存**——同一个键绑两个动作时两个都会响应。
+
+---
+
+## 工程结构
 
 ```text
 Project/nameless/
 ├─ Assets/
 │  ├─ Scenes/
-│  │  ├─ TuningLab.unity          # 规则基准场景，禁止手改生成物
-│  │  └─ Levels/                  # 正式关卡和调试房
-│  ├─ Sounds/Resources/           # 12 类运行时音效（LabAudio 按目录加载）
-│  └─ TuningLab/
-│     ├─ TuningLab.cs             # 参数、基准房间、HUD、音效/表现层挂载、死亡闪红
-│     ├─ LabPlayer.cs             # 玩家、形态、撞击、召回输入
-│     ├─ LabVisual.cs             # 边框/眼睛
-│     ├─ LabSpeedFeedback.cs      # V3 起 / 顶档 V6 残影与拖尾
-│     ├─ LabAudio.cs              # 运行时音效
-│     ├─ LabSettingsUI.cs         # 纯图标设置界面、Esc 暂停/恢复
-│     ├─ LabSettingsStore.cs      # 设置 JSON、备份与坏档恢复
-│     ├─ Resources/SettingsIcons/ # 16×16 像素图标（同名 PNG 可替换）
-│     ├─ Lab*.cs                  # 相机、绳、钥匙/门、刺、冰、岩浆、隐藏方块、召回/幻影等
+│  │  ├─ Home.unity              # 主界面，Build Settings 第 0 项
+│  │  ├─ TuningLab.unity         # 规则基准场景（生成物，不手改）
+│  │  └─ Levels/                 # 正式关卡 + 各系统测试房
+│  ├─ Sounds/Resources/          # 音效素材（LabAudio 按目录加载）
+│  └─ TuningLab/                 # 唯一规则基准
+│     ├─ TuningLab.cs            # 参数、场地生成、HUD、音效挂载
+│     ├─ LabPlayer.cs            # 玩家、形态、撞击、输入
+│     ├─ LabBindings.cs          # 按键绑定模型与冲突检测
+│     ├─ LabPhantom.cs           # 召回幻影（光桥、2048、玻璃大炮、L 转向）
+│     ├─ LabLightBridgeBlock.cs  # 光桥方块
+│     ├─ LabIce.cs / LabMagma.cs / LabRepairBlock.cs
+│     ├─ LabVerticalRope.cs / LabHorizontalRope.cs
+│     ├─ LabDoor.cs / LabKey.cs / LabSpike.cs / LabHiddenBlock.cs
+│     ├─ LabRespawnPoint.cs / LabTeleportPoint.cs / LabRecallPickup.cs
+│     ├─ LabSettingsUI.cs        # 设置界面（三页：基本 / 操控 / 关于）
+│     ├─ LabSettingsStore.cs     # 设置 JSON 持久化
+│     ├─ LabCheckpointStore.cs   # 存档（重生点续玩）
+│     ├─ LabArt.cs / LabVisual.cs
+│     ├─ LabAudio.cs / LabSpeedFeedback.cs / LabChargeFeedback.cs
+│     ├─ LabCamera.cs / LabBackground.cs / LabHud.cs
+│     ├─ LabCompositeRebuild.cs  # 合并碰撞体的帧末统一重建
+│     ├─ LabPixelFont.cs         # 像素字体（Fusion Pixel 子集）
+│     ├─ TierMath.cs / LabForms.cs
 │     ├─ Level/
-│     │  ├─ LabLevelData.cs       # 格子、绳、机关、出生点、相机和分区数据
-│     │  └─ LabLevel.cs           # 数据 → 场景生成
-│     ├─ Editor/                  # Tuning Lab 菜单和自检
-│     ├─ Level/Editor/            # 派生、关卡编辑器、SelfCheck、PlayCheck、演示关
-│     └─ Tests/                   # PlayMode 规格
-└─ ProjectSettings/               # Unity 项目配置
+│     │  ├─ LabLevelData.cs      # 关卡数据（地形、机关、分区、相机）
+│     │  ├─ LabLevel.cs          # 数据 → 场景生成
+│     │  └─ LabLevelAsset.cs     # 数据独立成 ScriptableObject
+│     ├─ Editor/                 # 菜单与自检
+│     ├─ Level/Editor/           # 关卡编辑器、SelfCheck、PlayCheck
+│     ├─ Resources/
+│     │  ├─ SettingsIcons/       # 16×16 图标（含 _Dark/_Light 变体）
+│     │  ├─ Credits/             # 制作者头像
+│     │  └─ Fonts/               # 像素字体 + OFL 授权
+│     └─ Tests/                  # PlayMode 规格（30 个文件）
+└─ ProjectSettings/
 ```
 
-架构约束：
+### 三条硬约束
 
-- 规则改动进入 `Assets/TuningLab/`，不要恢复 `Assets/Scripts` 或另建第二套玩家逻辑。
-- 可编辑、可保存、可随分区移动的关卡内容进入 `LabLevelData`，不要手改生成的碰撞体。
-- 编辑器预览和 Play 共用 `LabLevel.Build`，避免两套关卡结果。
-- `TuningLab.unity` 是规则基准；正式关卡通过菜单从它派生。
-- 工程目录仍然是 `Project/nameless/`。仓库名虽然是 Hui，暂不改目录名，避免破坏 Unity 项目引用。
+1. **规则改动只进 `Assets/TuningLab/`** —— 不要恢复已删除的 `Assets/Scripts` 或另建第二套玩家逻辑。
+2. **可编辑的关卡内容进 `LabLevelData`** —— 不要手改生成的碰撞体，它们在 Play 时重建。
+3. **编辑器预览和 Play 共用 `LabLevel.Build`** —— 保证"看到的"和"撞到的"是同一份几何。
 
-## 当前进度
+> 工程目录仍叫 `Project/nameless/`。仓库名叫 Hui，但改目录名会破坏所有 Unity 引用，不值得。
 
-### 已完成并进入基准
+---
 
-| 范围 | 当前状态 | 依据 |
-| --- | --- | --- |
-| Tuning Lab 单一基准、场景派生和关卡编辑器 | 已完成 | [Issue #16](https://github.com/sfher/hui/issues/16)、[Issue #3](https://github.com/sfher/hui/issues/3) |
-| 玩家移动、跳跃、冲刺、五档速度和相机 | 已完成基础版本 | [机制策划案](docs/策划案/回-机制.md) |
-| 红热锻造、A 形态、L 形转向器和大炮 | 已完成基础版本 | [Issue #14](https://github.com/sfher/hui/issues/14)、[#15](https://github.com/sfher/hui/issues/15)、[#21](https://github.com/sfher/hui/issues/21) |
-| 钥匙、门、重生点、传送点（含进出场动画） | 已完成基础版本 | [Issue #18](https://github.com/sfher/hui/issues/18)、[#19](https://github.com/sfher/hui/issues/19)、[#20](https://github.com/sfher/hui/issues/20) |
-| 冰块（#29，含运行时组色边框）、竖绳/横绳（#27）、地刺（#34） | 已进入基准 | 现行规则 §3.8 / §3.9 与编辑器文档 |
-| 隐藏方块（#59） | 已进入基准 | `LabHiddenBlock` + 关卡数据 + 编辑器工具 |
-| 召回与幻影（#69） | 已进入基准 | `LabRecallPickup` / `LabPhantom` + 编辑器工具 + 契约测试 |
-| 音效（#60）、速度/死亡反馈（#62） | 已进入基准 | `LabAudio` / `LabSpeedFeedback` / 死亡闪红 |
-| 纯图标设置界面（#71） | 已进入基准 | `LabSettingsUI` / `LabSettingsStore`，Esc 打开并暂停；音量、分辨率、全屏、亮度/按键预留位 |
-| 修复方块（#63） | 已进入基准 | `LabRepairBlock` + 关卡数据 + 编辑器工具；热二/灵体边贴面回普通，不消耗 |
-| 灵体（#64，ADR-0007 定名） | 已进入基准 | 全碎边限时穿透、耗尽即死并掉临时钥匙；`LabPlayer.EnterSpirit` 一线 |
-| 主页（#70） | 已完成基础版本 | `Home.unity`（Build Settings 第 0 项）+ `HomeScreen`：纯图标三入口、边框蛇、关闭转场 |
-| 判据修复：双人锻造门槛（#65）、形态不拦拾取（#67） | 已修 | 规则文档 §3.4 / §3.5 |
-| 纯数据 Self Check、真实物理 Play Check、PlayMode 测试 | 已建立 | [当前项目基准](docs/current-baseline.md) |
+## 关卡制作
 
-### 当前进行中或待处理
+### 菜单入口
 
-| Issue | 主题 | 当前判断 |
-| --- | --- | --- |
-| [#66](https://github.com/sfher/hui/issues/66) | 传送门相对位置保留 | 未实现；传送后相对站位保持。 |
-| [#72](https://github.com/sfher/hui/issues/72) | 游戏内图标 UI | 未开始；主页已按 #70 落地，游戏内 HUD 仍是调试用 IMGUI。 |
-| [#26](https://github.com/sfher/hui/issues/26) | 像素美术资源 | 首批资源已入库并经 `LabArt` 接入（角色边框、材质、道具）；清单未齐，仍在补。音效已按 #60 入库。 |
-| 主线关卡 | 组合关卡和最终流程 | 机制大多具备，完整主线尚未制作。 |
+| 菜单 | 用途 |
+| --- | --- |
+| **GameJam → Build Tuning Lab** | 生成/更新规则基准场景 |
+| **GameJam → New Level From Tuning Lab** | 从基准派生正式关卡 |
+| **GameJam → Convert Current Scene To Level** | 把 Tuning Lab 副本转为关卡 |
+| **GameJam → Tuning Lab Level Editor** | 关卡编辑器（主入口） |
+| **GameJam → Build HiddenBlock Demo Level** | 隐藏方块演示关 |
+| **GameJam → Run Level Baseline Self Check** | 纯数据自检 |
+| **GameJam → Run Level Play Check** | 真实物理自检 |
+| **GameJam → Build Players → Windows/macOS/Linux** | 本地构建发布包 |
 
-### 按策划案的主线覆盖情况
+### 关卡编辑器
 
-这是“机制是否具备”的进度，不代表对应关卡已经制作完成。
+可放：地形、竖绳、横绳、钥匙、门、地刺、冰块（含分组）、岩浆（含分组）、隐藏方块（含分组）、修复方块、召回道具、像素画、重生点、传送点、出生点和相机分区。
 
-| 区段 | 设计目标 | 当前状态 |
-| --- | --- | --- |
-| L0 | 移动、跳跃、冲刺入门 | 基础能力已具备 |
-| L1 | 横碰、上冲、重生点 | 机制具备 |
-| L2 | 钥匙、门、伤害物、绳子初见 | 钥匙/门、地刺、绳子均已具备；关卡内容待补 |
-| L3 | 冰块破坏与滑行 | 机制具备（#29），关卡内容待补 |
-| L4 / L4+ | L 转向、传送点、冰面组合 | L 转向、传送点、冰面组合机制具备；完整关卡待补 |
-| L5 / L6 | 滑道、绳子、转换器组合 | 部分机制具备，组合关卡未完成 |
-| L7 | 大炮 | 基础功能具备 |
-| L8 | 竖绳与 `\|` 形态 | 绳子基础存在；`\|` 形态的完整关卡用途待补 |
-| L9 | 地刺交互 | 机制具备（#34） |
-| L10 | 全部传送门、最终门、最大速度、结局/Boss | 仍属策划阶段，未形成完整关卡 |
+**快捷键只有四个**（其余从工具面板进）：
 
-## 打开和验证工程
+| 键 | 工具 |
+| --- | --- |
+| `1` | 铺地形 |
+| `3` | 擦地形 |
+| `4` | 选区 |
+| `5` | 选择 |
 
-1. 用 Unity Hub 添加 `Project/nameless`。
-2. 使用 Unity **6000.6.4f1** 打开（URP 2D，Input System 1.20）。
-3. 菜单执行 **GameJam → Build Tuning Lab**，生成或更新基准场景。
-4. 按 Play 验证调试台；正式关卡从 Tuning Lab 派生，不要手改基准场景生成物。
-5. 使用 **GameJam → Run Level Baseline Self Check** 做纯数据验证，使用 **GameJam → Run Level Play Check** 做真实物理验证。
-6. PlayMode 规格在 `Assets/TuningLab/Tests/`，用 Unity Test Runner 的 PlayMode 运行。
+**移动选区**：拖动时不会重建整张预览——早期版本每帧重建会导致"整个场景破裂"，现在只在松手时重建一次。
 
-Unity 打开工程可能重写 `ProjectSettings/`。提交前检查 `git status`：只丢弃纯序列化噪音，真实的图层、输入和构建场景改动必须保留。
+**分区**（partitions）—— 大关卡按房间切分，每个分区的 bounds 同时是相机范围。分区不能重叠，贴边相邻可以。
 
-## 关卡工作流
+**合并** —— 关卡数据可以独立成 `.asset`，把多个分区场景的数据合并成一份。合并规则：地形取并集、物件按格+分组去重、相机范围取并集，出生点保持接收方的值。
 
-- **GameJam → New Level From Tuning Lab**：创建正式关卡。
-- **GameJam → Convert Current Scene To Level**：把 Tuning Lab 副本转为关卡。
-- **GameJam → Tuning Lab Level Editor**：编辑地形、绳、机关、隐藏方块、召回道具、出生点、相机和连续关卡分区。
-- **GameJam → Build HiddenBlock Demo Level**：生成隐藏方块演示关，快速验证整组揭示。
-- **GameJam → Run Level Baseline Self Check**：验证数据归一化、矩形合并、分区和相机规则。
-- **GameJam → Run Level Play Check**：创建临时关卡并用真实物理验证。
+### 数据模型
 
-## 操作
+`LabLevelData` 是纯数据，一个格子列表 + 各类物件的 spec 列表 + 分区列表。生成走 `LabLevel.Build`，编辑器预览和 Play 是同一路径。
 
-| 玩家 | 移动 | 上 / 下 | 跳跃 | 冲刺 | 召回 |
-| --- | --- | --- | --- | --- | --- |
-| P1 / A | A / D | W / S | 空格 | 左 Shift | `Q` |
-| P2 / B | ← / → | ↑ / ↓ | `/` | `.` | 右 `Shift` |
+---
 
-调试台常用：`R` 重置，`P` 像素网格，`Tab` 格线，`Esc` 打开/关闭设置界面（打开时全部玩法暂停，再按 `Esc` 或点关闭图标恢复）。传送门选择阶段 `Esc` 仍然只取消选择。召回需要先在关卡里拾取召回道具。关卡编辑器工具和验证方式见 [编辑器手册](docs/tuning-lab-level-editor.md)。
+## 验证体系
 
-## 目录速查
+三层，从快到慢：
 
-- 规则、玩家、相机、机关和表现层：`Project/nameless/Assets/TuningLab/`
-- 关卡数据与生成：`Project/nameless/Assets/TuningLab/Level/`
-- 音效素材：`Project/nameless/Assets/Sounds/Resources/`
-- 设置图标：`Project/nameless/Assets/TuningLab/Resources/SettingsIcons/`
-- 基准场景：`Project/nameless/Assets/Scenes/TuningLab.unity`
-- 正式关卡：`Project/nameless/Assets/Scenes/Levels/`
-- 设计草稿：`docs/策划案/`
-- 当前事实与入口：[docs/current-baseline.md](docs/current-baseline.md)
+| 层 | 命令 | 覆盖 | 耗时 |
+| --- | --- | --- | --- |
+| **Self Check** | `GameJam → Run Level Baseline Self Check` | 纯数据规则：归一化、矩形合并、分区、相机 | 秒级 |
+| **Play Check** | `GameJam → Run Level Play Check` | 真实物理：建临时关卡跑实际碰撞 | 十几秒 |
+| **PlayMode 规格** | Unity Test Runner → PlayMode | 30 个测试文件，覆盖每个机制 | 约 80 秒 |
+
+当前状态：**30 个测试文件**，覆盖全部机制与关键边界。
+
+运行 PlayMode 全量的方式：
+
+```bash
+# Unity Test Runner 里手动跑，或用 CI
+```
+
+> **已知问题**：`LabHiddenBlockTests` 有部分用例会因测试间的静态状态泄漏而失败（单独跑该文件也会失败）。这是测试自身的问题，与业务代码无关。
+
+---
+
+## 构建与发布
+
+### 自动（GitHub Actions）
+
+打 tag 即触发：
+
+```bash
+git tag 1.0.0
+git push origin 1.0.0
+```
+
+工作流 [`.github/workflows/release.yml`](.github/workflows/release.yml) 会构建 **macOS + Linux**（x64），打包成
+`Hui-<版本>-<系统>-x64.zip`，自动创建 GitHub Release。
+
+也可以在 Actions 页手动触发（`dry_run=true` 只构建不发版）。
+
+**Windows 目前不在 CI 里** —— GitHub 托管 runner 上它的 Unity 容器会被 OOM killer 稳定杀掉（exit 137），见 [unity-builder#540](https://github.com/game-ci/unity-builder/issues/540)：限制容器内存只会让 OOM 更早发生。Windows 包请本地构建：
+
+```
+GameJam → Build Players → Windows
+```
+
+产物在 `Project/nameless/Builds/Windows/`。
+
+### 本地
+
+三个菜单项分别构建对应平台，产物在 `Project/nameless/Builds/`。
+
+命令行也能构建：
+
+```bash
+Unity -batchmode -quit -projectPath Project/nameless \
+      -executeMethod LabPlayerBuild.Run \
+      -buildTarget linux -outPath /abs/out
+```
+
+发布包只含两个场景，顺序固定：
+
+1. `Assets/Scenes/Home.unity`（主界面，**必须是第一个**）
+2. `Assets/Scenes/Levels/REAL FINAL MAP.unity`
+
+`TuningLab.unity` 是调试场景，不进发布包。构建脚本里有断言，主界面缺失会直接抛异常。
+
+### 平台限制
+
+| 平台 | 说明 |
+| --- | --- |
+| Windows x64 | 本地构建，CI 不可用 |
+| macOS x64 | CI 可构建，**未签名未公证**，首次打开需右键 → 打开 |
+| Linux x64 | CI 可构建，需要 glibc 2.31+ |
+
+---
+
+## 开发约定
+
+### 分支与提交
+
+- **不直接在 `main` 上开发**，从 `main` 建 `feat/` `fix/` `refactor/` `docs/` 分支
+- 通过 PR 合入，保持变更范围最小
+- 提交信息说明实际变更，不要编造验证结果
+- **不加 AI 署名水印，不加 `Co-Authored-By`**
+
+### 资源
+
+- 每个资源文件提交对应 `.meta`
+- 文本资源用 LF
+- 像素图导入：Point 过滤、无压缩、关闭 Mipmap
+
+### ProjectSettings
+
+Unity 打开工程会重写 `ProjectSettings/`。提交前先看：
+
+```bash
+git status --short
+git diff --stat Project/nameless/ProjectSettings/
+```
+
+只有 `serializedVersion`、字段顺序、默认值变化属于序列化噪音，可以丢弃；真实的场景列表、图层、物理、输入和渲染设置变化必须审查后提交。
+
+### 不提交的东西
+
+`Library/` `Temp/` `Logs/` `UserSettings/` `*.csproj` `*.slnx` `Builds/`
+
+---
+
+## 文档索引
+
+### 开发基准（代码有疑问优先看这里）
+
+| 文档 | 内容 |
+| --- | --- |
+| [当前项目基准](docs/current-baseline.md) | 架构边界、场景、菜单入口、验证层级 |
+| [冲刺与对撞：现行规则](docs/冲刺与对撞-现行规则.md) | 按代码整理的全部玩法规则（最详细） |
+| [关卡编辑器](docs/tuning-lab-level-editor.md) | 数据模型、代码地图、扩展方式 |
+| [调试台手册](docs/tuning-lab.md) | TuningLab 操作 |
+| [领域术语](GLOSSARY.md) | 隐藏方块、死亡反馈、残影等术语 |
+
+### 工程流程
+
+| 文档 | 内容 |
+| --- | --- |
+| [CI 与发布](docs/ci-release.md) | 工作流、产物命名、平台限制 |
+| [CI 授权配置](docs/ci-secrets.md) | Unity 许可证 Secrets 怎么配 |
+| [Issue 流程](docs/agents/issue-tracker.md) | 需求、验收、状态约定 |
+| [策划 → 程序交接](docs/agents/策划-程序交接.md) | 设计变更如何落到代码 |
+| [架构决策记录](docs/adr/) | ADR-0005 红热锻造 / 0006 单一基准 / 0007 灵体 |
+
+### 设计文档（规划用，不覆盖代码基准）
+
+[docs/策划案/](docs/策划案/) —— 概述、机制、关卡、剧情、美学
+
+### 历史复盘
+
+| 文档 | 内容 |
+| --- | --- |
+| [速度等级：基准与教训](docs/速度等级-基准与教训.md) | 数值设计的踩坑记录 |
+| [最近更改](docs/recent-changes.md) | 近期合并记录 |
+
+---
+
+## 制作者
+
+| | 分工 |
+| --- | --- |
+| [@sfher](https://github.com/sfher) | 主程序 |
+| [@cyx-weimijiheheda](https://github.com/cyx-weimijiheheda) | 主程序 |
+| [@declinegod](https://github.com/declinegod) | 策划 / 主程序 |
+| [@strelizia-z](https://github.com/strelizia-z) | 美术 |
+
+---
+
+## 许可
+
+**代码、关卡数据与自制美术** 采用 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) 许可。
+© 2026 Hui 制作组。全文见 [LICENSE](LICENSE)。
+
+转载或改编时请注明原作者为「Hui 制作组」及上述协作者，保留版权声明，标明是否修改，并附协议链接。
+
+### 第三方素材（各自遵循原授权，不在 CC BY 4.0 范围内）
+
+| 素材 | 授权 |
+| --- | --- |
+| **Fusion Pixel Font**（像素字体） | SIL OFL 1.1，© 2022 TakWolf，全文见 `Assets/TuningLab/Resources/Fonts/LICENSE-OFL.txt` |
+| **1-bit Pixel Icons**（设置图标） | 可用于个人与商业项目、无需署名；不得转售或再分发素材文件 |
+| **Pixel Platformer Tileset**（游戏美术） | 同上 |
+
+---
+
+## 相关链接
+
+- [Issues](https://github.com/sfher/hui/issues) · [Pull Requests](https://github.com/sfher/hui/pulls) · [Releases](https://github.com/sfher/hui/releases)
+- 本仓库面向 **学院路 GameJam** 参赛，玩法与数值以代码和 [现行规则](docs/冲刺与对撞-现行规则.md) 为准，策划案仅作规划参考。

@@ -118,20 +118,12 @@ git push origin 1.0.0
 总耗时可能 40 分钟以上（Pro 大约 15–25 分钟）。
 
 如果嫌慢，可以先只保留一个平台跑通（改 `release.yml` 里 `matrix.include` 只留一项），
-确认链路没问题后再放开三个。
+确认链路没问题后再放开。
 
 ---
 
-## 实测状态（2026-11-09）
+## 实测状态
 
-已经触发过一次 dry run（run `42608944911`），结果与预期一致：
+**Secrets 已经配好并跑通了。** 从 `1.0.0-rc1` 起多次成功出包，许可证不是当前的问题。
 
-| Job | 结果 |
-| --- | --- |
-| Resolve version | **success** |
-| Build windows-x64 | failure（缺 license） |
-| Build macos-x64 | failure（缺 license） |
-| Build linux-x64 | failure（缺 license） |
-| Publish release | **skipped**（dry_run 生效） |
-
-说明工作流结构、版本号解析、dry_run 开关都正常，只差许可证。
+现在 CI 的瓶颈是 GitHub 托管 runner 上的内存限制，不是授权 —— 见 [ci-release.md](ci-release.md#平台覆盖)。

@@ -12,7 +12,8 @@
 - 可摆放像素画素材：`Assets/TuningLab/Art/Resources/PixelArt/`
 - 启动主页：`Assets/Scenes/Home.unity`，Build Settings 第 0 项
 - 设置界面：`Assets/TuningLab/LabSettingsUI.cs`，图标在 `Assets/TuningLab/Resources/SettingsIcons/`
-- 设置存档：`Assets/TuningLab/LabSettingsStore.cs` → `Application.persistentDataPath/settings.json`
+- 设置存档：`Assets/TuningLab/LabSettingsStore.cs` → `Application.persistentDataPath/settings.json`（含按键绑定，按键按名字序列化）
+- 关卡存档：`Assets/TuningLab/LabCheckpointStore.cs` → `Application.persistentDataPath/checkpoint.json`（重生点续玩）
 - 基准场景：`Assets/Scenes/TuningLab.unity`
 - 正式关卡入口：`Assets/Scenes/Levels/REAL FINAL MAP.unity`
 - 正式关卡目录：`Assets/Scenes/Levels/`
@@ -29,11 +30,15 @@
 
 ## 当前系统
 
-- 玩家：移动、跳跃、四向冲刺、速度等级、双人动量互换、红热锻造、碎边形态、u 大炮、L 转向器、灵体态（限时穿透、不受力、四向匀速移动，耗尽即死并掉临时钥匙）。
-- 关卡物件：竖绳/横绳、钥匙/门、地刺、冰块、岩浆块、隐藏方块、重生点、传送点、召回道具、幻影、纯视觉像素画。
+- 玩家：移动、跳跃、四向冲刺、速度等级、双人动量互换、红热锻造、碎边形态、u 大炮、L 转向器、灵体态（限时穿透、不受力、四向匀速移动，耗尽即死并掉临时钥匙）、竖光桥攀爬。
+- 关卡物件：竖绳/横绳、钥匙/门、地刺、冰块、岩浆块、隐藏方块、修复方块、重生点、传送点、召回道具、幻影（含光桥 / 2048 滑块 / 玻璃大炮 / L 转向）、纯视觉像素画。
+- 关卡数据可独立成 `LabLevelAsset`（ScriptableObject），支持把多个分区场景的数据合并成一份。
 - 表现层：V3 起、顶档 V6 的残影与拖尾、冲刺就绪轮廓闪烁与头顶粒子、死亡边框闪红、运行时音效（16 个 Cue，无场景引用）。
 - 主页：纯黑背景、三个纯图标入口、两条边缘出发的高亮边框蛇、地图/UI 素材横向漂浮，以及约 0.7 秒的电视关闭式转场。
-- 设置：纯图标 IMGUI；Esc 打开/关闭。玩法场景打开时 `Time.timeScale = 0`，关闭恢复暂停前的值；主页只冻结主页动效。主音量、音乐/音效音量、分辨率、全屏可用，亮度与按键绑定为预留位。
+- 设置：纯图标 IMGUI，三页（基本设置 / 操控设置 / 关于）；Esc 打开/关闭。玩法场景打开时 `Time.timeScale = 0`，关闭恢复暂停前的值；主页只冻结主页动效。
+  - 基本页：主音量、音乐/音效音量、分辨率、全屏（亮度为预留位）。
+  - 操控页：两个玩家各 9 个动作可重映射（指向 ×4、跳跃、冲刺、召回、传送门交互、取消），冲突会标红但不阻止保存；同时只允许改一个键。
+  - 关于页：项目名、制作组、CC BY 4.0 署名与第三方素材授权。
 - 数据/生成：`LabLevelData` → `LabLevel.Build`，编辑器预览与 Play 共用同一条生成路径。
 
 ## 场景与菜单
@@ -42,7 +47,6 @@
 | --- | --- |
 | 启动主页 | Build Settings 第 0 项：`Assets/Scenes/Home.unity` |
 | 新游戏 / 临时读取存档 | 主页图标 → `Assets/Scenes/Levels/REAL FINAL MAP.unity` |
-| 重新生成主页 | GameJam → Rebuild Home Scene |
 | 生成基准场景 | GameJam → Build Tuning Lab |
 | 新建关卡 | GameJam → New Level From Tuning Lab |
 | 转换已有副本 | GameJam → Convert Current Scene To Level |
@@ -50,6 +54,8 @@
 | 生成隐藏方块演示关卡 | GameJam → Build HiddenBlock Demo Level |
 | 纯数据验证 | GameJam → Run Level Baseline Self Check |
 | 真实物理验证 | GameJam → Run Level Play Check |
+| 本地构建发布包 | GameJam → Build Players → Windows / macOS / Linux |
+| 重新生成主页 | GameJam → Rebuild Home Scene |
 
 ## 验证
 
@@ -70,6 +76,7 @@ CLI 示例和常见问题见 [tuning-lab-level-editor.md](tuning-lab-level-edito
 3. `tuning-lab.md`：调试台操作说明。
 4. `冲刺与对撞-现行规则.md`：冲刺、对撞、锻造、形态（含灵体态与临时钥匙）、大炮、冰块、岩浆、召回/幻影和隐藏方块的现行规则，按代码写；§6 是文档与代码的冲突清单。
 5. `GLOSSARY.md`：跨关卡复用的领域术语。
+5.1 `ci-release.md` / `ci-secrets.md`：构建、发布与 Unity 许可证配置。
 6. Issue / ADR：具体规则的拍板记录；ADR 是历史决策，若与现行代码冲突，以本文和规则文档为准。
 7. `docs/策划案/`：设计草稿；未同步前不能覆盖代码基准。
 8. `速度等级-基准与教训.md`、`recent-changes.md`：历史复盘。

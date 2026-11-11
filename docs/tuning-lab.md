@@ -1,112 +1,147 @@
-# Tuning Lab 使用手册
+# Tuning Lab 调试台手册
 
-Tuning Lab 是当前项目唯一的规则调试台，用来验证玩家移动、冲刺、速度读数、碰撞和相机行为。正式关卡必须从它派生，不能另起一套玩家或数值规则。
+Tuning Lab 是本项目的**唯一规则基准**。所有玩法规则的调整都在这里做，正式关卡从它派生。
 
-## 打开
+场景：`Assets/Scenes/TuningLab.unity`（由 `GameJam → Build Tuning Lab` 生成，**不要手改生成物**）
 
-1. 用 Unity 6000.6.4f1 打开 `Project/nameless/`。
-2. 执行 **GameJam → Build Tuning Lab**。
-3. 打开或运行 `Assets/Scenes/TuningLab.unity`。
-4. 按 Play，使用 HUD 和 Scene 视图检查读数。
+---
 
-场地、玩家和相机由 `Assets/TuningLab/` 代码生成；不要手改生成物。
+## 打开与运行
+
+1. 菜单 **GameJam → Build Tuning Lab** 重新生成基准场景
+2. 打开 `Assets/Scenes/TuningLab.unity`
+3. 按 Play
+
+场景里有 `TuningLab` 和 `Main Camera` 两个物体。`TuningLab` 挂着 `LabLevel`，Play 时由 `TuningLab.BuildAll()` 现场搭出整个场地。
+
+> `TuningLab.autoBuild` 关掉时不会自动搭场地，PlayMode 规格用这个开关。正常玩保持勾选。
+
+---
 
 ## 操作
 
-| 玩家 | 移动 | 上 / 下 | 跳跃 | 冲刺 | 召回 |
-| --- | --- | --- | --- | --- | --- |
-| A | A / D | W / S | 空格 | 左 Shift | `Q` |
-| B | ← / → | ↑ / ↓ | `/` | `.` | 右 `Shift` |
+默认键位。可在设置界面（Esc）里改。
 
-- `R`：重置位置和调试读数。
-- `P`：像素网格。
-- `Tab`：格线。
-- `F1`：手碎一条边，顺序固定 上 → 下 → 左 → 右；`F2`：恢复四条边框。用来逐个看碎边组合出的形态，不用真去砸。
-- `Esc`：打开/关闭纯图标设置界面。打开时所有玩法冻结（`Time.timeScale = 0`），再按 `Esc` 或点右上角关闭图标恢复；关闭后回到暂停前的 `timeScale`，玩家位置、速度和各类计时都不重置。传送门选择阶段的 `Esc` 仍然只取消选择。
+### 两个玩家
 
-B 被装进 u 形大炮的膛里时（A 是 u 形且 B 以冲刺态撞在炮口上），B 不可视、移动无效、不算在地面、充能不回；
-B 的冲刺键 `.` 变成**开炮**，把 B 按进入方向的反向打出去，`v' = √(Vb² + 一个等级间距的 v²)`，A 这边一切照常。
-规则细节与朝向门控见 [冲刺与对撞-现行规则](冲刺与对撞-现行规则.md) §3.6。
-
-冲刺充能从不满补到满时，该玩家轮廓高亮一次并在头顶冒出少量上浮粒子；HUD 同步显示“就绪”。
-初始满充、传送/复活复位不会播放。死亡和传送门动画期间会停止并清理该反馈，暂停时动画计时冻结。
-
-召回需要先在关卡里放召回道具（基准室内没有）。拾取后 HUD 显示“召回 已解锁”：A 按 `Q`、B 按右 `Shift`，
-把另一名玩家拉到施法者头顶并在旧位置留下幻影；规则见 §3.10。
-
-V3 起会留下残影和拖尾（顶档 V6 更多更亮）；任一玩家死亡时屏幕边缘闪红。音效由运行时 `LabAudio` 挂载，不依赖场景对象。
-
-## 设置界面
-
-`LabSettingsUI` 和音效/HUD 一样在运行时挂载，只用 IMGUI 和程序生成的色块，不依赖 Canvas、prefab 或字体。界面不出现文字，所有行都由图标和控件表达：
-
-| 图标 | 控件 | 当前行为 |
+| 动作 | 大块 A | 小块 B |
 | --- | --- | --- |
-| 喇叭 | 水平滑块 | 主音量，写入 `AudioListener.volume` |
-| 音符 | 水平滑块 | 音乐音量，写入 `LabAudio.MusicVolume`（当前无音乐轨，先存值） |
-| 爆炸 | 水平滑块 | 音效音量，写入 `LabAudio.SfxVolume` |
-| 显示器 | 左右箭头 + 档位点 | 在去重后的 `Screen.resolutions` 档位间切换；档位过多时等距保留最多 6 档 |
-| 全屏 / 窗口 | 两个切换按钮 | `Screen.SetResolution` 的窗口模式 |
-| 太阳 | 滑块（锁定） | 亮度预留位，只存取不应用 |
-| 手柄 | 按键占位（锁定） | 按键绑定预留位 |
+| 上下左右 | `W` `A` `S` `D` | `I` `J` `K` `L` |
+| 跳跃 | `Space` | `'` |
+| 冲刺 | `LeftShift` | `;` |
+| 召回 | `LeftCtrl` | `Enter` |
 
-设置存到 `Application.persistentDataPath/settings.json`：保存先写 `settings.tmp`，再 `File.Replace` 正式档并留下 `settings.backup.json`；读取顺序是正式档 → 备份 → 默认值，坏档不会被自动覆盖。`LabSettingsStore.Sanitize` 把越界音量、尺寸收口。
+### 调试用
 
-图标从 `Resources/SettingsIcons/<name>.png` 读取，`LabSettingsUI.IconResourceFolder` 和文件名是替换入口；缺图时用运行时生成的占位棋盘。当前 16×16 PNG 的导入设置是 Default、Point、Uncompressed、无 mipmap。
+| 键 | 作用 |
+| --- | --- |
+| `R` | 重置两人 |
+| `P` | 像素网格 |
+| `Tab` | 格线 |
+| `F1` | 打碎 A 的下一条边（快速演示形态） |
+| `F2` | 恢复 A 的全部边 |
+| `Esc` | 设置界面（全局暂停） |
 
-具体规则以当前代码和 HUD 读数为准；历史速度规格不再作为实现依据。
+---
 
-## 传送门
+## HUD 面板
 
-两人均存活、未进膛且同时位于同一传送门 3×3 区域时，任一人按自己的冲刺键启动。已标记传送门必须多于一个；不足时不会冻结角色或移动相机。
+Play 时左上角会出现**手感调试台**，里面有实时可调的参数。右侧是读数，底部有标尺。
 
-- 起点先播放 `0.35s` 高亮与粒子，再由蓝、红光柱以 `48 格/s` 向上离屏；双人离屏后才开放选择。
-- 选择阶段用 `A/D` 切换、`Enter` 确认、`Esc` 取消，候选相机移动为 `0.25s`。
-- 确认后先完成终点取景，再播放 `0.15s` 淡入、`0.20s` 高亮停留和 `0.15s` 爆开；最后恢复操作、进入前形态和完整二维速度。
-- 取消会在起点播放同样的返场动画，恢复零速度，不吞钥匙、不重置地图。
-- 动画期间移动、跳跃、`R` 和重复触发无效；`Esc` 只在选择阶段有效。
+> **发布包里不显示这个面板。** `LabHud.showTuningPanel` 默认取 `Debug.isDebugBuild`——编辑器里显示，正式构建隐藏。
 
-## 关卡验证
+### 可调参数
 
-正式关卡工作流：
+| 分组 | 参数 |
+| --- | --- |
+| 时间 | 时间缩放（0.05×–2×） |
+| 重力与跳跃 | 重力、跳高、走路速度、起步加速度、空中制动、地面制动 |
+| 冲刺 | 冲刺距离、冷却、锁定时间 |
+| 等级 | 首级落差、每级间距、等级数 |
+| 大炮 | 增益格数、L 形进膛门槛 |
+| 冰块 / 岩浆 | 破碎所需档位 |
+| 地图重置 | 重置半径 |
 
-1. **GameJam → New Level From Tuning Lab** 创建关卡。
-2. **GameJam → Tuning Lab Level Editor** 编辑 `LabLevelData`。
-3. 使用 **Run Level Baseline Self Check** 验证数据和相机规则。
-4. 使用 **Run Level Play Check** 验证真实物理。
-5. 需要单独看隐藏方块时，执行 **GameJam → Build HiddenBlock Demo Level** 生成演示关。
+改完立刻作用于物理，方便边调边试。
 
-编辑器预览与 Play 共用 `LabLevel.Build`。分区 bounds 是相机范围；B 的位置决定当前分区；分区不能重叠，贴边相邻允许。
+---
+
+## 速度等级
+
+一切判定都用"相当于从多少格落下"表达，不是绝对速度。`TierMath` 负责换算：
+
+```
+速度 = √(2 · g · 格数)
+格数 = 速度² / (2 · g)
+```
+
+等级边界默认 `tierFirstCells = 4`、`tierSpacingCells = 4`，即 **4 / 8 / 12 / 16 格**（v0 顶端到 v4）。
+
+调等级参数会同时影响：撞击门槛、红热门槛、冰块破碎、岩浆破坏、大炮增益。**这是个牵一发动全身的参数**，改之前先看 [速度等级：基准与教训](速度等级-基准与教训.md)。
+
+---
+
+## 灰盒场地
+
+基准场地是一片带地板、台阶和几处机关的空旷房间，用来单独验证机制。它不是正式关卡。
+
+组合验证请在 `Assets/Scenes/Levels/` 下的正式关卡里做。
+
+---
+
+## 验证一次改动
+
+```bash
+# 1. 纯数据自检（秒级）
+GameJam → Run Level Baseline Self Check
+
+# 2. 真实物理自检（十几秒）
+GameJam → Run Level Play Check
+
+# 3. 全量规格（约 80 秒）
+Unity Test Runner → PlayMode
+```
+
+三层都过再提交。
+
+---
+
+## 加一个新机关
+
+1. 在 `Assets/TuningLab/` 写组件（参考 `LabSpike.cs` 这类简单的）
+2. 在 `LabLevelData` 加对应的 spec 列表和 `Place*` 方法
+3. 在 `LabLevel.BuildSteps` 里加一个 `Add*` 步骤
+4. 在 `LabLevelEditorWindow` 里加工具和绘制
+5. 补 PlayMode 规格
+6. 更新 [冲刺与对撞-现行规则](冲刺与对撞-现行规则.md) 和 [关卡编辑器文档](tuning-lab-level-editor.md)
+
+---
 
 ## 代码地图
 
-```text
-Assets/TuningLab/
-├── TuningLab.cs          规则参数、基准房间、HUD/网格、音效/表现层挂载
-├── LabPlayer.cs          移动、跳跃、冲刺、碰撞、形态、召回输入
-├── LabCamera.cs          双人跟随、缩放和分区相机范围
-├── LabVisual.cs          玩家边框/眼睛
-├── LabChargeFeedback.cs  冲刺就绪轮廓闪烁与头顶粒子
-├── LabSpeedFeedback.cs   V3 起 / 顶档 V6 残影与拖尾
-├── LabAudio.cs           运行时音效（16 个 Cue）
-├── LabSettingsUI.cs      纯图标设置界面、Esc 暂停/恢复
-├── LabSettingsStore.cs   设置 JSON、备份与坏档恢复
-├── Resources/SettingsIcons/  16×16 设置图标（同名 PNG 可替换）
-├── LabVerticalRope.cs    竖绳行为
-├── LabHorizontalRope.cs  横绳平台行为
-├── LabKey.cs / LabDoor.cs
-├── LabSpike.cs / LabIce.cs / LabMagma.cs / LabHiddenBlock.cs
-├── LabRecallPickup.cs / LabPhantom.cs
-├── LabRespawnPoint.cs / LabTeleportPoint.cs
-├── TierMath.cs           速度与等级数学
-└── Level/
-    ├── LabLevelData.cs       关卡数据
-    ├── LabLevel.cs            数据到碰撞/机关的生成
-    └── Editor/                派生、编辑、SelfCheck、PlayCheck、隐藏方块演示关
-```
+| 文件 | 职责 |
+| --- | --- |
+| `TuningLab.cs` | 参数、场地生成、HUD/音效挂载、全局输入、死亡闪红 |
+| `LabPlayer.cs` | 移动、跳跃、冲刺、撞击结算、形态、输入读取 |
+| `LabBindings.cs` | 按键绑定模型、默认值、冲突检测、按键显示名 |
+| `LabForms.cs` | 碎边掩码 → 形态映射 |
+| `TierMath.cs` | 速度 ↔ 格数换算与等级映射 |
+| `LabPhantom.cs` | 召回幻影（光桥、2048 滑块、玻璃大炮、L 转向） |
+| `LabLevel.cs` | 数据 → 场景几何 |
+| `LabLevelData.cs` | 关卡数据模型 |
 
-扩展关卡机制时，先阅读 [tuning-lab-level-editor.md](tuning-lab-level-editor.md) 第 5 节。需要摆放、撤销、分区移动和保存的内容必须进入 `LabLevelData`。
+---
 
-## 验证命令
+## 常见问题
 
-Windows Unity CLI 示例见 [tuning-lab-level-editor.md](tuning-lab-level-editor.md) 第 7 节。命令无法运行时必须记录原因，不要伪造通过结果。
+**场地没生成**
+检查 `TuningLab.autoBuild` 是否勾选，或手动执行 `GameJam → Build Tuning Lab`。
+
+**改了参数没生效**
+等级相关参数有缓存（`cachedBounds`），需要让场景重建一次。
+
+**Play 时画面卡住**
+设置界面打开会 `Time.timeScale = 0`，按 `Esc` 关掉即可。
+
+**F1 没反应**
+`DebugShatterNextEdge` 只对 `canBeRedHot` 的玩家生效（目前只有 A）。
