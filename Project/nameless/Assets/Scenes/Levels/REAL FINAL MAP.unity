@@ -1796,9 +1796,6 @@ MonoBehaviour:
     - {x: 813, y: -78}
     - {x: 826, y: -78}
     - {x: 827, y: -78}
-    - {x: 828, y: -78}
-    - {x: 829, y: -78}
-    - {x: 830, y: -78}
     - {x: 831, y: -78}
     - {x: 832, y: -78}
     - {x: 833, y: -78}
@@ -1857,9 +1854,6 @@ MonoBehaviour:
     - {x: 813, y: -77}
     - {x: 826, y: -77}
     - {x: 827, y: -77}
-    - {x: 828, y: -77}
-    - {x: 829, y: -77}
-    - {x: 830, y: -77}
     - {x: 831, y: -77}
     - {x: 832, y: -77}
     - {x: 833, y: -77}
@@ -1919,13 +1913,9 @@ MonoBehaviour:
     - {x: 813, y: -76}
     - {x: 826, y: -76}
     - {x: 827, y: -76}
-    - {x: 828, y: -76}
-    - {x: 829, y: -76}
-    - {x: 830, y: -76}
     - {x: 831, y: -76}
     - {x: 832, y: -76}
     - {x: 833, y: -76}
-    - {x: 839, y: -76}
     - {x: 846, y: -76}
     - {x: 847, y: -76}
     - {x: 848, y: -76}
@@ -1943,6 +1933,7 @@ MonoBehaviour:
     - {x: 860, y: -76}
     - {x: 897, y: -76}
     - {x: 721, y: -75}
+    - {x: 799, y: -75}
     - {x: 803, y: -75}
     - {x: 804, y: -75}
     - {x: 805, y: -75}
@@ -1956,6 +1947,8 @@ MonoBehaviour:
     - {x: 896, y: -75}
     - {x: 897, y: -75}
     - {x: 721, y: -74}
+    - {x: 799, y: -74}
+    - {x: 803, y: -74}
     - {x: 804, y: -74}
     - {x: 805, y: -74}
     - {x: 806, y: -74}
@@ -1967,6 +1960,8 @@ MonoBehaviour:
     - {x: 869, y: -74}
     - {x: 896, y: -74}
     - {x: 721, y: -73}
+    - {x: 799, y: -73}
+    - {x: 803, y: -73}
     - {x: 804, y: -73}
     - {x: 805, y: -73}
     - {x: 806, y: -73}
@@ -2762,6 +2757,10 @@ MonoBehaviour:
     - {x: 606, y: -61}
     - {x: 644, y: -61}
     - {x: 786, y: -61}
+    - {x: 787, y: -61}
+    - {x: 788, y: -61}
+    - {x: 789, y: -61}
+    - {x: 790, y: -61}
     - {x: 794, y: -61}
     - {x: 814, y: -61}
     - {x: 842, y: -61}
@@ -2793,6 +2792,10 @@ MonoBehaviour:
     - {x: 606, y: -60}
     - {x: 644, y: -60}
     - {x: 786, y: -60}
+    - {x: 787, y: -60}
+    - {x: 788, y: -60}
+    - {x: 789, y: -60}
+    - {x: 790, y: -60}
     - {x: 794, y: -60}
     - {x: 814, y: -60}
     - {x: 846, y: -60}
@@ -2823,6 +2826,10 @@ MonoBehaviour:
     - {x: 606, y: -59}
     - {x: 644, y: -59}
     - {x: 786, y: -59}
+    - {x: 787, y: -59}
+    - {x: 788, y: -59}
+    - {x: 789, y: -59}
+    - {x: 790, y: -59}
     - {x: 794, y: -59}
     - {x: 814, y: -59}
     - {x: 815, y: -59}
@@ -2884,6 +2891,10 @@ MonoBehaviour:
     - {x: 606, y: -58}
     - {x: 644, y: -58}
     - {x: 786, y: -58}
+    - {x: 787, y: -58}
+    - {x: 788, y: -58}
+    - {x: 789, y: -58}
+    - {x: 790, y: -58}
     - {x: 794, y: -58}
     - {x: 582, y: -57}
     - {x: 583, y: -57}
@@ -2920,6 +2931,10 @@ MonoBehaviour:
     - {x: 637, y: -57}
     - {x: 644, y: -57}
     - {x: 786, y: -57}
+    - {x: 787, y: -57}
+    - {x: 788, y: -57}
+    - {x: 789, y: -57}
+    - {x: 790, y: -57}
     - {x: 794, y: -57}
     - {x: 582, y: -56}
     - {x: 583, y: -56}
@@ -2938,6 +2953,10 @@ MonoBehaviour:
     - {x: 605, y: -56}
     - {x: 644, y: -56}
     - {x: 786, y: -56}
+    - {x: 787, y: -56}
+    - {x: 788, y: -56}
+    - {x: 789, y: -56}
+    - {x: 790, y: -56}
     - {x: 794, y: -56}
     - {x: 582, y: -55}
     - {x: 583, y: -55}
@@ -2955,6 +2974,10 @@ MonoBehaviour:
     - {x: 595, y: -55}
     - {x: 644, y: -55}
     - {x: 786, y: -55}
+    - {x: 787, y: -55}
+    - {x: 788, y: -55}
+    - {x: 789, y: -55}
+    - {x: 790, y: -55}
     - {x: 794, y: -55}
     - {x: 582, y: -54}
     - {x: 583, y: -54}
@@ -2972,6 +2995,10 @@ MonoBehaviour:
     - {x: 595, y: -54}
     - {x: 644, y: -54}
     - {x: 786, y: -54}
+    - {x: 787, y: -54}
+    - {x: 788, y: -54}
+    - {x: 789, y: -54}
+    - {x: 790, y: -54}
     - {x: 794, y: -54}
     - {x: 582, y: -53}
     - {x: 583, y: -53}
@@ -6603,12 +6630,6 @@ MonoBehaviour:
     - {x: 300, y: -10}
     - {x: 308, y: -10}
     - {x: 348, y: -10}
-    - {x: 357, y: -10}
-    - {x: 358, y: -10}
-    - {x: 359, y: -10}
-    - {x: 360, y: -10}
-    - {x: 361, y: -10}
-    - {x: 362, y: -10}
     - {x: 363, y: -10}
     - {x: 388, y: -10}
     - {x: 397, y: -10}
@@ -6722,7 +6743,7 @@ MonoBehaviour:
     - {x: 300, y: -9}
     - {x: 308, y: -9}
     - {x: 348, y: -9}
-    - {x: 357, y: -9}
+    - {x: 363, y: -9}
     - {x: 374, y: -9}
     - {x: 375, y: -9}
     - {x: 376, y: -9}
@@ -6822,7 +6843,7 @@ MonoBehaviour:
     - {x: 307, y: -8}
     - {x: 308, y: -8}
     - {x: 348, y: -8}
-    - {x: 357, y: -8}
+    - {x: 363, y: -8}
     - {x: 374, y: -8}
     - {x: 388, y: -8}
     - {x: 397, y: -8}
@@ -6910,7 +6931,7 @@ MonoBehaviour:
     - {x: 295, y: -7}
     - {x: 296, y: -7}
     - {x: 348, y: -7}
-    - {x: 357, y: -7}
+    - {x: 363, y: -7}
     - {x: 374, y: -7}
     - {x: 388, y: -7}
     - {x: 397, y: -7}
@@ -7000,12 +7021,6 @@ MonoBehaviour:
     - {x: 294, y: -6}
     - {x: 295, y: -6}
     - {x: 348, y: -6}
-    - {x: 357, y: -6}
-    - {x: 358, y: -6}
-    - {x: 359, y: -6}
-    - {x: 360, y: -6}
-    - {x: 361, y: -6}
-    - {x: 362, y: -6}
     - {x: 363, y: -6}
     - {x: 388, y: -6}
     - {x: 397, y: -6}
@@ -11059,8 +11074,8 @@ MonoBehaviour:
     - position: {x: 916.5, y: -128.5}
     - position: {x: 915.5, y: -129.5}
     - position: {x: 915.5, y: -131.5}
-    - position: {x: 358.5, y: -7.5}
     - position: {x: 1032.5, y: -108.5}
+    - position: {x: 829.5, y: -77.5}
     recalls:
     - cell: {x: 1031, y: -179}
     doors:
@@ -11125,6 +11140,8 @@ MonoBehaviour:
     - position: {x: 391.5, y: 3.5}
       color: {r: 0.25, g: 0.75, b: 1, a: 1}
     - position: {x: 976.5, y: -167.5}
+      color: {r: 0.25, g: 0.75, b: 1, a: 1}
+    - position: {x: 849.5, y: -73.5}
       color: {r: 0.25, g: 0.75, b: 1, a: 1}
     spikes:
     - cell: {x: 959, y: -164}
@@ -12605,29 +12622,29 @@ MonoBehaviour:
     - cell: {x: 825, y: -76}
       groupId: 25
     - cell: {x: 834, y: -76}
-      groupId: 26
+      groupId: 35
     - cell: {x: 835, y: -76}
-      groupId: 26
+      groupId: 35
     - cell: {x: 836, y: -76}
-      groupId: 26
+      groupId: 35
     - cell: {x: 837, y: -76}
-      groupId: 26
+      groupId: 35
     - cell: {x: 838, y: -76}
-      groupId: 26
+      groupId: 35
     - cell: {x: 839, y: -76}
-      groupId: 26
+      groupId: 35
     - cell: {x: 840, y: -76}
-      groupId: 26
+      groupId: 35
     - cell: {x: 841, y: -76}
-      groupId: 26
+      groupId: 35
     - cell: {x: 842, y: -76}
-      groupId: 26
+      groupId: 35
     - cell: {x: 843, y: -76}
-      groupId: 26
+      groupId: 35
     - cell: {x: 844, y: -76}
-      groupId: 26
+      groupId: 35
     - cell: {x: 845, y: -76}
-      groupId: 26
+      groupId: 35
     - cell: {x: 740, y: -72}
       groupId: 33
     - cell: {x: 741, y: -72}
@@ -13252,8 +13269,6 @@ MonoBehaviour:
       groupId: 8
     - cell: {x: 387, y: -10}
       groupId: 8
-    - cell: {x: 360, y: -9}
-      groupId: 32
     - cell: {x: 386, y: -9}
       groupId: 8
     - cell: {x: 387, y: -9}
@@ -13310,16 +13325,12 @@ MonoBehaviour:
       groupId: 9
     - cell: {x: 436, y: -9}
       groupId: 10
-    - cell: {x: 360, y: -8}
-      groupId: 32
     - cell: {x: 386, y: -8}
       groupId: 8
     - cell: {x: 387, y: -8}
       groupId: 8
     - cell: {x: 436, y: -8}
       groupId: 10
-    - cell: {x: 360, y: -7}
-      groupId: 32
     - cell: {x: 386, y: -7}
       groupId: 8
     - cell: {x: 387, y: -7}
@@ -13715,6 +13726,12 @@ MonoBehaviour:
       groupId: 11
     - cell: {x: 776, y: -76}
       groupId: 11
+    - cell: {x: 828, y: -76}
+      groupId: 13
+    - cell: {x: 829, y: -76}
+      groupId: 13
+    - cell: {x: 830, y: -76}
+      groupId: 13
     - cell: {x: 861, y: -76}
       groupId: 9
     - cell: {x: 862, y: -76}
@@ -15258,94 +15275,14 @@ MonoBehaviour:
       groupId: 5
     - cell: {x: 601, y: -47}
       groupId: 5
-    - cell: {x: 831, y: -29}
-      groupId: 7
-    - cell: {x: 832, y: -29}
-      groupId: 7
-    - cell: {x: 833, y: -29}
-      groupId: 7
-    - cell: {x: 800, y: -28}
-      groupId: 7
-    - cell: {x: 805, y: -28}
-      groupId: 7
-    - cell: {x: 807, y: -28}
-      groupId: 7
-    - cell: {x: 811, y: -28}
-      groupId: 7
-    - cell: {x: 812, y: -28}
-      groupId: 7
-    - cell: {x: 818, y: -28}
-      groupId: 7
-    - cell: {x: 820, y: -28}
-      groupId: 7
-    - cell: {x: 823, y: -28}
-      groupId: 7
-    - cell: {x: 825, y: -28}
-      groupId: 7
-    - cell: {x: 828, y: -28}
-      groupId: 7
-    - cell: {x: 834, y: -28}
-      groupId: 7
     - cell: {x: 462, y: -27}
       groupId: 1
-    - cell: {x: 800, y: -27}
-      groupId: 7
-    - cell: {x: 805, y: -27}
-      groupId: 7
-    - cell: {x: 807, y: -27}
-      groupId: 7
-    - cell: {x: 810, y: -27}
-      groupId: 7
-    - cell: {x: 813, y: -27}
-      groupId: 7
-    - cell: {x: 818, y: -27}
-      groupId: 7
-    - cell: {x: 820, y: -27}
-      groupId: 7
-    - cell: {x: 823, y: -27}
-      groupId: 7
-    - cell: {x: 824, y: -27}
-      groupId: 7
-    - cell: {x: 825, y: -27}
-      groupId: 7
-    - cell: {x: 828, y: -27}
-      groupId: 7
-    - cell: {x: 832, y: -27}
-      groupId: 7
-    - cell: {x: 833, y: -27}
-      groupId: 7
     - cell: {x: 461, y: -26}
       groupId: 1
     - cell: {x: 462, y: -26}
       groupId: 1
     - cell: {x: 463, y: -26}
       groupId: 1
-    - cell: {x: 800, y: -26}
-      groupId: 7
-    - cell: {x: 804, y: -26}
-      groupId: 7
-    - cell: {x: 806, y: -26}
-      groupId: 7
-    - cell: {x: 808, y: -26}
-      groupId: 7
-    - cell: {x: 810, y: -26}
-      groupId: 7
-    - cell: {x: 813, y: -26}
-      groupId: 7
-    - cell: {x: 817, y: -26}
-      groupId: 7
-    - cell: {x: 819, y: -26}
-      groupId: 7
-    - cell: {x: 821, y: -26}
-      groupId: 7
-    - cell: {x: 823, y: -26}
-      groupId: 7
-    - cell: {x: 825, y: -26}
-      groupId: 7
-    - cell: {x: 828, y: -26}
-      groupId: 7
-    - cell: {x: 831, y: -26}
-      groupId: 7
     - cell: {x: 460, y: -25}
       groupId: 1
     - cell: {x: 461, y: -25}
@@ -15356,40 +15293,6 @@ MonoBehaviour:
       groupId: 1
     - cell: {x: 464, y: -25}
       groupId: 1
-    - cell: {x: 799, y: -25}
-      groupId: 7
-    - cell: {x: 800, y: -25}
-      groupId: 7
-    - cell: {x: 801, y: -25}
-      groupId: 7
-    - cell: {x: 804, y: -25}
-      groupId: 7
-    - cell: {x: 806, y: -25}
-      groupId: 7
-    - cell: {x: 808, y: -25}
-      groupId: 7
-    - cell: {x: 811, y: -25}
-      groupId: 7
-    - cell: {x: 812, y: -25}
-      groupId: 7
-    - cell: {x: 817, y: -25}
-      groupId: 7
-    - cell: {x: 819, y: -25}
-      groupId: 7
-    - cell: {x: 821, y: -25}
-      groupId: 7
-    - cell: {x: 824, y: -25}
-      groupId: 7
-    - cell: {x: 827, y: -25}
-      groupId: 7
-    - cell: {x: 829, y: -25}
-      groupId: 7
-    - cell: {x: 832, y: -25}
-      groupId: 7
-    - cell: {x: 833, y: -25}
-      groupId: 7
-    - cell: {x: 834, y: -25}
-      groupId: 7
     - cell: {x: 461, y: -24}
       groupId: 1
     - cell: {x: 462, y: -24}
@@ -17703,6 +17606,10 @@ MonoBehaviour:
       origin: {x: 969, y: -122}
       size: {x: 4, y: 2}
       sortingOrder: 1
+    - sprite: {fileID: -969714752165012542, guid: a04fa9ad3f9350043bfb6d035525f2ef, type: 3}
+      origin: {x: 828, y: -73}
+      size: {x: 4, y: 2}
+      sortingOrder: 1
     - sprite: {fileID: -8195164018292892933, guid: 249b3ce6361151c46b8ae8dfd5642752, type: 3}
       origin: {x: 750, y: -67}
       size: {x: 4, y: 4}
@@ -17725,10 +17632,6 @@ MonoBehaviour:
       sortingOrder: 1
     - sprite: {fileID: -8087695293503228663, guid: 47fc43f729af0944c8fb94b91e922ea5, type: 3}
       origin: {x: 376, y: -10}
-      size: {x: 4, y: 2}
-      sortingOrder: 1
-    - sprite: {fileID: -969714752165012542, guid: a04fa9ad3f9350043bfb6d035525f2ef, type: 3}
-      origin: {x: 364, y: -9}
       size: {x: 4, y: 2}
       sortingOrder: 1
     - sprite: {fileID: -2430311879158790913, guid: 571b78a50ec3c6c448115e320db1e857, type: 3}
@@ -17789,13 +17692,13 @@ MonoBehaviour:
     - position: {x: 1090.5, y: -122.5}
     - position: {x: 712.5, y: -81.5}
     - position: {x: 792.5, y: -73.5}
+    - position: {x: 829.5, y: -73.5}
     - position: {x: 603.5, y: -66.5}
     - position: {x: 597.5, y: -54.5}
-    - position: {x: 789.5, y: -46.5}
+    - position: {x: 792.5, y: -51.5}
     - position: {x: 567.5, y: -26.5}
     - position: {x: 488.5, y: -19.5}
     - position: {x: 310.5, y: -9.5}
-    - position: {x: 362.5, y: -7.5}
     - position: {x: 235.5, y: -2.5}
     - position: {x: 509.5, y: 1.5}
     - position: {x: 229.5, y: 4.5}
